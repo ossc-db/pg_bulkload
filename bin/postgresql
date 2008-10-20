@@ -1,0 +1,346 @@
+#! /bin/sh
+#------------------------------------------------------------------------------
+#
+# postgresql-- a wrapper script of pg_ctl
+#
+#    - NOTE: If you use pg_bulkload, you must use this script instead of pg_ctl.
+#      + This script calls our own recovery process solving clash while data is
+#        loaded with pg_bulkload.
+#
+#    - You can give all of the pg_ctl options to this script.
+#    - If given command to PostgreSQL is not start or restart,
+#      this script doesn't execute pg_bulkload's recovery and call pg_ctl 
+#      directory.
+#
+# Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#
+#------------------------------------------------------------------------------
+# Acquire a command name
+CMDNAME=`basename $0`
+
+# postgresql help message (allmost all of the following is as same as pg_ctl)
+help="\
+postgresql is a utility to start pg_bulkload -r and to start, stop, restart,
+reload configuration files, report the status of a PostgreSQL server, 
+or signal a PostgreSQL process.
+
+Usage:
+  $CMDNAME start   [-w] [-D DATADIR] [-s] [-l FILENAME] [-o \"OPTIONS\"]
+  $CMDNAME stop    [-W] [-D DATADIR] [-s] [-m SHUTDOWN-MODE]
+  $CMDNAME restart [-w] [-D DATADIR] [-s] [-m SHUTDOWN-MODE] [-o \"OPTIONS\"]
+  $CMDNAME reload  [-D DATADIR] [-s]
+  $CMDNAME status  [-D DATADIR]
+  $CMDNAME kill    SIGNALNAME PID
+
+Common options:
+  -D, --pgdata DATADIR   location of the database storage area
+  -s, --silent           only print errors, no informational messages
+  -w                     wait until operation completes
+  -W                     do not wait until operation completes
+  --help                 show this help, then exit
+  --version              output version information, then exit
+(The default is to wait for shutdown, but not for start or restart.)
+
+If the -D option is omitted, the environment variable PGDATA is used.
+
+Options for start or restart:
+  -l, --log FILENAME     write (or append) server log to FILENAME
+  -o OPTIONS             command line options to pass to postgres
+                         (PostgreSQL server executable)
+  -p PATH-TO-POSTGRES    normally not necessary
+
+Options for stop or restart:
+  -m SHUTDOWN-MODE   may be \"smart\", \"fast\", or \"immediate\"
+
+Shutdown modes are:
+  smart       quit after all clients have disconnected
+  fast        quit directly, with proper shutdown
+  immediate   quit without complete shutdown; will lead to recovery on restart
+
+Allowed signal names for kill:
+  HUP INT QUIT ABRT TERM USR1 USR2"
+
+# Message if user mistake how to use postgresql
+advice="\
+Try \"$CMDNAME --help\" for more information."
+
+# Keep all of the arguments
+ARGUMENTS=$*
+
+# Arguments passed to pg_ctl
+PG_CTL_ARGS=
+
+# Default value of "-m" option
+shutdown_mode=smart
+
+# Signal name passed to "pg_ctl kill"
+kill_signame=
+
+# Process ID passed to "pg_ctl kill"
+kill_pid=
+
+# Flag if -s or --silent is specified
+silent_mode=
+
+# Check command line arguments and execute a property process
+while [ $# -gt 0 ];do
+    case $1 in
+
+    -h|--help|-\?)
+        # Show help message and exit normally
+        echo "$help"
+        exit 0
+        ;;
+    -V|--version)
+        # Show a version of postgresql and PostgreSQL and exit normally
+        echo "postgresql 2.3.0"
+        pg_ctl --version
+        exit 0
+        ;;
+    -D|--pgdata)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1 $2"
+        
+        # Get $PGDATA path from command line
+        shift
+        PGDATA=$1
+        export PGDATA
+        ;;
+    -l|--log)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1 $2"
+        shift
+        ;;
+    -l*)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+        ;;
+    -m)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1 $2"
+        
+        # Get a shutdown mode(smart/fast/immediate)
+        shutdown_mode="$2"
+        shift
+        ;;
+    -m*)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+        
+        # Get a shutdown mode (smart/fast/immediate)
+        shutdown_mode=`echo "$1" | sed 's/^-m//g'`
+        ;;
+    -o)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1 '$2'"
+        shift
+        ;;
+    -p)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1 $2"
+        shift
+        ;;
+    -s|--silent)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+        silent_mode="yes"
+        ;;
+    -w)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+        ;;
+    -W)
+        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+        ;;
+    -*)
+        # Exit by 1 if invalid options are given.
+        echo "$CMDNAME: invalid option: $1" 1>&2
+        echo "$advice" 1>&2
+        exit 1
+        ;;
+    start)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        # pg_ctl operation
+        op="start"
+        ;;
+    stop)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        op="stop"
+        ;;
+    restart)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        op="restart"
+        ;;
+    reload)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        op="reload"
+        ;;
+    status)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        op="status"
+        ;;
+    kill)
+        if [ ! -z "$op" ];then
+            echo '$CMDNAME: too many command-line arguments (first is "stop")' 1>&2
+            echo "$advice" 1>&2
+            exit 1
+        fi
+        op="kill"
+        kill_signame="$2"
+        shift
+        kill_pid="$2"
+        shift
+        ;;
+    *)
+        # Exit 1 if invalid option is given.
+        echo "$CMDNAME: invalid option: $1" 1>&2
+        echo "$advice" 1>&2
+        exit 1
+        ;;
+
+    esac
+    shift
+done
+
+## debug message
+##echo $PG_CTL_ARGS $op
+
+# Exit 1 if none of operations are given.
+if [ -z "$op" ];then
+    echo "$CMDNAME: no operation mode specified" 1>&2
+    echo "$advice" 1>&2
+    exit 1
+fi
+
+# Exit 1 if PGDATA path is not specified.
+if [ -z "$PGDATA" ];then
+    echo "no postgreSQL database directory specified"
+    echo "$advice" 1>&2
+    exit 1
+
+# Exit 1 if PGDATA path is not invalid.
+elif [ ! -d $PGDATA ];then
+    echo "$PGDATA : Not a directory"
+    echo "$advice" 1>&2
+    exit 1
+fi
+
+# Exit 1 if the specified shutdown mode are not smart or fast or immediate.
+case "$shutdown_mode" in
+
+    s|smart)
+            ;;
+    f|fast)
+        ;;
+    i|immediate)
+        ;;
+    *)
+        echo "$CMDNAME: invalid shutdown mode \"$shutdown_mode\"" 1>&2
+        echo "$advice" 1>&2
+        exit 1
+        ;;
+esac
+
+# Check a signal name if the specified operation is "kill".
+# Exit 1 if a value except for [HUP/INT/QUIT/ABRT/TERM/USR1/USR2] is specified.
+if [ "$op" = "kill" ];then
+    case "$kill_signame" in
+
+        HUP)
+            ;;
+        INT)
+            ;;
+        QUIT)
+            ;;
+        ABRT)
+            ;;
+        TERM)
+            ;;
+        USR1)
+            ;;
+        USR2)
+            ;;
+        *)  
+            echo "$CMDNAME: unrecognized signal name \"$kill_signame\"" 1>&2
+            echo "$advice" 1>&2
+            exit 1
+            ;;
+    esac
+
+    # Check process ID if the operation is "kill".
+    # Exit 1 if no process ID is specified.
+    if [ -z "$kill_pid" ];then
+        echo "$CMDNAME: missing arguments for kill mode" 1>&2
+        echo "$advice" 1>&2
+        exit 1
+    fi
+fi
+
+# restart option in this script is exececuted as the following 3 steps:
+#    1. pg_ctl stop
+#    2. pg_bulkload recovery
+#    3. pg_ctl start
+# 
+# In this sequence, "stop" operation must be executed 
+# before starting pg_bulkload recovery, in order to refrain from executing 
+# recovery while PostgreSQL is running.
+# After "pg_ctl stop" and pg_bulkload recovery, arguments for "pg_ctl start" 
+# are processed.
+# Note: We don't check exit status after "pg_ctl stop", which is as same 
+# behavior as pg_ctl restart.
+if [ "$op" = "restart" ];then
+    ##ARGUMENTS=`echo "$ARGUMENTS" | sed 's/restart/stop/g'`
+    ##pg_ctl $ARGUMENTS
+    ##ARGUMENTS=`echo "$ARGUMENTS" | sed 's/stop/start/g'`
+    eval "pg_ctl $PG_CTL_ARGS stop"
+fi
+
+# If "start" or "restart" is given, pg_bulkload recovery is executed before 
+# pg_ctl start.
+# The path of $PGDATA is passed to recovery command as arguments.
+# If -s option is given, pg_bulkload recovery command is executed in silent
+# mode.
+# 
+# If recovery command exits in abnormal status, this script doesn't execute 
+# pg_ctl and exits 1.
+if [ "$op" = "start" -o "$op" = "restart" ];then
+    if [ "$silent_mode" = "yes" ];then
+        pg_bulkload -s -r -D $PGDATA
+    else
+        pg_bulkload -r -D $PGDATA
+    fi
+
+    if [ "$?" -ne 0 ];then
+        exit 1
+    fi
+fi
+
+# All of the specified arguments are passed to pg_ctl.
+# If "restart" is given, pg_ctl start is executed here.
+##pg_ctl $ARGUMENTS
+if [ "$op" = "kill" ];then
+    eval "pg_ctl $PG_CTL_ARGS $op $kill_signame $kill_pid"
+elif [ "$op" = "restart" ];then
+    eval "pg_ctl $PG_CTL_ARGS start"
+else
+    eval "pg_ctl $PG_CTL_ARGS $op"
+fi
+
+# Exit 1 if the process exits abnormally.
+if [ "$?" -ne 0 ];then
+    exit 1
+fi
+
+# Normal exit
+exit 0

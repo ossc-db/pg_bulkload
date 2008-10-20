@@ -1,0 +1,26 @@
+/*
+ * pg_bulkload: lib/pg_bulkload.sql.in
+ * 
+ *    Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ */
+
+-- Adjust this setting to control where the objects get created.
+SET search_path = public;
+
+BEGIN;
+
+CREATE FUNCTION pg_bulkload(ctlfilename text)
+	RETURNS integer
+	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
+
+-- Triggers
+CREATE FUNCTION pg_bulkload_trigger_init() RETURNS trigger
+	AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE FUNCTION pg_bulkload_trigger_main() RETURNS trigger
+	AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE FUNCTION pg_bulkload_trigger_term() RETURNS trigger
+	AS 'MODULE_PATHNAME' LANGUAGE C;
+
+COMMIT;

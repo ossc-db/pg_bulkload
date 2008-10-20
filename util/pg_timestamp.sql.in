@@ -1,0 +1,22 @@
+/*
+ * pg_bulkload: util/pg_timestamp.sql.in
+ * 
+ *    Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ */
+
+SET search_path = public;
+
+BEGIN;
+
+-- Register the user defined function
+CREATE FUNCTION pg_timestamp_in(cstring, oid, int4)
+	RETURNS timestamp
+	LANGUAGE C
+	as 'MODULE_PATHNAME', 'pg_timestamp_in';
+
+-- Update pg_type to set pg_timestamp as a timestamp input function
+UPDATE pg_type
+   SET typinput = (SELECT oid FROM pg_proc WHERE proname='pg_timestamp_in')
+ WHERE typname = 'timestamp';
+
+COMMIT;
