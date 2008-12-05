@@ -1,3 +1,5 @@
+int pgwin32_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timeval * timeout);
+
 static char *
 GetSharedMemName(void)
 {
@@ -10,13 +12,12 @@ GetSharedMemName(void)
 	if (bufsize == 0)
 		return NULL;
 
-	retptr = malloc(bufsize + 1 + 18);	/* 1 NULL and 18 for
-										 * Global\PostgreSQL: */
+	retptr = malloc(bufsize + 18);		/* 18 for Global\PostgreSQL: */
 	if (retptr == NULL)
 		return NULL;
 
 	strcpy(retptr, "Global\\PostgreSQL:");
-	r = GetFullPathName(DataDir, bufsize, retptr + 11, NULL);
+	r = GetFullPathName(DataDir, bufsize, retptr + 18, NULL);
 	if (r == 0 || r > bufsize)
 		return NULL;
 
@@ -35,7 +36,10 @@ PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2)
 
 	szShareMem = GetSharedMemName();
 	if (szShareMem == NULL)
+	{
+		free(szShareMem);
 		return true;	/* if can't stat, be conservative */
+	}
 
 	hmap = OpenFileMapping(FILE_MAP_READ, FALSE, szShareMem);
 

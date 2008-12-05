@@ -28,6 +28,13 @@ typedef struct Parser		Parser;
 #define smgrread(reln, forknum, blocknum, buffer) \
 	smgrread((reln), (blocknum), (buffer))
 #define mdclose(reln, forknum)			mdclose((reln))
+#define heap_insert(relation, tup, cid, options, bistate) \
+	heap_insert((relation), (tup), (cid), true, true)
+#define HEAP_INSERT_SKIP_WAL	0x0001
+#define HEAP_INSERT_SKIP_FSM	0x0002
+typedef void *BulkInsertState;
+#define GetBulkInsertState()			(NULL)
+#define FreeBulkInsertState(bistate)	((void)0)
 
 #endif
 

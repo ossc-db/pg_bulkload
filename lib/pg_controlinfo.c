@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <unistd.h>
 
+#include "access/heapam.h"
 #include "catalog/namespace.h"
 #include "executor/executor.h"
 #include "mb/pg_wchar.h"

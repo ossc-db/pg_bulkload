@@ -10,6 +10,7 @@
  */
 #include "postgres.h"
 
+#include "access/heapam.h"
 #include "access/transam.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"

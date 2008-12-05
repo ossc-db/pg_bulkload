@@ -28,8 +28,8 @@ typedef struct Table
 	ResultRelInfo  *relinfo;	/* Target relation */
 	BTSpool		  **spools;		/* Array of index spooler */
 	int				n_ins_tup;	/* # of inserted rows */
-	bool			use_wal;	/* Use WAL */
-	bool			use_fsm;	/* Use FSM */
+	int				options;	/* insert options */
+	BulkInsertState	bistate;
 } Table;
 
 typedef struct Loader
@@ -190,7 +190,7 @@ LoaderInsert(Loader *loader, HeapTuple tuple)
 
 	/* Insert the heap tuple and index entries. */
 	heap_insert(TableGetDesc(target), tuple, loader->cid,
-				target->use_wal, target->use_fsm);
+				target->options, target->bistate);
 	IndexSpoolInsert(target->spools, loader->slot, &(tuple->t_self),
 					 loader->estate, loader->reindex);
 
@@ -234,15 +234,23 @@ TableOpen(Table *table, Relation rel, bool reindex)
 	table->relinfo = relinfo;
 	table->spools = NULL;
 	table->n_ins_tup = 0;
-	table->use_wal = (!isNew || XLogArchivingActive());
-	table->use_fsm = (!isNew);
+	table->options = 0;
+	if (isNew)
+	{
+		table->options |= HEAP_INSERT_SKIP_FSM;
+		if (!XLogArchivingActive())
+			table->options |= HEAP_INSERT_SKIP_WAL;
+	}
+	table->bistate = GetBulkInsertState();
 
 	ExecOpenIndices(table->relinfo);
 	if (reindex && table->relinfo->ri_NumIndices > 0)
 		table->spools = IndexSpoolBegin(table->relinfo);
 
 	elog(DEBUG1, "pg_bulkload: open \"%s\" wal=%d, fsm=%d",
-		RelationGetRelationName(rel), table->use_wal, table->use_fsm);
+		RelationGetRelationName(rel),
+		(table->options & HEAP_INSERT_SKIP_WAL) == 0,
+		(table->options & HEAP_INSERT_SKIP_FSM) == 0);
 }
 
 /*
@@ -251,20 +259,26 @@ TableOpen(Table *table, Relation rel, bool reindex)
 void
 TableClose(Table *table, EState *estate, bool reindex)
 {
+	bool	use_wal;
+
 	if (table == NULL || table->relinfo == NULL)
 		return;
 
 	elog(DEBUG1, "pg_bulkload: close \"%s\" n_ins_tup=%d",
 		RelationGetRelationName(TableGetDesc(table)), table->n_ins_tup);
 
+	use_wal = ((table->options & HEAP_INSERT_SKIP_WAL) == 0);
+
 	/* Flush index spoolers and close indexes. */
 	if (table->spools != NULL)
-		IndexSpoolEnd(table->spools, table->relinfo, reindex, table->use_wal);
+		IndexSpoolEnd(table->spools, table->relinfo, reindex, use_wal);
 	ExecCloseIndices(table->relinfo);
 
 	/* Flush table buffers and close it. */
-	if (table->n_ins_tup > 0 && !table->use_wal)
+	if (table->n_ins_tup > 0 && !use_wal)
 		heap_sync(TableGetDesc(table));
+
+	FreeBulkInsertState(table->bistate);
 
 	/* free memory */
 	if (table->relinfo->ri_TrigFunctions)

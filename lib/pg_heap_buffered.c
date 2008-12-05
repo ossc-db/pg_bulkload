@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/heapam.h"
 #include "access/xact.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
@@ -35,13 +36,13 @@ BufferedHeapLoad(ControlInfo *ci, BTSpool **spools)
 {
 	TransactionId	xid;
 	CommandId		cid;
-	bool			use_wal = true;
-	bool			use_fsm = true;
 	MemoryContext	org_ctx;
+	BulkInsertState bistate;
 
 	/* Obtain transaction ID and command ID. */
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
+	bistate = GetBulkInsertState();
 
 	/* Switch into its memory context */
 	org_ctx = MemoryContextSwitchTo(GetPerTupleMemoryContext(ci->ci_estate));
@@ -76,7 +77,7 @@ BufferedHeapLoad(ControlInfo *ci, BTSpool **spools)
 
 			/* Insert the heap tuple and index entries. */
 			heap_insert(ci->ci_estate->es_result_relation_info->ri_RelationDesc,
-				tuple, cid, use_wal, use_fsm);
+				tuple, cid, 0, bistate);
 
 			/*
 			 * Loading is complete when a tuple is added to a block buffer.
@@ -132,4 +133,5 @@ BufferedHeapLoad(ControlInfo *ci, BTSpool **spools)
 
 	ResetPerTupleExprContext(ci->ci_estate);
 	MemoryContextSwitchTo(org_ctx);
+	FreeBulkInsertState(bistate);
 }

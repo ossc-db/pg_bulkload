@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/heapam.h"
 #include "access/tuptoaster.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
@@ -30,9 +31,12 @@
 
 #if PG_VERSION_NUM < 80300
 #define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
-    PageAddItem((page), (item), (size), (offnum), LP_USED)
-#define toast_insert_or_update(rel, newtup, oldtup, use_wal, use_fsm) \
+	PageAddItem((page), (item), (size), (offnum), LP_USED)
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
 	toast_insert_or_update((rel), (newtup), (oldtup))
+#elif PG_VERSION_NUM < 80400
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
+	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
 #endif
 
 
@@ -156,7 +160,7 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 			if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
 			{
 				/* XXX: Better parameter for use_wal and use_fsm */
-				tuple = toast_insert_or_update(ci->ci_rel, tuple, NULL, true, true);
+				tuple = toast_insert_or_update(ci->ci_rel, tuple, NULL, 0);
 				ereport(DEBUG1,
 						(errmsg("tup compressed to %d", tuple->t_len)));
 			}

@@ -15,6 +15,9 @@
  */
 #include "postgres.h"
 
+#undef PGDLLIMPORT
+#define PGDLLIMPORT
+
 #include <assert.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -502,7 +505,6 @@ static void
 LoadInterrupt(void)
 {
 	intrflag = true;
-	return;
 }
 
 /**
@@ -540,7 +542,6 @@ PrintUsage(void)
 			"Other options:\n"
 			"  --help, -?      show this help, then exit\n"
 			"  --version, -V   output version information, then exit\n");
-	return;
 }
 
 
@@ -554,7 +555,6 @@ static void
 PrintVersion(void)
 {
 	fprintf(stderr, "pg_bulkload " LOADER_VERSION "\n");
-	return;
 }
 
 
@@ -927,7 +927,6 @@ StartLoaderRecovery(void)
 	if (!isSilentRecovery)
 		LoaderLogMessage(true, LOG, "recovered all relations");
 	return;						/* revocery process successfully terminated, */
-
 }
 
 
@@ -1132,7 +1131,6 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * lsinfo)
 						 "Calculated CRC checksum does not match value stored in file. "
 						 "Either the file is corrupt, or it has a different layout "
 						 "than this program is expecting.");
-	return;
 }
 
 /**
@@ -1230,8 +1228,6 @@ AddListLSFName(List *list, const char *filename)
 	 * increment length of List
 	 */
 	list->length++;
-
-	return;
 }
 
 /**

@@ -14,7 +14,6 @@
 
 #include <sys/param.h>
 #include "postgres.h"
-#include "access/heapam.h"
 #include "access/nbtree.h"
 #include "nodes/execnodes.h"
 #include "utils/palloc.h"
