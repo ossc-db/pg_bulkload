@@ -253,6 +253,7 @@ InitializeCSV(CSVParser* self, ControlInfo *ci)
 		char	buffer[LINEBUFLEN];
 		int		len;
 		int		skipped = 0;
+		bool	inCR = false;
 
 		while ((len = read(ci->ci_infd, buffer, LINEBUFLEN)) > 0)
 		{
@@ -260,16 +261,27 @@ InitializeCSV(CSVParser* self, ControlInfo *ci)
 
 			for (i = 0; i < len; i++)
 			{
-				/* FIXME: Handling of line breaks using CR and LF+CR. */
-				if (buffer[i] == '\n')
+				if (buffer[i] == '\r')
 				{
-					++skipped;
-					if (skipped >= ci->ci_offset)
+					if (i == len - 1)
 					{
-						/* Seek to head of the next line. */
-						lseek(ci->ci_infd, i - len + 1, SEEK_CUR);
-                        goto skip_done;
+						inCR = true;
+						continue;
 					}
+					else if (buffer[i + 1] == '\n')
+						i++;
+				}
+				else if (!inCR && buffer[i] != '\n')
+					continue;
+
+				/* Skip the line */
+				inCR = false;
+				++skipped;
+				if (skipped >= ci->ci_offset)
+				{
+					/* Seek to head of the next line. */
+					lseek(ci->ci_infd, i - len + 1, SEEK_CUR);
+                    goto skip_done;
 				}
 			}
 		}
@@ -305,6 +317,26 @@ CleanUpCSV(CSVParser *self)
 	print_profile();
 }
 
+static bool
+checkFieldIsNull(CSVParser *self, ControlInfo *ci, int field_num, int len)
+{
+	/*
+	 * We have to determine NULL value using character string before quote mark
+	 * and escape character handling.	For this, we use the record buffer, not
+	 * the field buffer (field buffer contains character string after these marks
+	 * are handled).
+	 */
+	if (!self->fnn[ci->ci_attnumlist[field_num]] &&
+		self->null_len == len &&
+		0 == memcmp(self->null, self->fields[field_num], self->null_len))
+	{
+		self->fields[field_num] = NULL;
+		return true;
+	}
+	else
+		return false;
+}
+
 /**
  * @brief Reads one record from the input file, converts each field's
  * character string representation into PostgreSQL internal representation
@@ -334,6 +366,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	char	   *cur;			/* Return value */
 	bool		need_data = false;		/* Flag indicating the need to read more characters */
 	bool		in_quote = false;
+	bool		inCR = false;
 
 	/*
 	 * Field parsing info
@@ -533,6 +566,19 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				in_quote = false;
 			}
 		}
+		else if (inCR)
+		{
+			appendToField(self, &dst, &src, i - src - 1);
+			checkFieldIsNull(self, ci, field_num, i - field_head - 1);
+			self->rec_buf[i - 1] = '\0';
+
+			if (c != '\n')
+				i--;	/* re-read the char */
+			self->next = self->rec_buf + i + 1;
+
+			inCR = false;
+			break;
+		}
 		else
 		{
 			/*
@@ -548,7 +594,11 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				appendToField(self, &dst, &src, i - src);
 				in_quote = true;
 			}
-			else if (c == delim || c == '\n')
+			else if (c == '\r')
+			{
+				inCR = true;
+			}
+			else if (c == '\n')
 			{
 				/*
 				 * We determine the end of a field when a delimiter or line feed is found.
@@ -557,57 +607,45 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				 */
 				appendToField(self, &dst, &src, i - src);
 
+				checkFieldIsNull(self, ci, field_num, i - field_head);
+
 				/*
-				 * We have to determine NULL value using character string before quote mark
-				 * and escape character handling.	For this, we use the record buffer, not
-				 * the field buffer (field buffer contains character string after these marks
-				 * are handled).
+				 * Line feed other than a quote mark is the record delimiter.  Record parse
+				 * terminates when the record delmiter is found.
 				 */
-				if (!self->fnn[ci->ci_attnumlist[field_num]] &&
-					self->null_len == i - field_head &&
-					!memcmp(self->null, self->rec_buf + field_head, self->null_len))
-				{
-					self->fields[field_num] = NULL;
-				}
+				self->rec_buf[i] = '\0';
+				self->next = self->rec_buf + i + 1;
+				break;
+			}
+			else if (c == delim)
+			{
+				appendToField(self, &dst, &src, i - src);
 
-				if (c == delim)
-				{
-					/*
-					 * If then number of columns specified in the input record exceeds the
-					 * number of columns of the copy target table, then the value of the last
-					 * column of the table will be overwritten by extra columns in the input
-					 * data successively.
-					 */
-					if (field_num + 1 < ci->ci_attnumcnt)
-						field_num++;
-					ci->ci_field++;
+				checkFieldIsNull(self, ci, field_num, i - field_head);
 
-					/*
-					 * The beginning of the next field is the next character from the delimiter.
-					 */
-					field_head = i + 1;
-					/*
-					 * Delmiter itself is not field data and skip this.
-					 */
-					dst++;
-					/*
-					 * Update the destination field
-					 */
-					self->field_buf[dst] = '\0';
-					self->fields[field_num] = self->field_buf + dst;
-				}
-				else
-				{
-					/*
-					 * Line feed other than a quote mark is the record delimiter.  Record parse
-					 * terminates when the record delmiter is found.
-					 */
-					char	   *nl = self->rec_buf + i;
+				/*
+				 * If then number of columns specified in the input record exceeds the
+				 * number of columns of the copy target table, then the value of the last
+				 * column of the table will be overwritten by extra columns in the input
+				 * data successively.
+				 */
+				if (field_num + 1 < ci->ci_attnumcnt)
+					field_num++;
+				ci->ci_field++;
 
-					*nl = '\0';
-					self->next = nl + 1;
-					break;
-				}
+				/*
+				 * The beginning of the next field is the next character from the delimiter.
+				 */
+				field_head = i + 1;
+				/*
+				 * Delmiter itself is not field data and skip this.
+				 */
+				dst++;
+				/*
+				 * Update the destination field
+				 */
+				self->field_buf[dst] = '\0';
+				self->fields[field_num] = self->field_buf + dst;
 			}
 		}
 		add_prof(&tv_scan);
