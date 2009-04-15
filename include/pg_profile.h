@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/pg_bulkload.h
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -11,61 +11,62 @@
 #ifndef PROFILE_H_INCLUDED
 #define PROFILE_H_INCLUDED
 
+/*
+#define ENABLE_BULKLOAD_PROFILE
+*/
+
 /* Profiling routine */
-#ifdef PROFILE
-#include <sys/time.h>
+#ifdef ENABLE_BULKLOAD_PROFILE
+#include "portability/instr_time.h"
 
 /**
- * @brief Keep timestamp at the last add_prof() finishing point
+ * @brief Keep timestamp at the last BULKLOAD_PROFILE() finishing point
  */
-static struct timeval tv_last;
+extern instr_time *prof_top;
 
-/**
- * @brief Compute the difference of timevals
- * @param tv1 left parameter of subtraction
- * @param tv2 right parameter of subtraction
- * @return tv2 - tv1
- */
-static struct timeval
-time_diff(struct timeval tv1, struct timeval tv2)
-{
-	struct timeval ret;
+extern instr_time prof_heap_read;
+extern instr_time prof_heap_toast;
+extern instr_time prof_heap_table;
+extern instr_time prof_heap_index;
+extern instr_time prof_heap_flush;
 
-	ret.tv_sec = tv2.tv_sec - tv1.tv_sec;
-	ret.tv_usec = tv2.tv_usec - tv1.tv_usec;
-	if (ret.tv_usec < 0)
-	{
-		ret.tv_sec--;
-		ret.tv_usec += 1000000;
-	}
-	return ret;
-}
+extern instr_time prof_index_merge;
+extern instr_time prof_index_reindex;
+
+extern instr_time prof_index_merge_flush;
+extern instr_time prof_index_merge_build;
+
+extern instr_time prof_index_merge_build_init;
+extern instr_time prof_index_merge_build_unique;
+extern instr_time prof_index_merge_build_insert;
+extern instr_time prof_index_merge_build_term;
+extern instr_time prof_index_merge_build_flush;
 
 /**
  * @brief Record profile information
  */
-#define add_prof(total) \
-do { \
-	struct timeval tv_tmp; \
-	struct timeval tv_diff; \
- \
-	gettimeofday(&tv_tmp, NULL); \
- \
-	if (total) \
-	{ \
-		tv_diff = time_diff(tv_last, tv_tmp); \
-		(total)->tv_sec += tv_diff.tv_sec; \
-		(total)->tv_usec += tv_diff.tv_usec; \
-		if ((total)->tv_usec > 999999) \
-		{ \
-			(total)->tv_sec++; \
-			(total)->tv_usec -= 1000000; \
-		} \
-	} \
-	tv_last = tv_tmp; \
-} while (0);
+#define BULKLOAD_PROFILE(total) \
+	do { \
+		instr_time now; \
+		INSTR_TIME_SET_CURRENT(now); \
+		INSTR_TIME_ACCUM_DIFF(*(total), now, *prof_top); \
+		*prof_top = now; \
+	} while (0);
+#define BULKLOAD_PROFILE_PUSH() \
+	do { \
+		instr_time		_prof; \
+		instr_time	   *_prof_save; \
+		INSTR_TIME_SET_CURRENT(_prof); \
+		_prof_save = prof_top; \
+		prof_top = &_prof;
+
+#define BULKLOAD_PROFILE_POP() \
+		prof_top = _prof_save; \
+	} while (0)
 #else
-#define add_prof(x)
+#define BULKLOAD_PROFILE(x)		((void) 0)
+#define BULKLOAD_PROFILE_PUSH()	((void) 0)
+#define BULKLOAD_PROFILE_POP()	((void) 0)
 #endif
 
 #endif   /* PROFILE_H_INCLUDED */

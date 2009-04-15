@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_bulkload.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -14,6 +14,7 @@
 #include "access/transam.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"
+#include "utils/builtins.h"
 
 #include "pg_bulkload.h"
 #include "pg_btree.h"
@@ -22,48 +23,63 @@
 
 PG_MODULE_MAGIC;
 
-/* Signature of static functions */
-static char *get_text_arg(FunctionCallInfo fcinfo, int index);
+#ifdef ENABLE_BULKLOAD_PROFILE
+static instr_time prof_init;
+static instr_time prof_heap;
+static instr_time prof_index;
+static instr_time prof_term;
 
-/* Obtaining core-modules' profile */
-#ifdef PROFILE
-#include <sys/time.h>
-struct timeval tv_prepare;
-struct timeval tv_read;
-struct timeval tv_create_tup;
-struct timeval tv_compress;
-struct timeval tv_flush;
-struct timeval tv_add;
-struct timeval tv_cleanup;
-struct timeval tv_write_data;
-struct timeval tv_write_lsf;
+instr_time prof_heap_read;
+instr_time prof_heap_toast;
+instr_time prof_heap_table;
+instr_time prof_heap_index;
+instr_time prof_heap_flush;
+
+instr_time prof_index_merge;
+instr_time prof_index_reindex;
+
+instr_time prof_index_merge_flush;
+instr_time prof_index_merge_build;
+
+instr_time prof_index_merge_build_init;
+instr_time prof_index_merge_build_unique;
+instr_time prof_index_merge_build_insert;
+instr_time prof_index_merge_build_term;
+instr_time prof_index_merge_build_flush;
+
+instr_time *prof_top;
 
 /**
  * @brief Output the result of profile check.
  */
 static void
-print_profile()
+BULKLOAD_PROFILE_PRINT()
 {
-	elog(INFO, "prepare: %d.%07d",
-		 (int) tv_prepare.tv_sec, (int) tv_prepare.tv_usec);
-	elog(INFO, "read: %d.%07d", (int) tv_read.tv_sec, (int) tv_read.tv_usec);
-	elog(INFO, "create_tup: %d.%07d",
-		 (int) tv_create_tup.tv_sec, (int) tv_create_tup.tv_usec);
-	elog(INFO, "compress: %d.%07d",
-		 (int) tv_compress.tv_sec, (int) tv_compress.tv_usec);
-	elog(INFO, "flush: %d.%07d",
-		 (int) tv_flush.tv_sec, (int) tv_flush.tv_usec);
-	elog(INFO, "	write data: %d.%07d",
-		 (int) tv_write_data.tv_sec, (int) tv_write_data.tv_usec);
-	elog(INFO, "	write LSF: %d.%07d",
-		 (int) tv_write_lsf.tv_sec, (int) tv_write_lsf.tv_usec);
-	elog(INFO, "add: %d.%07d", (int) tv_add.tv_sec, (int) tv_add.tv_usec);
-	elog(INFO, "cleanup: %d.%07d",
-		 (int) tv_cleanup.tv_sec, (int) tv_cleanup.tv_usec);
+	elog(INFO, "<GLOBAL>");
+	elog(INFO, "  INIT  : %.7f", INSTR_TIME_GET_DOUBLE(prof_init));
+	elog(INFO, "  HEAP  : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap));
+	elog(INFO, "  INDEX : %.7f", INSTR_TIME_GET_DOUBLE(prof_index));
+	elog(INFO, "  TERM  : %.7f", INSTR_TIME_GET_DOUBLE(prof_term));
+	elog(INFO, "<HEAP>");
+	elog(INFO, "  READ  : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_read));
+	elog(INFO, "  TOAST : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_toast));
+	elog(INFO, "  TABLE : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_table));
+	elog(INFO, "  INDEX : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_index));
+	elog(INFO, "  FLUSH : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_flush));
+	elog(INFO, "<INDEX>");
+	elog(INFO, "  MERGE      : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge));
+	elog(INFO, "    FLUSH    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_flush));
+	elog(INFO, "    BUILD    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build));
+	elog(INFO, "      INIT   : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_init));
+	elog(INFO, "      UNIQUE : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_unique));
+	elog(INFO, "      INSERT : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_insert));
+	elog(INFO, "      TERM   : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_term));
+	elog(INFO, "      FLUSH  : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_flush));
+	elog(INFO, "  REINDEX    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_reindex));
 }
 #else
-#define print_profile()
-#endif   /* PROFILE */
+#define BULKLOAD_PROFILE_PRINT()	((void) 0)
+#endif   /* ENABLE_BULKLOAD_PROFILE */
 
 /* ========================================================================
  * Implementation
@@ -82,8 +98,8 @@ Datum
 pg_bulkload(PG_FUNCTION_ARGS)
 {
 	ControlInfo	   *ci = NULL;
-
-	add_prof((struct timeval *) NULL);
+	char		   *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	int32			load_cnt;
 
 	/*
 	 * Check user previlege (must be the super user and need INSERT previlege
@@ -93,16 +109,17 @@ pg_bulkload(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to use pg_bulkload()")));
 
+	BULKLOAD_PROFILE_PUSH();
+
 	/*
 	 * STEP 0: Read control file
 	 */
 
 	ereport(NOTICE, (errmsg("BULK LOAD START")));
-	ci = OpenControlInfo(get_text_arg(fcinfo, 0));
+	ci = OpenControlInfo(path);
 
 	PG_TRY();
 	{
-		int32			load_cnt;
 		BTSpool		  **spools = NULL;
 
 		/*
@@ -111,14 +128,16 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		ParserInitialize(ci->ci_parser, ci);
 		spools = IndexSpoolBegin(ci->ci_estate->es_result_relation_info);
-		ereport(DEBUG1, (errmsg("pg_bulkload: STEP 1 OK")));
-		add_prof(&tv_prepare);
+		elog(DEBUG1, "pg_bulkload: STEP 1 OK");
+		BULKLOAD_PROFILE(&prof_init);
 
 		/*
 		 * STEP 2: Build heap
 		 */
 
+		BULKLOAD_PROFILE_PUSH();
 		ci->ci_loader(ci, spools);
+		BULKLOAD_PROFILE_POP();
 
 		/* If an error has been found, abort. */
 		if (ci->ci_err_cnt)
@@ -128,7 +147,8 @@ pg_bulkload(PG_FUNCTION_ARGS)
 								   ci->ci_err_cnt)));
 		}
 
-		ereport(DEBUG1, (errmsg("pg_bulkload: STEP 2 OK")));
+		elog(DEBUG1, "pg_bulkload: STEP 2 OK");
+		BULKLOAD_PROFILE(&prof_heap);
 
 		/*
 		 * STEP 3: Merge indexes
@@ -136,10 +156,13 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		if (spools != NULL)
 		{
+			BULKLOAD_PROFILE_PUSH();
 			IndexSpoolEnd(spools, ci->ci_estate->es_result_relation_info,
 				true, ci->ci_loader == BufferedHeapLoad);
+			BULKLOAD_PROFILE_POP();
 		}
-		ereport(DEBUG1, (errmsg("pg_bulkload: STEP 3 OK")));
+		elog(DEBUG1, "pg_bulkload: STEP 3 OK");
+		BULKLOAD_PROFILE(&prof_index);
 
 		/*
 		 * STEP 4: Postprocessing
@@ -150,16 +173,13 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		CloseControlInfo(ci);
 		ci = NULL;
 
-		ereport(DEBUG1, (errmsg("pg_bulkload: STEP 4 OK")));
+		elog(DEBUG1, "pg_bulkload: STEP 4 OK");
 
 		/* Write end log. */
 		ereport(NOTICE,
 				(errmsg("BULK LOAD END  (%d records)", load_cnt)));
 
-		add_prof(&tv_cleanup);
-		print_profile();
-
-		PG_RETURN_INT32(load_cnt);
+		BULKLOAD_PROFILE(&prof_term);
 	}
 	PG_CATCH();
 	{
@@ -167,6 +187,11 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	BULKLOAD_PROFILE_POP();
+	BULKLOAD_PROFILE_PRINT();
+
+	PG_RETURN_INT32(load_cnt);
 }
 
 HeapTuple
@@ -176,7 +201,6 @@ ReadTuple(ControlInfo *ci, TransactionId xid, TransactionId cid)
 
 	if (ParserReadLine(ci->ci_parser, ci) == 0)
 		return NULL;
-	add_prof(&tv_read);
 
 	tuple = heap_form_tuple(RelationGetDescr(ci->ci_rel),
 							ci->ci_values, ci->ci_isnull);
@@ -194,34 +218,9 @@ ReadTuple(ControlInfo *ci, TransactionId xid, TransactionId cid)
 #if PG_VERSION_NUM < 80300
 	HeapTupleHeaderSetCmax(tuple->t_data, 0);
 #endif
-	tuple->t_tableOid = ci->ci_rel->rd_id;
-	add_prof(&tv_create_tup);
+	tuple->t_tableOid = RelationGetRelid(ci->ci_rel);
 
 	return tuple;
-}
-
-/**
- * @brief Obtain data length from varlena.
- */
-#define VARLEN(x)	(VARSIZE(x) - VARHDRSZ)
-
-/**
- * @brief Obtain TEXT type augument as a character string of C-language.
- * @param fcinfo [in] Argument info (specify 'fcinfo')
- * @param index [in] Index of the argument
- * @return Returns argument character string.	Returns NULL if error occurs.
- */
-static char *
-get_text_arg(FunctionCallInfo fcinfo, int index)
-{
-	text	   *text_arg = PG_GETARG_TEXT_P(0);
-	char	   *arg;
-
-	arg = (char *) palloc(VARLEN(text_arg) + 1);
-	memmove(arg, VARDATA(text_arg), VARLEN(text_arg));
-	arg[VARLEN(text_arg)] = '\0';
-
-	return arg;
 }
 
 #ifdef WIN32

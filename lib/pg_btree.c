@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_btree.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -24,6 +24,7 @@
 
 #include "pg_bulkload_win32.h"
 #include "pg_btree.h"
+#include "pg_profile.h"
 
 static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
 static void unused_bt_spooldestroy(BTSpool *);
@@ -116,8 +117,11 @@ IndexSpoolEnd(BTSpool **spools,
 	{
 		if (spools[i] != NULL)
 		{
+			BULKLOAD_PROFILE_PUSH();
 			_bt_mergebuild(spools[i], relinfo->ri_RelationDesc, use_wal);
+			BULKLOAD_PROFILE_POP();
 			_bt_spooldestroy(spools[i]);
+			BULKLOAD_PROFILE(&prof_index_merge);
 		}
 		else if (reindex)
 		{
@@ -128,6 +132,7 @@ IndexSpoolEnd(BTSpool **spools,
 			indices[i] = NULL;
 			reindex_index(indexOid);
 			CommandCounterIncrement();
+			BULKLOAD_PROFILE(&prof_index_reindex);
 		}
 		else
 		{
@@ -266,6 +271,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 	 */
 	LockRelation(wstate.index, AccessExclusiveLock);
 	FlushRelationBuffers(wstate.index);
+	BULKLOAD_PROFILE(&prof_index_merge_flush);
 
 	PG_TRY();
 	{
@@ -280,7 +286,9 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 		{
 			/* Assign a new file node and merge two streams into it. */
 			setNewRelfilenode(wstate.index, RecentXmin);
+			BULKLOAD_PROFILE_PUSH();
 			_bt_mergeload(&wstate, btspool, &reader, heapRel);
+			BULKLOAD_PROFILE_POP();
 		}
 		else
 		{
@@ -296,6 +304,8 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	BULKLOAD_PROFILE(&prof_index_merge_build);
 }
 
 /*
@@ -320,6 +330,8 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 	itup = tuplesort_getindextuple(btspool->sortstate, true, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
 	indexScanKey = _bt_mkscankey_nodata(wstate->index);
+
+	BULKLOAD_PROFILE(&prof_index_merge_build_init);
 
 	for (;;)
 	{
@@ -406,6 +418,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 			/* Discard itup2 and read next */
 			itup2 = BTReaderGetNextItem(btspool2);
 		}
+		BULKLOAD_PROFILE(&prof_index_merge_build_unique);
 
 		/* When we see first tuple, create first index page */
 		if (state == NULL)
@@ -424,11 +437,13 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 			_bt_buildadd(wstate, state, itup2);
 			itup2 = BTReaderGetNextItem(btspool2);
 		}
+		BULKLOAD_PROFILE(&prof_index_merge_build_insert);
 	}
 	_bt_freeskey(indexScanKey);
 
 	/* Close down final pages and write the metapage */
 	_bt_uppershutdown(wstate, state);
+	BULKLOAD_PROFILE(&prof_index_merge_build_term);
 
 	/*
 	 * If the index isn't temp, we must fsync it down to disk before it's safe
@@ -450,6 +465,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 		RelationOpenSmgr(wstate->index);
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
+	BULKLOAD_PROFILE(&prof_index_merge_build_flush);
 }
 
 /**

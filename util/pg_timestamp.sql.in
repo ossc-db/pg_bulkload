@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: util/pg_timestamp.sql.in
  * 
- *    Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 SET search_path = public;

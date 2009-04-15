@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
 	pg_bulkload.c \

@@ -1,7 +1,7 @@
 /*
  * pg_heap_buffered: lib/pg_heap_buffered.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**

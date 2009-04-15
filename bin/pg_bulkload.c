@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: bin/pg_bulkload.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <sys/stat.h>
 #ifndef WIN32
 #include <sys/shm.h>

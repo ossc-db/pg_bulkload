@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_input_csv.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -16,25 +16,7 @@
 #include "access/htup.h"
 
 #include "pg_controlinfo.h"
-#include "pg_profile.h"
 #include "pg_strutil.h"
-
-#ifdef PROFILE
-static struct timeval tv_init;
-static struct timeval tv_read;
-static struct timeval tv_scan;
-static struct timeval tv_buf;
-static void
-print_profile()
-{
-	elog(INFO, "init: %d.%07d", (int) tv_init.tv_sec, (int) tv_init.tv_usec);
-	elog(INFO, "read: %d.%07d", (int) tv_read.tv_sec, (int) tv_read.tv_usec);
-	elog(INFO, "scan: %d.%07d", (int) tv_scan.tv_sec, (int) tv_scan.tv_usec);
-	elog(INFO, "buf: %d.%07d", (int) tv_buf.tv_sec, (int) tv_buf.tv_usec);
-}
-#else
-#define print_profile()
-#endif   /* PROFILE */
 
 /**
  * @brief Initial size of the record buffer and the field buffer.
@@ -314,7 +296,6 @@ CleanUpCSV(CSVParser *self)
 	if (self->field_buf)
 		pfree(self->field_buf);
 	pfree(self);
-	print_profile();
 }
 
 static bool
@@ -376,8 +357,6 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	int			src;			/* Index to the next source */
 	int			field_num = 0;	/* Number of self->fields already parsed */
 
-	add_prof((struct timeval *) NULL);
-
 	/*
 	 * If EOF found in the previous calls, returns zero.
 	 */
@@ -419,8 +398,6 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	ci->ci_field = 1;
 	self->field_buf[dst] = '\0';
 	self->fields[field_num] = self->field_buf + dst;
-
-	add_prof(&tv_init);
 
 	/*
 	 * Loop for each input character to parse record buffer.
@@ -478,7 +455,6 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				 */
 				cur = self->rec_buf;
 			}
-			add_prof(&tv_buf);
 
 			ret =
 				read(ci->ci_infd, self->rec_buf + self->used_len, self->buf_len - self->used_len - 1);
@@ -518,7 +494,6 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 			self->used_len += ret;
 			self->rec_buf[self->used_len] = '\0';
 			need_data = false;
-			add_prof(&tv_read);
 		}
 
 		c = self->rec_buf[i];
@@ -648,7 +623,6 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				self->fields[field_num] = self->field_buf + dst;
 			}
 		}
-		add_prof(&tv_scan);
 	}
 
 	/*

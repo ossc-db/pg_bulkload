@@ -1,7 +1,7 @@
 /*
  * pg_heap_direct: lib/pg_heap_direct.c
  *
- *	  Copyright(C) 2007-2008 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -152,6 +152,7 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 				ci->ci_status = 1;
 				goto record_proc_end;
 			}
+			BULKLOAD_PROFILE(&prof_heap_read);
 
 			/*
 			 * Compress the tuple data as needed.	TOAST_TUPLE_THRESHOLD
@@ -161,10 +162,9 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 			{
 				/* XXX: Better parameter for use_wal and use_fsm */
 				tuple = toast_insert_or_update(ci->ci_rel, tuple, NULL, 0);
-				ereport(DEBUG1,
-						(errmsg("tup compressed to %d", tuple->t_len)));
+				elog(DEBUG1, "tup compressed to %d", tuple->t_len);
 			}
-			add_prof(&tv_compress);
+			BULKLOAD_PROFILE(&prof_heap_toast);
 
 			/*
 			 * If a tuple does not fit to single block, it's an error. 
@@ -202,9 +202,9 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 				}
 
 				cur_offset = FirstOffsetNumber;
-				ereport(DEBUG2, (errmsg("current buffer# is %d", cur_block)));
+				elog(DEBUG2, "current buffer# is %d", cur_block);
 			}
-			add_prof(&tv_flush);
+			BULKLOAD_PROFILE(&prof_heap_flush);
 
 			/*
 			 * We have obtained shared lock of the table.  We can increment
@@ -218,7 +218,7 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 			itemId = PageGetItemId(blocks + BLCKSZ * cur_block, off);
 			item = PageGetItem(blocks + BLCKSZ * cur_block, itemId);
 			((HeapTupleHeader) item)->t_ctid = tuple->t_self;
-			add_prof(&tv_add);
+			BULKLOAD_PROFILE(&prof_heap_table);
 
 			/*
 			 * Loading is complete when a tuple is added to a block buffer.
@@ -230,6 +230,7 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 			 */
 			ExecStoreTuple(tuple, ci->ci_slot, InvalidBuffer, false);
 			IndexSpoolInsert(spools, ci->ci_slot, &(tuple->t_self), ci->ci_estate, true);
+			BULKLOAD_PROFILE(&prof_heap_index);
 
 		  record_proc_end:
 			;
@@ -289,7 +290,7 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
 		close_data_file(ci, datafd);
 		datafd = -1;
 	}
-	add_prof(&tv_flush);
+	BULKLOAD_PROFILE(&prof_heap_flush);
 
 	/*
 	 * Release the block buffer
@@ -414,7 +415,6 @@ flush_pages(int fd, ControlInfo *ci, char *blocks, int num, LoadStatus *ls)
 	 * Write the last block number to the load status file.
 	 */
 	UpdateLSF(ls, flush_num);
-	add_prof(&tv_write_lsf);
 
 	/*
 	 * Flush flush_num data block to the current file.
@@ -446,8 +446,6 @@ flush_pages(int fd, ControlInfo *ci, char *blocks, int num, LoadStatus *ls)
 		PageInit(blocks + BLCKSZ * i, BLCKSZ, 0);
 		PageSetTLI(blocks + BLCKSZ * i, ThisTimeLineID);
 	}
-
-	add_prof(&tv_write_data);
 
 	/*
 	 * Flush block buffers if any buffers remain unflushed.
@@ -569,7 +567,7 @@ CreateLSF(LoadStatus *ls, Relation rel)
 	 */
 	snprintf(ls->ls_lsfname, MAXPATHLEN,
 			 "%s/pg_bulkload/%d.%d.loadstatus", DataDir, MyDatabaseId,
-			 rel->rd_id);
+			 RelationGetRelid(rel));
 
 	/*
 	 * Get the first data file segment name.
