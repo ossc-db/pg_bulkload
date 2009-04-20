@@ -1,5 +1,5 @@
 /*
- * pg_bulkload: include/pg_bulkload.h
+ * pg_bulkload: include/pg_profile.h
  *
  *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
@@ -28,7 +28,6 @@ extern instr_time prof_heap_read;
 extern instr_time prof_heap_toast;
 extern instr_time prof_heap_table;
 extern instr_time prof_heap_index;
-extern instr_time prof_heap_flush;
 
 extern instr_time prof_index_merge;
 extern instr_time prof_index_reindex;

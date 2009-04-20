@@ -10,8 +10,9 @@
  */
 #include "postgres.h"
 
-#include "access/heapam.h"
-#include "access/transam.h"
+#include "access/tuptoaster.h"
+#include "access/xact.h"
+#include "executor/executor.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -23,6 +24,11 @@
 
 PG_MODULE_MAGIC;
 
+PG_FUNCTION_INFO_V1(pg_bulkload);
+Datum		pg_bulkload(PG_FUNCTION_ARGS);
+
+static HeapTuple ReadTuple(ControlInfo *ci, TransactionId xid, CommandId cid);
+
 #ifdef ENABLE_BULKLOAD_PROFILE
 static instr_time prof_init;
 static instr_time prof_heap;
@@ -33,7 +39,6 @@ instr_time prof_heap_read;
 instr_time prof_heap_toast;
 instr_time prof_heap_table;
 instr_time prof_heap_index;
-instr_time prof_heap_flush;
 
 instr_time prof_index_merge;
 instr_time prof_index_reindex;
@@ -65,7 +70,6 @@ BULKLOAD_PROFILE_PRINT()
 	elog(INFO, "  TOAST : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_toast));
 	elog(INFO, "  TABLE : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_table));
 	elog(INFO, "  INDEX : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_index));
-	elog(INFO, "  FLUSH : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_flush));
 	elog(INFO, "<INDEX>");
 	elog(INFO, "  MERGE      : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge));
 	elog(INFO, "    FLUSH    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_flush));
@@ -84,22 +88,21 @@ BULKLOAD_PROFILE_PRINT()
 /* ========================================================================
  * Implementation
  * ========================================================================*/
-PG_FUNCTION_INFO_V1(pg_bulkload);
-Datum		pg_bulkload(PG_FUNCTION_ARGS);
 
 /**
  * @brief Entry point of the user-defined function for pg_bulkload.
  * @return Returns number of loaded tuples.  If the case of errors, -1 will be
  * returned.
- * @todo It may be better to warn when loaded tuple number is different from
- * the input record number.
  */
 Datum
 pg_bulkload(PG_FUNCTION_ARGS)
 {
 	ControlInfo	   *ci = NULL;
 	char		   *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	int32			load_cnt;
+	ResultRelInfo  *relinfo;
+	EState		   *estate;
+	TupleTableSlot *slot;
+	int64			count;
 
 	/*
 	 * Check user previlege (must be the super user and need INSERT previlege
@@ -118,16 +121,38 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	ereport(NOTICE, (errmsg("BULK LOAD START")));
 	ci = OpenControlInfo(path);
 
+	/* create estate */
+	relinfo = makeNode(ResultRelInfo);
+	relinfo->ri_RangeTableIndex = 1;	/* dummy */
+	relinfo->ri_RelationDesc = ci->ci_rel;
+	relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
+	relinfo->ri_TrigInstrument = NULL;
+	ExecOpenIndices(relinfo);
+	estate = CreateExecutorState();
+	estate->es_num_result_relations = 1;
+	estate->es_result_relations = relinfo;
+	estate->es_result_relation_info = relinfo;
+
 	PG_TRY();
 	{
-		BTSpool		  **spools = NULL;
+		BTSpool		  **spools;
+		bool			use_wal;
+		TransactionId	xid;
+		CommandId		cid;
+		MemoryContext	ctx;
 
 		/*
 		 * STEP 1: Initialization
 		 */
 
-		ParserInitialize(ci->ci_parser, ci);
-		spools = IndexSpoolBegin(ci->ci_estate->es_result_relation_info);
+		/* Obtain transaction ID and command ID. */
+		xid = GetCurrentTransactionId();
+		cid = GetCurrentCommandId(true);
+
+		ParserInit(ci->ci_parser, ci);
+		spools = IndexSpoolBegin(relinfo);
+		slot = MakeSingleTupleTableSlot(RelationGetDescr(ci->ci_rel));
+
 		elog(DEBUG1, "pg_bulkload: STEP 1 OK");
 		BULKLOAD_PROFILE(&prof_init);
 
@@ -136,15 +161,77 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		 */
 
 		BULKLOAD_PROFILE_PUSH();
-		ci->ci_loader(ci, spools);
+
+		LoaderInit(ci->ci_loader, ci->ci_rel);
+
+		/* Switch into its memory context */
+		ctx = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+
+		/* Loop for each input file record. */
+		for (count = 0; count < ci->ci_limit; count++)
+		{
+			HeapTuple	tuple;
+
+			CHECK_FOR_INTERRUPTS();
+			ResetPerTupleExprContext(estate);
+
+			/* Read next tuple */
+			if ((tuple = ReadTuple(ci, xid, cid)) == NULL)
+				break;
+			BULKLOAD_PROFILE(&prof_heap_read);
+
+			/* Compress the tuple data if needed. */
+			if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
+				tuple = toast_insert_or_update(ci->ci_rel, tuple, NULL, 0);
+			BULKLOAD_PROFILE(&prof_heap_toast);
+
+			/* Insert the heap tuple and index entries. */
+			LoaderInsert(ci->ci_loader, ci->ci_rel, tuple);
+			BULKLOAD_PROFILE(&prof_heap_table);
+
+			/* Spool keys in the tuple */
+			ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+			IndexSpoolInsert(spools, slot, &(tuple->t_self), estate, true);
+			BULKLOAD_PROFILE(&prof_heap_index);
+		}
+
+		ResetPerTupleExprContext(estate);
+		MemoryContextSwitchTo(ctx);
+		use_wal = ci->ci_loader->use_wal;
+
+		/* Terminate spooler. */
+		ExecDropSingleTupleTableSlot(slot);
+		if (estate->es_result_relation_info)
+			ExecCloseIndices(estate->es_result_relation_info);
+		FreeExecutorState(estate);
+
+		/* Terminate loader. Be sure to set ci_loader to NULL. */
+		LoaderTerm(ci->ci_loader, false);
+		ci->ci_loader = NULL;
+
+		/* Terminate parser. Be sure to set ci_parser to NULL. */
+		ParserTerm(ci->ci_parser, false);
+		ci->ci_parser = NULL;
+
 		BULKLOAD_PROFILE_POP();
 
 		/* If an error has been found, abort. */
-		if (ci->ci_err_cnt)
+		if (ci->ci_err_cnt > 0)
 		{
-			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-							errmsg("input file error (error count=%d)",
-								   ci->ci_err_cnt)));
+			if (ci->ci_err_cnt > ci->ci_max_err_cnt)
+			{
+				ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("%d error(s) found in input file",
+							ci->ci_err_cnt)));
+			}
+			else
+			{
+				ereport(WARNING,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("skip %d error(s) in input file",
+							ci->ci_err_cnt)));
+			}
 		}
 
 		elog(DEBUG1, "pg_bulkload: STEP 2 OK");
@@ -157,8 +244,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		if (spools != NULL)
 		{
 			BULKLOAD_PROFILE_PUSH();
-			IndexSpoolEnd(spools, ci->ci_estate->es_result_relation_info,
-				true, ci->ci_loader == BufferedHeapLoad);
+			IndexSpoolEnd(spools, relinfo, true, use_wal);
 			BULKLOAD_PROFILE_POP();
 		}
 		elog(DEBUG1, "pg_bulkload: STEP 3 OK");
@@ -169,21 +255,20 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		 */
 
 		/* Save the number of loaded tuples and release control info. */
-		load_cnt = ci->ci_load_cnt;
-		CloseControlInfo(ci);
+		CloseControlInfo(ci, false);
 		ci = NULL;
 
 		elog(DEBUG1, "pg_bulkload: STEP 4 OK");
 
 		/* Write end log. */
 		ereport(NOTICE,
-				(errmsg("BULK LOAD END  (%d records)", load_cnt)));
+				(errmsg("BULK LOAD END (" int64_FMT " records)", count)));
 
 		BULKLOAD_PROFILE(&prof_term);
 	}
 	PG_CATCH();
 	{
-		CloseControlInfo(ci);
+		CloseControlInfo(ci, true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -191,21 +276,92 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();
 
-	PG_RETURN_INT32(load_cnt);
+	PG_RETURN_INT32(count);
 }
 
-HeapTuple
-ReadTuple(ControlInfo *ci, TransactionId xid, TransactionId cid)
+/**
+ * @brief Read the next tuple from parser.
+ * @param ci  [in/out] control info
+ * @param xid [in] current transaction id
+ * @param cid [in] current command id
+ * @return type
+ */
+static HeapTuple
+ReadTuple(ControlInfo *ci, TransactionId xid, CommandId cid)
 {
-	HeapTuple	tuple;
+	HeapTuple		tuple;
+	MemoryContext	ccxt;
+	bool			eof;
 
-	if (ParserReadLine(ci->ci_parser, ci) == 0)
-		return NULL;
+	ccxt = CurrentMemoryContext;
 
-	tuple = heap_form_tuple(RelationGetDescr(ci->ci_rel),
-							ci->ci_values, ci->ci_isnull);
+	eof = false;
+	do
+	{
+		tuple = NULL;
+		ci->ci_parsing_field = 0;
+
+		PG_TRY();
+		{
+			if (ParserRead(ci->ci_parser, ci))
+				tuple = heap_form_tuple(RelationGetDescr(ci->ci_rel),
+										ci->ci_values, ci->ci_isnull);
+			else
+				eof = true;
+		}
+		PG_CATCH();
+		{
+			ErrorData	   *errdata;
+			MemoryContext	ecxt;
+			char		   *message;
+
+			if (ci->ci_parsing_field <= 0)
+				PG_RE_THROW();	/* should not ignore */
+
+			ecxt = MemoryContextSwitchTo(ccxt);
+			errdata = CopyErrorData();
+
+			/* We cannot ignore query aborts. */
+			switch (errdata->sqlerrcode)
+			{
+				case ERRCODE_ADMIN_SHUTDOWN:
+				case ERRCODE_QUERY_CANCELED:
+					MemoryContextSwitchTo(ecxt);
+					PG_RE_THROW();
+					break;
+			}
+
+			/* Absorb general errors. */
+			ci->ci_err_cnt++;
+			if (errdata->message)
+				message = pstrdup(errdata->message);
+			else
+				message = "<no error message>";
+			FlushErrorState();
+			FreeErrorData(errdata);
+
+			ereport(WARNING,
+				(errmsg("BULK LOAD ERROR (row=" int64_FMT ", col=%d) %s",
+					ci->ci_read_cnt, ci->ci_parsing_field, message)));
+
+			/* Terminate if MAX_ERR_CNT has been reached. */
+			if (ci->ci_err_cnt > ci->ci_max_err_cnt)
+				eof = true;
+		}
+		PG_END_TRY();
+
+	} while (!eof && !tuple);
+
+	if (!tuple)
+		return NULL;	/* EOF */
+
 	if (ci->ci_rel->rd_rel->relhasoids)
 		HeapTupleSetOid(tuple, GetNewOid(ci->ci_rel));
+
+	/*
+	 * FIXME: the following is only needed for direct loaders because
+	 * heap_insert does the same things for buffered loaders.
+	 */
 
 	tuple->t_data->t_infomask &= ~(HEAP_XACT_MASK);
 #if PG_VERSION_NUM >= 80300
@@ -222,7 +378,3 @@ ReadTuple(ControlInfo *ci, TransactionId xid, TransactionId cid)
 
 	return tuple;
 }
-
-#ifdef WIN32
-#include "../../src/backend/utils/hash/pg_crc.c"
-#endif

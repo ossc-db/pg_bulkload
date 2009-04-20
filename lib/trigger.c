@@ -32,7 +32,7 @@ typedef struct Table
 	BulkInsertState	bistate;
 } Table;
 
-typedef struct Loader
+typedef struct TLoader
 {
 	EState		   *estate;
 	TupleTableSlot *slot;
@@ -40,13 +40,13 @@ typedef struct Loader
 	CommandId		cid;		/* CommandId for inserted tuples */
 	bool			trigger;	/* Enable trigger? */
 	bool			reindex;	/* Rebuild index? */
-} Loader;
+} TLoader;
 
-static Loader TriggerLoader;
+static TLoader TriggerLoader;
 
-static void LoaderInit(Loader *loader, Relation rel, bool trigger, bool reindex);
-static void LoaderTerm(Loader *loader);
-static void LoaderInsert(Loader *loader, HeapTuple tuple);
+static void LoaderInit(TLoader *loader, Relation rel, bool trigger, bool reindex);
+static void LoaderTerm(TLoader *loader);
+static void LoaderInsert(TLoader *loader, HeapTuple tuple);
 static void TableOpen(Table *table, Relation rel, bool reindex);
 static void TableClose(Table *table, EState *estate, bool reindex);
 
@@ -134,7 +134,7 @@ pg_bulkload_trigger_main(PG_FUNCTION_ARGS)
  * LoaderInit - 
  */
 static void
-LoaderInit(Loader *loader, Relation rel, bool trigger, bool reindex)
+LoaderInit(TLoader *loader, Relation rel, bool trigger, bool reindex)
 {
 	MemoryContext	cxt;
 
@@ -161,7 +161,7 @@ LoaderInit(Loader *loader, Relation rel, bool trigger, bool reindex)
  * LoaderTerm - 
  */
 static void
-LoaderTerm(Loader *loader)
+LoaderTerm(TLoader *loader)
 {
 	TableClose(&loader->table, loader->estate, loader->reindex);
 	ExecDropSingleTupleTableSlot(loader->slot);
@@ -172,7 +172,7 @@ LoaderTerm(Loader *loader)
  * LoaderInsert - 
  */
 static void
-LoaderInsert(Loader *loader, HeapTuple tuple)
+LoaderInsert(TLoader *loader, HeapTuple tuple)
 {
 	Table	   *target = &loader->table;
 

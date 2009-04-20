@@ -10,21 +10,13 @@
  */
 #include "postgres.h"
 
-#include <fcntl.h>
-#include <limits.h>
-#include <unistd.h>
-
-#include "access/heapam.h"
 #include "catalog/namespace.h"
 #include "executor/executor.h"
-#include "mb/pg_wchar.h"
 #include "miscadmin.h"
-#include "nodes/makefuncs.h"
 #include "storage/fd.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "utils/relcache.h"
 
 #include "pg_bulkload.h"
 #include "pg_controlinfo.h"
@@ -72,7 +64,7 @@ OpenControlInfo(const char *fname)
 	ci = (ControlInfo *) palloc0(sizeof(ControlInfo));
 	ci->ci_max_err_cnt = -1;
 	ci->ci_offset = -1;
-	ci->ci_limit = INT_MAX;
+	ci->ci_limit = INT64_MAX;
 	ci->ci_infd = -1;
 
 	/*
@@ -90,7 +82,7 @@ OpenControlInfo(const char *fname)
 	PG_CATCH();
 	{
 		fclose(file);	/* ignore errors */
-		CloseControlInfo(ci);
+		CloseControlInfo(ci, true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -234,9 +226,9 @@ ParseControlFile(ControlInfo *ci, FILE *file)
 			ASSERT_ONCE(ci->ci_loader == NULL);
 			
 			if (strcmp(target, "DIRECT") == 0)
-				ci->ci_loader = DirectHeapLoad;
+				ci->ci_loader = CreateDirectLoader();
 			else if (strcmp(target, "BUFFERED") == 0)
-				ci->ci_loader = BufferedHeapLoad;
+				ci->ci_loader = CreateBufferedLoader();
 			else
 				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 								errmsg("invalid loader \"%s\"", target)));
@@ -244,27 +236,24 @@ ParseControlFile(ControlInfo *ci, FILE *file)
 		else if (strcmp(keyword, "MAX_ERR_CNT") == 0)
 		{
 			ASSERT_ONCE(ci->ci_max_err_cnt < 0);
-			ci->ci_max_err_cnt = ParseInteger(target, 0);
+			ci->ci_max_err_cnt = ParseInt32(target, 0);
 		}
 		else if (strcmp(keyword, "OFFSET") == 0)
 		{
 			ASSERT_ONCE(ci->ci_offset < 0);
-			ci->ci_offset = ParseInteger(target, 0);
+			ci->ci_offset = ParseInt64(target, 0);
 		}
 		else if (strcmp(keyword, "LIMIT") == 0)
 		{
-			ASSERT_ONCE(ci->ci_limit == INT_MAX);
-			ci->ci_limit = ParseInteger(target, 0);
+			ASSERT_ONCE(ci->ci_limit == INT64_MAX);
+			ci->ci_limit = ParseInt64(target, 0);
 		}
-		else
-		{
-			if (ci->ci_parser == NULL ||
+		else if (ci->ci_parser == NULL ||
 				!ParserParam(ci->ci_parser, keyword, target))
-			{
-				ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("invalid keyword \"%s\"", keyword)));
-			}
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("invalid keyword \"%s\"", keyword)));
 		}
 	}
 
@@ -285,9 +274,9 @@ ParseControlFile(ControlInfo *ci, FILE *file)
 	 * Set defaults to unspecified parameters.
 	 */
 	if (ci->ci_loader == NULL)
-		ci->ci_loader = DirectHeapLoad;
+		ci->ci_loader = CreateDirectLoader();
 	if (ci->ci_max_err_cnt < 0)
-		ci->ci_max_err_cnt = 1;
+		ci->ci_max_err_cnt = 0;
 	if (ci->ci_offset < 0)
 		ci->ci_offset = 0;
 
@@ -309,7 +298,6 @@ static void
 PrepareControlInfo(ControlInfo *ci)
 {
 	Relation			rel;
-	ResultRelInfo	   *relinfo;
 	Form_pg_attribute  *attr;
 	int					attnum;
 	Oid					in_func_oid;
@@ -351,35 +339,17 @@ PrepareControlInfo(ControlInfo *ci)
 	ci->ci_rel = rel;
 
 	/*
-	 * open input data file
+	 * allocate buffer to store columns
 	 */
-	ci->ci_infd = BasicOpenFile(ci->ci_infname, O_RDONLY | PG_BINARY, 0);
-	if (ci->ci_infd == -1)
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not open \"%s\" %m", ci->ci_infname)));
-
-	/*
-	 * create estate
-	 */
-	relinfo = makeNode(ResultRelInfo);
-	relinfo->ri_RangeTableIndex = 1;	/* dummy */
-	relinfo->ri_RelationDesc = rel;
-	relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
-	relinfo->ri_TrigInstrument = NULL;
-	ExecOpenIndices(relinfo);
-
-	ci->ci_estate = CreateExecutorState();
-	ci->ci_estate->es_num_result_relations = 1;
-	ci->ci_estate->es_result_relations = relinfo;
-	ci->ci_estate->es_result_relation_info = relinfo;
-	ci->ci_slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
+	natts = RelationGetDescr(ci->ci_rel)->natts;
+	ci->ci_values = palloc(sizeof(Datum) * natts);
+	ci->ci_isnull = palloc(sizeof(bool) * natts);
+	MemSet(ci->ci_isnull, true, sizeof(bool) * natts);
 
 	/*
 	 * get column information of the target relation
 	 */
-	natts = RelationGetDescr(ci->ci_rel)->natts;
 	attr = RelationGetDescr(ci->ci_rel)->attrs;
-
 	ci->ci_typeioparams = (Oid *) palloc(natts * sizeof(Oid));
 	ci->ci_in_functions = (FmgrInfo *) palloc(natts * sizeof(FmgrInfo));
 	ci->ci_attnumlist = palloc(natts * sizeof(int));
@@ -400,9 +370,13 @@ PrepareControlInfo(ControlInfo *ci)
 		ci->ci_attnumcnt++;
 	}
 
-	ci->ci_values = palloc0(sizeof(Datum) * natts);
-	ci->ci_isnull = palloc(sizeof(bool) * natts);
-	MemSet(ci->ci_isnull, true, sizeof(bool) * natts);
+	/*
+	 * open input data file
+	 */
+	ci->ci_infd = BasicOpenFile(ci->ci_infname, O_RDONLY | PG_BINARY, 0);
+	if (ci->ci_infd == -1)
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not open \"%s\" %m", ci->ci_infname)));
 }
 
 /**
@@ -412,13 +386,20 @@ PrepareControlInfo(ControlInfo *ci)
  * -# close relation
  * -# free ControlInfo structure
  * @param ci [in/out] control information
+ * @param inError [in] true iff in error cleanup
  * @return void
  */
 void
-CloseControlInfo(ControlInfo *ci)
+CloseControlInfo(ControlInfo *ci, bool inError)
 {
 	if (ci == NULL)
 		return;
+
+	if (ci->ci_parser)
+		ParserTerm(ci->ci_parser, inError);
+
+	if (ci->ci_loader)
+		LoaderTerm(ci->ci_loader, inError);
 
 	if (ci->ci_rel)
 		heap_close(ci->ci_rel, NoLock);
@@ -434,9 +415,6 @@ CloseControlInfo(ControlInfo *ci)
 
 	if (ci->ci_rv != NULL)
 		pfree(ci->ci_rv);
-
-	if (ci->ci_parser)
-		ParserCleanUp(ci->ci_parser);
 
 	if (ci->ci_infname != NULL)
 		pfree(ci->ci_infname);
@@ -455,17 +433,6 @@ CloseControlInfo(ControlInfo *ci)
 
 	if (ci->ci_attnumlist)
 		pfree(ci->ci_attnumlist);
-
-	/* Release info used in rebuilding indexes. */
-	if (ci->ci_slot)
-		ExecDropSingleTupleTableSlot(ci->ci_slot);
-
-	if (ci->ci_estate)
-	{
-		if (ci->ci_estate->es_result_relation_info)
-			ExecCloseIndices(ci->ci_estate->es_result_relation_info);
-		FreeExecutorState(ci->ci_estate);
-	}
 
 	pfree(ci);
 }

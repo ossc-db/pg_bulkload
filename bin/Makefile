@@ -3,9 +3,7 @@
 #
 #    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
-SRCS = \
-	pg_bulkload.c \
-	pg_crc.c
+SRCS = pg_bulkload.c
 OBJS = $(SRCS:.c=.o)
 PROGRAM = pg_bulkload
 SCRIPTS = postgresql
@@ -21,12 +19,3 @@ top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
-
-pg_crc.c: $(top_srcdir)/src/backend/utils/hash/pg_crc.c
-	rm -f $@ && $(LN_S) $< .
-
-.PHONY: subclean
-clean: subclean
-
-subclean:
-	rm -f pg_crc.c

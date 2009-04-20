@@ -30,27 +30,19 @@
 #include <sys/shm.h>
 #endif
 
-#include "catalog/pg_control.h"
+#include "pg_loadstatus.h"
 #include "libpq-fe.h"
+
+#include "catalog/pg_control.h"
+#include "catalog/pg_tablespace.h"
+#include "nodes/pg_list.h"
 #include "storage/bufpage.h"
 #include "storage/pg_shmem.h"
 
-#include "pg_loadstatus.h"
-
-/**
- * @brief My version string
- */
-#define LOADER_VERSION "2.3.0"
-
-/**
- * @brief shmat() flag used in PGSharedMemoryIsInUse.
- * Refer to the line 44, backend/port/pg_shmem.c.
- */
-#ifdef SHM_SHARE_MMU
-#define PG_SHMAT_FLAGS SHM_SHARE_MMU
-#else
-#define PG_SHMAT_FLAGS 0
-#endif
+#define PROGRAM_NAME	"pg_bulkload"	/**< My program name */
+#define PROGRAM_VERSION	"2.4.0"			/**< My version string */
+#define PROGRAM_URL		"http://pgbulkload.projects.postgresql.org/"
+#define PROGRAM_EMAIL	"pgbulkload-general@pgfoundry.org"
 
 /**
  * @brief Definition of Assert() macros as done in PosgreSQL.
@@ -116,16 +108,6 @@ bool		intrflag;
 typedef int IpcMemoryId;
 
 /**
- * @brief Area to read a block.
- */
-char		page[BLCKSZ];
-
-/**
- * @brief Vacant page.
- */
-char		zeropage[BLCKSZ];
-
-/**
  * @Flag to indicate that the recovery should be performed in the silent mode.
  */
 bool		isSilentRecovery;
@@ -162,7 +144,7 @@ static List *GetLSFList(void);
 static DBState GetDBClusterState(void);
 
 /* Obtains load start block, end block, and the first data file name. */
-static void GetLoadStatusInfo(const char *lsfpath, LoadStatus * lsinfo);
+static void GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls);
 
 /* Initialize the List structure. */
 static List *InitializeList(void);
@@ -171,7 +153,9 @@ static List *InitializeList(void);
 static void AddListLSFName(List *list, const char *filename);
 
 /* Overwrite data pages with a vacant page. */
-static void ClearLoadedPage(LoadStatus * lsinfo);
+static void ClearLoadedPage(RelFileNode rnode,
+							BlockNumber blkbeg,
+							BlockNumber blkend);
 
 /* Write a log message. */
 static void LoaderLogMessage(bool cont, int elevel, const char *format, ...);
@@ -361,13 +345,11 @@ main(int argc, char *argv[])
 	else
 		ctlpath[0] = '\0';
 
-
 	if (optind != argc)
 	{
-		fprintf(stderr, "illegal arguments : try pg_bulkload --help\n");
+		fprintf(stderr, "illegal arguments : try %s --help\n", PROGRAM_NAME);
 		return 1;
 	}
-
 
 	/*
 	 * Determines data loading or recovery.
@@ -388,7 +370,7 @@ main(int argc, char *argv[])
 			return 1;
 		}
 
-		login_user = get_user_name("pg_bulkload");
+		login_user = get_user_name(PROGRAM_NAME);
 
 		/*
 		 * Sets default values.
@@ -517,32 +499,40 @@ LoadInterrupt(void)
 static void
 PrintUsage(void)
 {
-	fprintf(stderr, "pg_bulkload is a bulk data loading tool for PostgreSQL\n"
-			"\n"
-			"Usage:\n"
-			"Data Load : pg_bulkload [-d DBNAME] [-p PORT] [-U USER]"
-			" [-W PASSWORD] control_file_path\n"
-			"Recovery  : pg_bulkload -r [-D DATADIR]\n"
-			"\n"
-			"Options for data load:\n"
-			"  -d DBNAME       database name\n"
-			"  -p PORT         port number to listen on\n"
-			"  -U USER         user name\n"
-			"  -W PASSWORD     password\n"
-			"If these options are omitted, "
-			"the environment variables are used.\n"
-			"And if the environment variables are omitted too, "
-			"internal default values are used.\n"
-			"\n"
-			"Options for recovery:\n"
-			"  -r              execute recovery\n"
-			"  -D DATADIR      database directory\n\n"
-			"If the -D option is omitted, "
-			"the environment variable PGDATA is used.\n"
-			"\n"
-			"Other options:\n"
-			"  --help, -?      show this help, then exit\n"
-			"  --version, -V   output version information, then exit\n");
+	fprintf(stderr,
+		"%s is a bulk data loading tool for PostgreSQL\n"
+		"\n"
+		"Usage:\n"
+		"Data Load : pg_bulkload [-d DBNAME] [-p PORT] [-U USER]"
+		" [-W PASSWORD] control_file_path\n"
+		"Recovery  : pg_bulkload -r [-D DATADIR]\n"
+		"\n"
+		"Options for data load:\n"
+		"  -d DBNAME       database name\n"
+		"  -p PORT         port number to listen on\n"
+		"  -U USER         user name\n"
+		"  -W PASSWORD     password\n"
+		"If these options are omitted, "
+		"the environment variables are used.\n"
+		"And if the environment variables are omitted too, "
+		"internal default values are used.\n"
+		"\n"
+		"Options for recovery:\n"
+		"  -r              execute recovery\n"
+		"  -D DATADIR      database directory\n\n"
+		"If the -D option is omitted, "
+		"the environment variable PGDATA is used.\n"
+		"\n"
+		"Other options:\n"
+		"  --help, -?      show this help, then exit\n"
+		"  --version, -V   output version information, then exit\n",
+		PROGRAM_NAME);
+#ifdef PROGRAM_URL
+	printf("\nRead the website for details. <" PROGRAM_URL ">\n");
+#endif
+#ifdef PROGRAM_EMAIL
+	printf("\nReport bugs to <" PROGRAM_EMAIL ">.\n");
+#endif
 }
 
 
@@ -555,7 +545,7 @@ PrintUsage(void)
 static void
 PrintVersion(void)
 {
-	fprintf(stderr, "pg_bulkload " LOADER_VERSION "\n");
+	fprintf(stderr, "pg_bulkload " PROGRAM_VERSION "\n");
 }
 
 
@@ -633,7 +623,6 @@ LoaderLoadMain(const char *dbname,
 
 	if (PQstatus(conn) != CONNECTION_OK)
 		goto err_pqfinish;
-
 
 	sock = PQsocket(conn);
 	if (sock < 0)
@@ -791,7 +780,7 @@ LoaderRecoveryMain(void)
 	 */
 	if (chdir(DataDir) < 0)
 		LoaderLogMessage(false, ERROR,
-						 "could not change directory to \"DataDir\"");
+						 "could not change directory to \"%s\"", DataDir);
 
 	/*
 	 * create lock file.
@@ -844,7 +833,7 @@ StartLoaderRecovery(void)
 {
 	List	   *lsflist = NULL;
 	ListCell   *cur;
-	LoadStatus	lsinfo;
+	LoadStatus	ls;
 	bool		need_recovery;
 
 	/*
@@ -876,9 +865,7 @@ StartLoaderRecovery(void)
 
 		lsfname = (char *) lfirst(cur);
 
-		snprintf(lsfpath, MAXPGPATH, "pg_bulkload/%s", (char *) lfirst(cur));
-		lsfpath[MAXPGPATH - 1] = '\0';
-
+		snprintf(lsfpath, MAXPGPATH, BULKLOAD_LSF_DIR "/%s", (char *) lfirst(cur));
 
 		/*
 		 * if database cluster has abnormally shutdown,
@@ -889,7 +876,7 @@ StartLoaderRecovery(void)
 			/*
 			 * get contents of load status file.
 			 */
-			GetLoadStatusInfo(lsfpath, &lsinfo);
+			GetLoadStatusInfo(lsfpath, &ls);
 
 			/*
 			 * XXX :need to store relaion name?
@@ -902,7 +889,9 @@ StartLoaderRecovery(void)
 			/*
 			 * overwrite pages created by the loader by blank pages
 			 */
-			ClearLoadedPage(&lsinfo);
+			ClearLoadedPage(ls.ls.rnode,
+							ls.ls.exist_cnt,
+							ls.ls.exist_cnt + ls.ls.create_cnt);
 
 			if (!isSilentRecovery)
 				LoaderLogMessage(true, NOTICE,
@@ -975,10 +964,10 @@ GetLSFList(void)
 	 *	   and find files whose name end with ".loadstatus".
 	 *	   if exists, add file name to List.
 	 */
-	if ((dir = opendir("pg_bulkload")) == NULL)
+	if ((dir = opendir(BULKLOAD_LSF_DIR)) == NULL)
 		LoaderLogMessage(false, ERROR,
-						 "could not open LSF Directory \"pg_bulkload/\" : %s",
-						 strerror(errno));
+						 "could not open LSF Directory \"%s\" : %s",
+						 BULKLOAD_LSF_DIR, strerror(errno));
 
 	while ((dp = readdir(dir)) != NULL)
 	{
@@ -997,8 +986,8 @@ GetLSFList(void)
 
 	if (closedir(dir) == -1)
 		LoaderLogMessage(false, ERROR,
-						 "could not close LSF Directory \"pg_bulkload/\" : %s",
-						 strerror(errno));
+						 "could not close LSF Directory \"%s\" : %s",
+						 BULKLOAD_LSF_DIR, strerror(errno));
 
 	return list;
 }
@@ -1013,7 +1002,6 @@ GetLSFList(void)
  *		 to check status of database cluster.  </li>
  *	<li> open pg_control file. </li>
  *	<li> read pg_control file information,and store them to ControlFile structure. </li>
- *	<li> check CRC to verify pg_control file. </li>
  *	<li> return status of database cluster(State) of ControlFile. </li>
  * </ol>
  *
@@ -1023,8 +1011,7 @@ GetLSFList(void)
 static DBState
 GetDBClusterState(void)
 {
-	int			fd;
-	pg_crc32	crc;
+	int				fd;
 	ControlFileData ControlFile;
 
 	/*
@@ -1035,7 +1022,7 @@ GetDBClusterState(void)
 	/*
 	 * open, read, and close ControlFileData
 	 */
-	if ((fd = open("global/pg_control", O_RDONLY, 0)) == -1)
+	if ((fd = open("global/pg_control", O_RDONLY | PG_BINARY, 0)) == -1)
 		LoaderLogMessage(false, ERROR,
 						 "could not open Control File \"global/pg_control\" : %s",
 						 strerror(errno));
@@ -1051,21 +1038,6 @@ GetDBClusterState(void)
 						 "could not close Control File \"global/pg_control\" : %s",
 						 strerror(errno));
 
-	/*
-	 * CRC Check
-	 */
-	INIT_CRC32(crc);
-	COMP_CRC32(crc, &ControlFile, offsetof(ControlFileData, crc));
-
-	FIN_CRC32(crc);
-
-	if (!EQ_CRC32(crc, ControlFile.crc))
-		LoaderLogMessage(false, ERROR,
-						 "Control File : CRC Check Error. "
-						 "Calculated CRC checksum does not match value stored in file. "
-						 "Either the file is corrupt, or it has a different layout "
-						 "than this program is expecting.");
-
 	return ControlFile.state;
 }
 
@@ -1078,18 +1050,16 @@ GetDBClusterState(void)
  * <ol>
  *	<li> open LSF by checking path of LSG. </li>
  *	<li> read LSF, and store them to LoadStatus structure. </li>
- *	<li> check CRC to verify LSF. </li>
  * </ol>
  *
  * @param lsfpath [in]	path of load status file
- * @param lsinfo  [out] LoadStatus structure
+ * @param ls  [out] LoadStatus structure
  * @return void
  */
 static void
-GetLoadStatusInfo(const char *lsfpath, LoadStatus * lsinfo)
+GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
 {
 	int			fd;
-	pg_crc32	crc;
 	int			read_len;
 
 	Assert(lsfpath != NULL);
@@ -1097,13 +1067,13 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * lsinfo)
 	/*
 	 * open and read LSF
 	 */
-	if ((fd = open(lsfpath, O_RDONLY, 0)) == -1)
+	if ((fd = open(lsfpath, O_RDONLY | PG_BINARY, 0)) == -1)
 		LoaderLogMessage(false, ERROR,
 						 "could not open LoadStatusFile \"%s\" : %s",
 						 lsfpath, strerror(errno));
 
-	read_len = read(fd, lsinfo, sizeof(LoadStatus));
-	if (read_len < sizeof(pg_crc32))
+	read_len = read(fd, ls, sizeof(LoadStatus));
+	if (read_len != sizeof(LoadStatus))
 	{
 		LoaderLogMessage(false, ERROR,
 						 "could not read LoadStatusFile \"%s\" : %s",
@@ -1114,24 +1084,6 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * lsinfo)
 		LoaderLogMessage(false, ERROR,
 						 "could not close LoadStatusFile \"%s\" : %s",
 						 lsfpath, strerror(errno));
-
-	/*
-	 * CRC Check
-	 */
-	INIT_CRC32(crc);
-	COMP_CRC32(crc, ((char *) lsinfo) + sizeof(pg_crc32),
-			   read_len - sizeof(pg_crc32));
-	FIN_CRC32(crc);
-
-	/*
-	 * CRC Check Error
-	 */
-	if (!EQ_CRC32(crc, lsinfo->ls_crc))
-		LoaderLogMessage(false, ERROR,
-						 "LoadStatusFile : CRC Check Error. "
-						 "Calculated CRC checksum does not match value stored in file. "
-						 "Either the file is corrupt, or it has a different layout "
-						 "than this program is expecting.");
 }
 
 /**
@@ -1231,6 +1183,34 @@ AddListLSFName(List *list, const char *filename)
 	list->length++;
 }
 
+static void
+GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno)
+{
+	if (rnode.spcNode == GLOBALTABLESPACE_OID)
+	{
+		/* Shared system relations live in {datadir}/global */
+		snprintf(path, MAXPGPATH, "global/%u", rnode.relNode);
+	}
+	else if (rnode.spcNode == DEFAULTTABLESPACE_OID)
+	{
+		/* The default tablespace is {datadir}/base */
+		snprintf(path, MAXPGPATH, "base/%u/%u",
+					 rnode.dbNode, rnode.relNode);
+	}
+	else
+	{
+		/* All other tablespaces are accessed via symlinks */
+		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u",
+					 rnode.spcNode, rnode.dbNode, rnode.relNode);
+	}
+
+	if (segno > 0)
+	{
+		size_t	len = strlen(path);
+		snprintf(path + len, MAXPGPATH - len, ".%u", segno);
+	}
+}
+
 /**
  * @brief Overwrite pages created by pg_bulkload by blank pages.
  *
@@ -1242,74 +1222,60 @@ AddListLSFName(List *list, const char *filename)
  *		 and open the data file. </li>
  *	<li> overwrite this area by blank pages.  </li>
  * </ol>
- * @param lsinfo [in] information stored in load status file
+ * @param rnode  [in] Target relation
+ * @param blkbeg [in] Where to begin zerofill (included)
+ * @param blkend [in] Where to end zerofill (excluded)
  * @return void
  */
 static void
-ClearLoadedPage(LoadStatus * lsinfo)
+ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 {
-	BlockNumber rec_start;		/* recovery start point */
-	BlockNumber rec_end;		/* recovery end point */
-	BlockNumber segno;			/* data file segment no */
-	char		tmpfname[MAXPGPATH];	/* data file name to open */
-	Page		p = (Page) page;		/* area to read blocks */
-	Page		z = (Page) zeropage;	/* blank page */
-	int			blockcur;		/* block no currently procesing */
-	int			fd;				/* file descriptor */
-	off_t		seekpos;		/* position of block to recovery */
-	ssize_t		ret;			/* return value of read()  */
-	ssize_t		readlen;		/* size of data read by read()	*/
+	BlockNumber segno;				/* data file segment no */
+	char		segpath[MAXPGPATH];	/* data file name to open */
+	char	   *page;				/* area to read blocks */
+	Page		zeropage;			/* blank page */
+	int			blknum;				/* block no currently procesing */
+	int			fd;					/* file descriptor */
+	off_t		seekpos;			/* position of block to recovery */
+	ssize_t		ret;				/* return value of read()  */
+	ssize_t		readlen;			/* size of data read by read()	*/
 
-
-	/*
-	 * if no block is created by pg_bulkload, program terminates
-	 */
-	if (lsinfo->ls_create_cnt == 0)
+	/* if no block is created by pg_bulkload, no work needed. */
+	if (blkbeg <= blkend)
 		return;
 
 	/*
-	 * create blank pages
+	 * Allocate buffer page and blank pages with malloc so that the buffers
+	 * will be well-aligned.
 	 */
-	PageInit(z, BLCKSZ, 0);
-
+	page = malloc(BLCKSZ);
+	zeropage = (Page) malloc(BLCKSZ);
+	PageInit(zeropage, BLCKSZ, 0);
 
 	/*
-	 * compute first and last blocks of areas for recovery.
-	 * (first block) = (blocks at load start time: ls_exist_cnt)
-	 * (last block) = (blocks at load start time ls_exist_cnt)
-	 *						+ (blocks created by pg_bulkload ls_create_cnt)
-	 */
-	rec_start = lsinfo->ls_exist_cnt;
-	rec_end = lsinfo->ls_exist_cnt + lsinfo->ls_create_cnt;
-
-	/*
-	 * get file name of first file name from lsinfo.
+	 * get file name of first file name from ls.
 	 *	   open the file.
 	 *	   if size of the file is over than 1 file segment size(default 1GB),
 	 *	   set	proper extension.
 	 */
-	segno = rec_start / RELSEG_SIZE;
-	if (segno > 0)
-		sprintf(tmpfname, "%s.%u", lsinfo->ls_datafname, segno);
-	else
-		strcpy(tmpfname, lsinfo->ls_datafname);
+	segno = blkbeg / RELSEG_SIZE;
+	GetSegmentPath(segpath, rnode, segno);
 
-
-	fd = open(tmpfname, O_RDWR, S_IRUSR | S_IWUSR);
+	fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 	if (fd == -1)
 		LoaderLogMessage(false, ERROR,
 						 "could not open data file \"%s\" : %s",
-						 tmpfname, strerror(errno));
+						 segpath, strerror(errno));
 
-	seekpos = lseek(fd, (rec_start % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
+	seekpos = lseek(fd, (blkbeg % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 	if (seekpos == -1)
 		LoaderLogMessage(false, ERROR,
 						 "could not seek the target position "
-						 "in the data file \"%s\" : %s", tmpfname,
+						 "in the data file \"%s\" : %s", segpath,
 						 strerror(errno));
 
-	blockcur = rec_start;
+	blknum = blkbeg;
 
 	/*
 	 * pages created by pg_bulklod, overwrite them by blank pages.
@@ -1325,7 +1291,7 @@ ClearLoadedPage(LoadStatus * lsinfo)
 		 */
 		do
 		{
-			ret = read(fd, p + readlen, BLCKSZ - readlen);
+			ret = read(fd, page + readlen, BLCKSZ - readlen);
 			if (ret == -1)
 			{
 				if (errno == EAGAIN || errno == EINTR)
@@ -1333,14 +1299,14 @@ ClearLoadedPage(LoadStatus * lsinfo)
 				else
 					LoaderLogMessage(false, ERROR,
 									 "could not read data file \"%s\" : %s",
-									 tmpfname, strerror(errno));
+									 segpath, strerror(errno));
 			}
 			else if (ret == 0)
 			{
 				/*
 				 * case of partially writing, refill 0.
 				 */
-				memset(p + readlen, 0, BLCKSZ - readlen);
+				memset(page + readlen, 0, BLCKSZ - readlen);
 				ret = BLCKSZ - readlen;
 			}
 			readlen += ret;
@@ -1351,9 +1317,9 @@ ClearLoadedPage(LoadStatus * lsinfo)
 		/*
 		 * if page is created by pg_bulkload, overwrite it by blank page.
 		 */
-		if (IsPageCreatedByLoader(p))
+		if (IsPageCreatedByLoader((Page) page))
 		{
-			seekpos = lseek(fd, (blockcur % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
+			seekpos = lseek(fd, (blknum % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 			if (write(fd, zeropage, BLCKSZ) == -1)
 				LoaderLogMessage(false, ERROR,
@@ -1361,36 +1327,36 @@ ClearLoadedPage(LoadStatus * lsinfo)
 								 strerror(errno));
 		}
 
-		blockcur++;
+		blknum++;
 
-		if (blockcur >= rec_end)
+		if (blknum >= blkend)
 			break;
 
 		/*
 		 * if current block reach to the end of file, and need to process continuously,
 		 * open next segment file.
 		 */
-		if (blockcur % RELSEG_SIZE == 0)
+		if (blknum % RELSEG_SIZE == 0)
 		{
 			if (fsync(fd) != 0)
 				LoaderLogMessage(false, ERROR,
 								 "could not sync data file \"%s\" : %s",
-								 tmpfname, strerror(errno));
+								 segpath, strerror(errno));
 
 			if (close(fd) == -1)
 				LoaderLogMessage(false, ERROR,
 								 "could not close data file \"%s\" : %s",
-								 tmpfname, strerror(errno));
+								 segpath, strerror(errno));
 
-			sprintf(tmpfname, "%s.%u", lsinfo->ls_datafname, ++segno);
+			++segno;
+			GetSegmentPath(segpath, rnode, segno);
 
-			fd = open(tmpfname, O_RDWR, S_IRUSR | S_IWUSR);
+			fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 			if (fd == -1)
 				LoaderLogMessage(false, ERROR,
 								 "could not open data file \"%s\" : %s",
-								 tmpfname, strerror(errno));
+								 segpath, strerror(errno));
 		}
-
 	}
 
 	/*
@@ -1399,12 +1365,12 @@ ClearLoadedPage(LoadStatus * lsinfo)
 	if (fsync(fd) != 0)
 		LoaderLogMessage(false, ERROR,
 						 "could not sync data file \"%s\" : %s",
-						 tmpfname, strerror(errno));
+						 segpath, strerror(errno));
 
 	if (close(fd) == -1)
 		LoaderLogMessage(false, ERROR,
 						 "could not close data file \"%s\" : %s",
-						 tmpfname, strerror(errno));
+						 segpath, strerror(errno));
 }
 
 
@@ -1641,7 +1607,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * Think not to make the file protection weaker than 0600.	See
 		 * comments below.
 		 */
-		fd = open(filename, O_RDWR | O_CREAT | O_EXCL, 0600);
+		fd = open(filename, O_RDWR | O_CREAT | O_EXCL | PG_BINARY, 0600);
 		if (fd >= 0)
 			break;				/* Success; exit the retry loop */
 
@@ -1657,7 +1623,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * Read the file to get the old owner's PID.  Note race condition
 		 * here: file might have been deleted since we tried to create it.
 		 */
-		fd = open(filename, O_RDONLY, 0600);
+		fd = open(filename, O_RDONLY | PG_BINARY, 0600);
 		if (fd < 0)
 		{
 			if (errno == ENOENT)
@@ -1954,6 +1920,13 @@ get_user_name(const char *progname)
  * shmem segment IDs are reasonably common.
  */
 #ifndef WIN32
+
+#ifdef SHM_SHARE_MMU
+#define PG_SHMAT_FLAGS SHM_SHARE_MMU
+#else
+#define PG_SHMAT_FLAGS 0
+#endif
+
 bool
 PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2)
 {

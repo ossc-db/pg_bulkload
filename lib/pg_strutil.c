@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "utils/builtins.h"
+#include "utils/int8.h"
 
 #include "pg_strutil.h"
 
@@ -206,12 +207,30 @@ ParseSingleChar(const char *value)
 }
 
 /**
- * @brief Parse integer expression
+ * @brief Parse int32 expression
  */
 int
-ParseInteger(char *value, int minValue)
+ParseInt32(char *value, int minValue)
 {
-	int32	i = pg_atoi(value, sizeof(int32), 0);
+	int32	i;
+	
+	i = pg_atoi(value, sizeof(int32), 0);
+	if (i < minValue)
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+             errmsg("value \"%s\" is out of range", value)));
+	return i;
+}
+
+/**
+ * @brief Parse int64 expression
+ */
+int64
+ParseInt64(char *value, int64 minValue)
+{
+	int64	i;
+
+	i = DatumGetInt64(DirectFunctionCall1(int8in, CStringGetDatum(value)));
 	if (i < minValue)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),

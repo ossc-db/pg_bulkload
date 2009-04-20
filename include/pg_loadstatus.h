@@ -12,36 +12,36 @@
 #ifndef LOADSTATUS_H
 #define LOADSTATUS_H
 
-#include <sys/param.h>
-#include "postgres.h"
 #include "storage/block.h"
-#include "utils/rel.h"
+#include "storage/relfilenode.h"
+
+#ifndef MAXPGPATH
+#define MAXPGPATH		1024
+#endif
+
+#define BULKLOAD_LSF_DIR		"pg_bulkload"
+
+/* typical sector size is 512 byte */
+#define BULKLOAD_LSF_BLCKSZ		512
+
+#define BULKLOAD_LSF_PATH(buffer, ls) \
+	snprintf((buffer), MAXPGPATH, \
+			 BULKLOAD_LSF_DIR "/%d.%d.loadstatus", \
+			 (ls)->ls.rnode.dbNode, (ls)->ls.relid)
 
 /**
  * @brief Loading status information
  */
-typedef struct LoadStatus
+typedef union LoadStatus
 {
-	/**
-	 * @name Written every time
-	 */
-	pg_crc32	ls_crc;					/**< For file invalidation check */
-	BlockNumber ls_create_cnt;			/**< The number of blocks pg_bulkload creates */
-
-	/**
-	 * @name  Written only first one time
-	 */
-	BlockNumber ls_exist_cnt;			/**< The number of blocks already existing */
-	char		ls_datafname[MAXPATHLEN + 1];
-										/**< Data file name of the first segment */
-
-	/**
-	 * @name Not written for file
-	 */
-	int			ls_fd;		/**< File descriptor of load status file */
-	char		ls_lsfname[MAXPATHLEN + 1];
-										/**< Load status file name */
-
+	struct
+	{
+		Oid			relid;		/**< target relation oid */
+		RelFileNode	rnode;		/**< target relation node */
+		BlockNumber exist_cnt;	/**< number of blocks already existing */
+		BlockNumber create_cnt;	/**< number of blocks pg_bulkload creates */
+	} ls;
+	char	padding[BULKLOAD_LSF_BLCKSZ];
 } LoadStatus;
 
 #endif   /* LOADSTATUS_H */

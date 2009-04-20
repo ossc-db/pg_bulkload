@@ -24,7 +24,6 @@
 
 #include "pg_bulkload_win32.h"
 #include "pg_btree.h"
-#include "pg_profile.h"
 
 static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
 static void unused_bt_spooldestroy(BTSpool *);
@@ -44,6 +43,7 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #undef _bt_leafbuild
 
 #include "pg_bulkload.h"
+#include "pg_profile.h"
 
 /**
  * @brief Reader for existing B-Tree index

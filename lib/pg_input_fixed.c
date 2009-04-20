@@ -119,10 +119,10 @@ typedef struct FixedParser
 /*
  * Prototype declaration for local functions
  */
-static void	InitializeFixed(FixedParser *self, ControlInfo *ci);
-static bool	ReadLineFromFixed(FixedParser *self, ControlInfo *ci);
-static void	CleanUpFixed(FixedParser *self);
-static bool ParamFixed(FixedParser *self, const char *keyword, char *value);
+static void	FixedParserInit(FixedParser *self, ControlInfo *ci);
+static bool	FixedParserRead(FixedParser *self, ControlInfo *ci);
+static void	FixedParserTerm(FixedParser *self, bool inError);
+static bool FixedParserParam(FixedParser *self, const char *keyword, char *value);
 
 static void ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record);
 
@@ -133,11 +133,10 @@ Parser *
 CreateFixedParser(void)
 {
 	FixedParser* self = palloc0(sizeof(FixedParser));
-	self->base.initialize = (ParserInitProc) InitializeFixed;
-	self->base.read_line = (ParserReadProc) ReadLineFromFixed;
-	self->base.cleanup = (ParserTermProc) CleanUpFixed;
-	self->base.param = (ParserParamProc) ParamFixed;
-
+	self->base.init = (ParserInitProc) FixedParserInit;
+	self->base.read = (ParserReadProc) FixedParserRead;
+	self->base.term = (ParserTermProc) FixedParserTerm;
+	self->base.param = (ParserParamProc) FixedParserParam;
 	return (Parser *)self;
 }
 
@@ -152,11 +151,11 @@ CreateFixedParser(void)
  * @return void
  * @note Return to caller by ereport() if the number of fields in the table
  * definition is not correspond to the number of fields in input file.
- * @note Caller must release the resource by calling CleanUpFixed() after calling this
+ * @note Caller must release the resource by calling FixedParserTerm() after calling this
  * function.
  */
 static void
-InitializeFixed(FixedParser *self, ControlInfo *ci)
+FixedParserInit(FixedParser *self, ControlInfo *ci)
 {
 	int		i;
 	int		maxlen;
@@ -205,7 +204,7 @@ InitializeFixed(FixedParser *self, ControlInfo *ci)
 			if (errno == 0)
 				errno = EINVAL;
 			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not skip %d lines (%ld bytes) in the input file: %m",
+							errmsg("could not skip " int64_FMT " lines (%ld bytes) in the input file: %m",
 							ci->ci_offset, skipbytes)));
 		}
 	}
@@ -221,7 +220,7 @@ InitializeFixed(FixedParser *self, ControlInfo *ci)
  * @return void
  */
 static void
-CleanUpFixed(FixedParser *self)
+FixedParserTerm(FixedParser *self, bool inError)
 {
 	if (self->record_buf)
 		pfree(self->record_buf);
@@ -250,7 +249,7 @@ CleanUpFixed(FixedParser *self)
  * @return	Return true if there is a next record, or false if EOF.
  */
 static bool
-ReadLineFromFixed(FixedParser *self, ControlInfo *ci)
+FixedParserRead(FixedParser *self, ControlInfo *ci)
 {
 	char	   *record;
 
@@ -303,10 +302,6 @@ ReadLineFromFixed(FixedParser *self, ControlInfo *ci)
 
 	ExtractValuesFromFixed(self, ci, record);
 
-	/*
-	 * We should not do any operation here because ExtractValuesFromFixed
-	 * could throw exceptions.
-	 */
 	return true;
 }
 
@@ -580,7 +575,7 @@ ParseFormat(const char *value, Field *field)
 }
 
 static bool
-ParamFixed(FixedParser *self, const char *keyword, char *value)
+FixedParserParam(FixedParser *self, const char *keyword, char *value)
 {
 	if (strcmp(keyword, "COL") == 0)
 	{
@@ -603,7 +598,7 @@ ParamFixed(FixedParser *self, const char *keyword, char *value)
 		{
 			/* default is CHAR or VARCHAR (compatible with 2.2.x) */
 			field->read = (self->preserve_blanks ? Read_varchar : Read_char);
-			field->len = ParseInteger(value, 1);
+			field->len = ParseInt32(value, 1);
 		}
 		else
 		{
@@ -620,7 +615,7 @@ ParamFixed(FixedParser *self, const char *keyword, char *value)
 	else if (strcmp(keyword, "STRIDE") == 0)
 	{
 		ASSERT_ONCE(self->rec_len == 0);
-		self->rec_len = ParseInteger(value, 1);
+		self->rec_len = ParseInt32(value, 1);
 	}
 	else
 		return false;	/* unknown parameter */
@@ -712,11 +707,6 @@ Read_varchar(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnul
 #define float8_GetDatum		Float8GetDatum
 #define int16_FMT		"%d"
 #define int32_FMT		"%d"
-#ifdef HAVE_LONG_INT_64
-#define int64_FMT		"%ld"
-#else
-#define int64_FMT		"%lld"
-#endif
 #define uint16_FMT		"%u"
 #define uint32_FMT		"%u"
 #define float4_FMT		"%f"
@@ -803,13 +793,13 @@ ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record)
 	/*
 	 * Loop for fields in the input file
 	 */
-	ci->ci_field = 1;	/* ci_field is 1 origin */
 	for (i = 0; i < self->nfield; i++)
 	{
 		int			j = ci->ci_attnumlist[i];	/* Index of physical fields */
 		bool		isnull;
 		Datum		value;
 
+		ci->ci_parsing_field = i + 1;	/* ci_parsing_field is 1 origin */
 		value = self->fields[i].read(ci,
 			record + self->fields[i].offset, &self->fields[i], j, &isnull);
 
@@ -822,6 +812,5 @@ ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record)
 
 		ci->ci_isnull[j] = isnull;
 		ci->ci_values[j] = value;
-		ci->ci_field++;
 	}
 }

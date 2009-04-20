@@ -16,6 +16,25 @@
 
 typedef struct ControlInfo	ControlInfo;
 typedef struct Parser		Parser;
+typedef struct Loader		Loader;
+
+/*
+ * 64bit integer utils
+ */
+
+#ifndef INT64_MAX
+#ifdef LLONG_MAX
+#define INT64_MAX	LLONG_MAX
+#else
+#define INT64_MAX	INT64CONST(0x7FFFFFFFFFFFFFFF)
+#endif
+#endif
+
+#ifdef HAVE_LONG_INT_64
+#define int64_FMT		"%ld"
+#else
+#define int64_FMT		"%lld"
+#endif
 
 /*
  * Version compatibility issues.

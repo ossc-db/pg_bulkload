@@ -14,6 +14,7 @@ extern char *UnquoteString(char *str, char quote, char escape);
 extern char *FindUnquotedChar(char *str, char target, char quote, char escape);
 extern bool	ParseBoolean(const char *value, bool defaultValue);
 extern char	ParseSingleChar(const char *value);
-extern int	ParseInteger(char *value, int minValue);
+extern int	ParseInt32(char *value, int minValue);
+extern int64	ParseInt64(char *value, int64 minValue);
 
 #endif   /* STRUTIL_H_INCLUDED */

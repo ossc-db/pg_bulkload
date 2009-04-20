@@ -25,103 +25,93 @@
  * Parser
  */
 
-/** initialization functions */
 typedef void (*ParserInitProc)(Parser *self, ControlInfo *ci);
-
-/** read one line and transforms each field from string to internal representation */
 typedef bool (*ParserReadProc)(Parser *self, ControlInfo *ci);
-
-/** clean up function */
-typedef void (*ParserTermProc)(Parser *self);
-
-/** parse parser parameter */
+typedef void (*ParserTermProc)(Parser *self, bool inError);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
 
 struct Parser
 {
-	ParserInitProc		initialize;
-	ParserReadProc		read_line;
-	ParserTermProc		cleanup;
-	ParserParamProc		param;
+	ParserInitProc		init;	/**< initialize */
+	ParserReadProc		read;	/**< read one tuple */
+	ParserTermProc		term;	/**< clean up */
+	ParserParamProc		param;	/**< parse a parameter */
 };
 
 /*
  * Loader
  */
 
-typedef void (*Loader)(ControlInfo *ci, BTSpool **spools);
+typedef void (*LoaderInitProc)(Loader *self, Relation rel);
+typedef bool (*LoaderInsertProc)(Loader *self, Relation rel, HeapTuple tuple);
+typedef void (*LoaderTermProc)(Loader *self, bool inError);
 
-extern void DirectHeapLoad(ControlInfo *ci, BTSpool **spools);
-extern void BufferedHeapLoad(ControlInfo *ci, BTSpool **spools);
+struct Loader
+{
+	LoaderInitProc		init;	/**< initialize */
+	LoaderInsertProc	insert;	/**< insert one tuple */
+	LoaderTermProc		term;	/**< clean up */
+	bool				use_wal;
+};
 
 /**
  * @brief Control information
  */
 struct ControlInfo
 {
-	int			ci_max_err_cnt; /**< max error admissible number */
-	RangeVar   *ci_rv;			/**< table information from control file */
+	RangeVar   *ci_rv;				/**< target relation name */
+	int			ci_max_err_cnt;		/**< max error admissible number */
+
+	char	   *ci_infname;			/**< input file name */
+	int64		ci_offset;			/**< lines to skip */
+	int64		ci_limit;			/**< max input lines */
 
 	/*
-	 * Input file parameters
+	 * General status
 	 */
-
-	char	   *ci_infname;		/**< input file name */
-	int			ci_infd;		/**< input file descriptor */
-	int			ci_offset;		/**< lines to skip */
-	int			ci_limit;		/**< max input lines */
-	Parser	   *ci_parser;		/**< input file parser */
+	Relation	ci_rel;				/**< target relation */
+	int			ci_err_cnt;			/**< number of errors ignored */
+	int			ci_parsing_field;	/**< field number being parsed */
 
 	/*
-	 * database information
+	 * Parser parameters and status
+	 *	TODO: Move some fields to parser because they are implementation.
 	 */
-
-	Relation		ci_rel;				/**< load target relation */
-	EState		   *ci_estate;
-	TupleTableSlot *ci_slot;
-	Oid			   *ci_typeioparams;	/**< type information */
-	FmgrInfo	   *ci_in_functions;	/**< type transformation funcdtions */
-	int			   *ci_attnumlist;		/**< index arrays for valid columns */
-	int				ci_attnumcnt;		/**< length of ci_attnumlist */
+	Parser	   *ci_parser;			/**< input file parser */
+	Datum	   *ci_values;			/**< array of values of one line */
+	bool	   *ci_isnull;			/**< array of NULL marker of one line */
+	int			ci_infd;			/**< input file descriptor */
+	int64		ci_read_cnt;		/**< number of records read from input file */
+	Oid		   *ci_typeioparams;	/**< type information */
+	FmgrInfo   *ci_in_functions;	/**< type transformation funcdtions */
+	int		   *ci_attnumlist;		/**< index arrays for valid columns */
+	int			ci_attnumcnt;		/**< length of ci_attnumlist */
 
 	/*
-	 * buffer for line data
+	 * Loader parameters and status
 	 */
-
-	Datum	   *ci_values;	/**< array of values of one line */
-	bool	   *ci_isnull;	/**< array of NULL marker of one line */
-
-	/*
-	 * heap loader
-	 */
-
-	Loader	ci_loader;	/**< loader function */
-
-	/*
-	 * loading status
-	 */
-
-	int32		ci_read_cnt;	/**< number of records read from input file */
-	int32		ci_load_cnt;	/**< number of tuples loaded successfully */
-	int32		ci_field;		/**< field number of processing (1 origin) */
-	int			ci_err_cnt;		/**< number of occurred error */
-	int			ci_status;		/**< 0:running, 1:eof, -1:error */
+	Loader	   *ci_loader;	/**< loader */
 };
 
 /* External declarations */
 
 extern ControlInfo *OpenControlInfo(const char *fname);
-extern void CloseControlInfo(ControlInfo *ci);
+extern void CloseControlInfo(ControlInfo *ci, bool inError);
 
 extern Parser *CreateFixedParser(void);
 extern Parser *CreateCSVParser(void);
 
-#define ParserInitialize(self, ci)			((self)->initialize((self), (ci)))
-#define ParserReadLine(self, ci)			((self)->read_line((self), (ci)))
-#define ParserCleanUp(self)					((self)->cleanup((self)))
+#define ParserInit(self, ci)				((self)->init((self), (ci)))
+#define ParserRead(self, ci)				((self)->read((self), (ci)))
+#define ParserTerm(self, inError)			((self)->term((self), (inError)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
 
-extern HeapTuple ReadTuple(ControlInfo *ci, TransactionId xid, TransactionId cid);
+extern Loader *CreateDirectLoader(void);
+extern Loader *CreateBufferedLoader(void);
+
+#define LoaderInit(self, rel)			((self)->init((self), (rel)))
+#define LoaderInsert(self, rel, tuple)	((self)->insert((self), (rel), (tuple)))
+#define LoaderTerm(self, inError)		((self)->term((self), (inError)))
 
 #define ASSERT_ONCE(expr) \
 	do { if (!(expr)) \

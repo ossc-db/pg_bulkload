@@ -10,24 +10,14 @@
  */
 #include "postgres.h"
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-
 #include "access/heapam.h"
-#include "access/tuptoaster.h"
-#include "access/xact.h"
 #include "catalog/catalog.h"
-#include "executor/executor.h"
 #include "miscadmin.h"
-#include "storage/bufmgr.h"
 #include "storage/fd.h"
 
 #include "pg_bulkload.h"
-#include "pg_btree.h"
 #include "pg_controlinfo.h"
 #include "pg_loadstatus.h"
-#include "pg_profile.h"
 
 #if PG_VERSION_NUM < 80300
 #define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
@@ -39,263 +29,216 @@
 	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
 #endif
 
+/**
+ * @brief Heap loader using direct path
+ */
+typedef struct DirectLoader
+{
+	Loader			base;
+
+	LoadStatus		ls;
+	int				lsf_fd;		/**< File descriptor of load status file */
+	char			lsf_path[MAXPGPATH];	/**< Load status file path */
+
+	int				datafd;		/**< File descriptor of data file */
+
+	char		   *blocks;		/**< Local heap block buffer */
+	int				curblk;		/**< Index of the current block buffer */
+} DirectLoader;
 
 /**
- * @brief Total number of blocks at the time
- */
-#define LS_TOTAL_CNT(ls)	((ls)->ls_exist_cnt + (ls)->ls_create_cnt)
-
- /**
  * @brief Number of the block buffer
  */
 #define BLOCK_BUF_NUM		1024
 
+/*
+ * Prototype declaration for local functions.
+ */
+
+static void	DirectLoaderInit(DirectLoader *self, Relation rel);
+static void	DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple);
+static void	DirectLoaderTerm(DirectLoader *self, bool inError);
+
+#define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
+
+/**
+ * @brief Total number of blocks at the time
+ */
+#define LS_TOTAL_CNT(ls)	((ls)->ls.exist_cnt + (ls)->ls.create_cnt)
+
 /* Signature of static functions */
-static void direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools);
-static int	open_data_file(ControlInfo *ci, LoadStatus *ls);
-static int	flush_pages(int fd, ControlInfo *ci, char *blocks, int num, LoadStatus *ls);
-static void	close_data_file(ControlInfo *ci, int fd);
-static void	CreateLSF(LoadStatus *ls, Relation rel);
-static void	UpdateLSF(LoadStatus *ls, BlockNumber num);
-static void	CleanupLSF(LoadStatus *ls);
+static int	open_data_file(RelFileNode rnode, LoadStatus *ls);
+static void	flush_pages(DirectLoader *loader);
+static void	close_data_file(DirectLoader *loader);
+static void	UpdateLSF(DirectLoader *loader, BlockNumber num);
+static void ValidateLSFDirectory(const char *path);
 
 /* ========================================================================
  * Implementation
  * ========================================================================*/
 
 /**
- * @brief Create LoadStatus file and load heap tuples directly.
- * @return void
+ * @brief Create a new DirectLoader
  */
-void
-DirectHeapLoad(ControlInfo *ci, BTSpool **spools)
+Loader *
+CreateDirectLoader(void)
 {
-	LoadStatus ls = { 0 };
-
-	PG_TRY();
-	{
-		CreateLSF(&ls, ci->ci_rel);
-		direct_load(ci, &ls, spools);
-		CleanupLSF(&ls);
-	}
-	PG_CATCH();
-	{
-		/* Remove the load status file if there is no fatal erros. */
-		if (ci->ci_status >= 0)
-			CleanupLSF(&ls);
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	DirectLoader* self = palloc0(sizeof(DirectLoader));
+	self->base.init = (LoaderInitProc) DirectLoaderInit;
+	self->base.insert = (LoaderInsertProc) DirectLoaderInsert;
+	self->base.term = (LoaderTermProc) DirectLoaderTerm;
+	self->base.use_wal = false;
+	self->datafd = -1;
+	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
+	return (Loader *) self;
 }
 
 /**
- * @brief Store tuples into the heap using local buffers.
+ * @brief Create load status file
+ * @param self [in/out] Load status information
+ * @param rel [in] Relation for loading
+ */
+static void
+DirectLoaderInit(DirectLoader *self, Relation rel)
+{
+	int			ret;
+	LoadStatus *ls = &self->ls;
+
+	/* Initialize first block */
+	PageInit(GetCurrentPage(self), BLCKSZ, 0);
+	PageSetTLI(GetCurrentPage(self), ThisTimeLineID);
+
+	ValidateLSFDirectory(BULKLOAD_LSF_DIR);
+
+	/*
+	 * Initialize load status information
+	 */
+	ls->ls.relid = RelationGetRelid(rel);
+	ls->ls.rnode = rel->rd_node;
+	ls->ls.exist_cnt = RelationGetNumberOfBlocks(rel);
+	ls->ls.create_cnt = 0;
+	self->lsf_fd = -1;
+
+	BULKLOAD_LSF_PATH(self->lsf_path, ls);
+
+	/*
+	 * Create a load status file and write the initial status for it.
+	 * At the time, if we find any existing load status files, exit with error
+	 * because recovery process haven't been executed after failing load to the
+	 * same table.
+	 */
+	self->lsf_fd = BasicOpenFile(self->lsf_path,
+					 O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+	if (self->lsf_fd == -1)
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not create loadstatus file \"%s\": %m", self->lsf_path)));
+
+	ret = write(self->lsf_fd, ls, sizeof(LoadStatus));
+	if (ret != sizeof(LoadStatus))
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not write loadstatus file \"%s\": %m",
+							   self->lsf_path)));
+	if (pg_fsync(self->lsf_fd) != 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not fsync loadstatus file \"%s\": %m", self->lsf_path)));
+}
+
+/**
+ * @brief Create LoadStatus file and load heap tuples directly.
  * @return void
  */
 static void
-direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
+DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 {
-	int				i;
-	TransactionId	xid;
-	CommandId		cid;
-	Size			saveFreeSpace;
-	int				cur_block = 0;	/* Index of the current block buffer */
-	OffsetNumber	cur_offset = FirstOffsetNumber;
-	char		   *blocks = NULL;	/* Pointer to the local block buffer */
-	int				datafd = -1;
-	MemoryContext	org_ctx;
-
-	/* Initialize block buffers. */
-	blocks = (char *) palloc(BLCKSZ * BLOCK_BUF_NUM);
-	for (i = 0; i < BLOCK_BUF_NUM; i++)
-	{
-		PageInit(blocks + BLCKSZ * i, BLCKSZ, 0);
-		PageSetTLI(blocks + BLCKSZ * i, ThisTimeLineID);
-	}
-
-	/* Obtain transaction ID and command ID. */
-	xid = GetCurrentTransactionId();
-	cid = GetCurrentCommandId(true);
-	saveFreeSpace = RelationGetTargetPageFreeSpace(ci->ci_rel,
-												   HEAP_DEFAULT_FILLFACTOR);
-
-	/* Switch into its memory context */
-	org_ctx = MemoryContextSwitchTo(GetPerTupleMemoryContext(ci->ci_estate));
+	Page			page;
+	OffsetNumber	offnum;
+	ItemId			itemId;
+	Item			item;
+	LoadStatus	   *ls = &self->ls;
 
 	/*
-	 * Loop for each input file record.
-	 * Allow errors upto specified number, so accumulate errors for each record.
+	 * If we're gonna fail for oversize tuple, do it right away
 	 */
-	while (ci->ci_status == 0 && ci->ci_load_cnt < ci->ci_limit)
+	if (MAXALIGN(tuple->t_len) > MaxHeapTupleSize)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("row is too big: size %lu, maximum size %lu",
+						(unsigned long) tuple->t_len,
+						(unsigned long) MaxHeapTupleSize)));
+
+	/*
+	 * Tuples are added from the end of each page, we have to determine
+	 * the insersion point regarding alignment.   For this, we have to
+	 * compare tuple size and the free area of a give page considering
+	 * this alignment.
+	 *
+	 * We don't have to consider this alignment if free area of pages
+	 * decreases in the unit of MAXIMUM_ALIGNOF.
+	 *
+	 * In the other cases, we have to consider this alignment to prevent
+	 * incorrect page update.
+	 *
+	 * Here, we use MAXALIGN() macro to obtain tuple size with alignment
+	 * and compare this with free are in this page.   We flush the buffer
+	 * and obtain new block if sufficient free area is not found in the page.
+	 */
+	page = GetCurrentPage(self);
+	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
+		RelationGetTargetPageFreeSpace(rel, HEAP_DEFAULT_FILLFACTOR))
 	{
-		PG_TRY();
+		if (self->curblk < BLOCK_BUF_NUM - 1)
+			self->curblk++;
+		else
 		{
-			HeapTuple		tuple;
-			OffsetNumber	off;
-			ItemId			itemId;
-			Item			item;
-
-			CHECK_FOR_INTERRUPTS();
-
-			/* Reset the per-tuple exprcontext */
-			ResetPerTupleExprContext(ci->ci_estate);
-
-			/*
-			 * Read record data until EOF is encountered.	Because PG_TRY()
-			 * is implemented using "do{} while (...);", goto statement is
-			 * used to get out from the loop.	Goto target assumes org_ctx
-			 * and so memory context is changed before the goto statement
-			 * here.
-			 */
-			if ((tuple = ReadTuple(ci, xid, cid)) == NULL)
-			{
-				ci->ci_status = 1;
-				goto record_proc_end;
-			}
-			BULKLOAD_PROFILE(&prof_heap_read);
-
-			/*
-			 * Compress the tuple data as needed.	TOAST_TUPLE_THRESHOLD
-			 * is one fourth of the block size.
-			 */
-			if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
-			{
-				/* XXX: Better parameter for use_wal and use_fsm */
-				tuple = toast_insert_or_update(ci->ci_rel, tuple, NULL, 0);
-				elog(DEBUG1, "tup compressed to %d", tuple->t_len);
-			}
-			BULKLOAD_PROFILE(&prof_heap_toast);
-
-			/*
-			 * If a tuple does not fit to single block, it's an error. 
-			 */
-			if (MAXALIGN(tuple->t_len) > MaxHeapTupleSize)
-				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-								errmsg("tuple too long (%d byte)",
-									   tuple->t_len)));
-
-			/*
-			 * Tuples are added from the end of each page, we have to determine
-			 * the insersion point regarding alignment.   For this, we have to
-			 * compare tuple size and the free area of a give page considering
-			 * this alignment.
-			 *
-			 * We don't have to consider this alignment if free area of pages
-			 * decreases in the unit of MAXIMUM_ALIGNOF.
-			 *
-			 * In the other cases, we have to consider this alignment to prevent
-			 * incorrect page update.
-			 *
-			 * Here, we use MAXALIGN() macro to obtain tuple size with alignment
-			 * and compare this with free are in this page.   We flush the buffer
-			 * and obtain new block if sufficient free area is not found in the page.
-			 */
-			if (PageGetFreeSpace(blocks + BLCKSZ * cur_block) <
-				MAXALIGN(tuple->t_len) + saveFreeSpace)
-			{
-				if (cur_block < BLOCK_BUF_NUM - 1)
-					cur_block++;
-				else
-				{
-					datafd = flush_pages(datafd, ci, blocks, cur_block + 1, ls);
-					cur_block = 0;
-				}
-
-				cur_offset = FirstOffsetNumber;
-				elog(DEBUG2, "current buffer# is %d", cur_block);
-			}
-			BULKLOAD_PROFILE(&prof_heap_flush);
-
-			/*
-			 * We have obtained shared lock of the table.  We can increment
-			 * the point to insert a tuple one by one.
-			 */
-			off = PageAddItem(blocks + BLCKSZ * cur_block,
-					(Item) tuple->t_data, tuple->t_len, cur_offset, false, true);
-			cur_offset = OffsetNumberNext(off);
-
-			ItemPointerSet(&(tuple->t_self), LS_TOTAL_CNT(ls) + cur_block, off);
-			itemId = PageGetItemId(blocks + BLCKSZ * cur_block, off);
-			item = PageGetItem(blocks + BLCKSZ * cur_block, itemId);
-			((HeapTupleHeader) item)->t_ctid = tuple->t_self;
-			BULKLOAD_PROFILE(&prof_heap_table);
-
-			/*
-			 * Loading is complete when a tuple is added to a block buffer.
-			 */
-			ci->ci_load_cnt++;
-
-			/*
-			 * Accumulate info from created heap tuple to the index pool.
-			 */
-			ExecStoreTuple(tuple, ci->ci_slot, InvalidBuffer, false);
-			IndexSpoolInsert(spools, ci->ci_slot, &(tuple->t_self), ci->ci_estate, true);
-			BULKLOAD_PROFILE(&prof_heap_index);
-
-		  record_proc_end:
-			;
+			flush_pages(self);
+			self->curblk = 0;	/* recycle from first block */
 		}
-		PG_CATCH();
-		{
-			ErrorData	   *errdata;
-			MemoryContext	ecxt;
-			char			tplerrmsg[1024];
 
-			ecxt = MemoryContextSwitchTo(GetPerTupleMemoryContext(ci->ci_estate));
-			errdata = CopyErrorData();
+		page = GetCurrentPage(self);
 
-			/* Clean up files when query is canceled. */
-			switch (errdata->sqlerrcode)
-			{
-				case ERRCODE_ADMIN_SHUTDOWN:
-				case ERRCODE_QUERY_CANCELED:
-					if (datafd != -1)
-					{
-						close_data_file(ci, datafd);
-						datafd = -1;
-					}
-					MemoryContextSwitchTo(ecxt);
-					PG_RE_THROW();
-					break;
-			}
-
-			/* Absorb general errors. */
-			ci->ci_err_cnt++;
-			strncpy(tplerrmsg, errdata->message, 1023);
-			FlushErrorState();
-			FreeErrorData(errdata);
-
-			ereport(WARNING, (errmsg("BULK LOAD ERROR (row=%d, col=%d) %s",
-									 ci->ci_read_cnt, ci->ci_field,
-									 tplerrmsg)));
-
-			/*
-			 * Terminate if MAX_ERR_CNT has been reached.
-			 */
-			if (ci->ci_max_err_cnt > 0 && ci->ci_err_cnt >= ci->ci_max_err_cnt)
-				ci->ci_status = 1;
-		}
-		PG_END_TRY();
+		/* Initialize current block */
+		PageInit(page, BLCKSZ, 0);
+		PageSetTLI(page, ThisTimeLineID);
 	}
 
-	ResetPerTupleExprContext(ci->ci_estate);
-	MemoryContextSwitchTo(org_ctx);
+	/* put the tuple on local page. */
+	offnum = PageAddItem(page, (Item) tuple->t_data,
+		tuple->t_len, InvalidOffsetNumber, false, true);
 
+	ItemPointerSet(&(tuple->t_self), LS_TOTAL_CNT(ls) + self->curblk, offnum);
+	itemId = PageGetItemId(page, offnum);
+	item = PageGetItem(page, itemId);
+	((HeapTupleHeader) item)->t_ctid = tuple->t_self;
+}
+
+/**
+ * @brief Clean up load status information
+ *
+ * @param self [in/out] Load status information
+ * @param 
+ * @return void
+ */
+static void
+DirectLoaderTerm(DirectLoader *self, bool inError)
+{
 	/* Flush unflushed block buffer and close the heap file. */
-	if (cur_block > 0 || !PageIsEmpty(blocks + BLCKSZ * cur_block))
-		datafd = flush_pages(datafd, ci, blocks, cur_block + 1, ls);
+	if (!inError)
+		flush_pages(self);
+	close_data_file(self);
 
-	if (datafd != -1)
+	if (self->lsf_fd != -1)
 	{
-		close_data_file(ci, datafd);
-		datafd = -1;
+		close(self->lsf_fd);
+		self->lsf_fd = -1;
+		if (unlink(self->lsf_path) == -1)
+			ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not unlink load status file: %m")));
 	}
-	BULKLOAD_PROFILE(&prof_heap_flush);
 
-	/*
-	 * Release the block buffer
-	 */
-	pfree(blocks);
+	if (self->blocks)
+		pfree(self->blocks);
+	pfree(self);
 }
 
 /**
@@ -312,75 +255,33 @@ direct_load(ControlInfo *ci, LoadStatus *ls, BTSpool **spools)
  *	 <li>If there are other data, write them too.</li>
  * </ol>
  *
- * @param fd [in] File descripter of the data file.
- * @param ci [in/out] Control Info.
- * @param blocks [in/out] Pointer to the block buffer.
- * @param num [in] Number of buffers to be written.
+ * @param loader [in] Direct Loader.
  * @return File descriptor for the current data file.
  */
-static int
-flush_pages(int fd, ControlInfo *ci, char *blocks, int num, LoadStatus *ls)
+static void
+flush_pages(DirectLoader *loader)
 {
 	int			i;
-	int			ret;
-	int			flush_num;		/* Number of blocks to be added to the current file. */
+	int			num;
+	LoadStatus *ls = &loader->ls;
 
-	/*
-	 * Switch to the next file if the current file has been filled up.
-	 */
-	if ((LS_TOTAL_CNT(ls)) % RELSEG_SIZE == 0 && fd != -1)
-	{
-		close_data_file(ci, fd);
-		fd = -1;
-	}
-	if (fd == -1)
-		fd = open_data_file(ci, ls);
+	num = loader->curblk;
+	if (!PageIsEmpty(GetCurrentPage(loader)))
+		num += 1;
+
+	if (num <= 0)
+		return;		/* no work */
 
 	/*
 	 * Add WAL entry (only the first page).
-	 * See backend/access/nbtree/nbtsort.c:278.
+	 * See backend/access/nbtree/nbtsort.c : _bt_blwritepage()
 	 */
-	if (ls->ls_create_cnt == 0)
+	if (ls->ls.create_cnt == 0)
 	{
-		/*
-		 * We use the heap NEWPAGE record type for this
-		 */
-		xl_heap_newpage xlrec;
 		XLogRecPtr	recptr;
-		XLogRecData rdata[2];
 
-		/*
-		 * NO ELOG(ERROR) will belogged from here untill newpage op.
-		 */
-		START_CRIT_SECTION();
-
-		xlrec.node = ci->ci_rel->rd_node;
-		xlrec.blkno = ls->ls_exist_cnt; /* 0 origin */
-
-		rdata[0].buffer = InvalidBuffer;
-		rdata[0].data = (char *) &xlrec;
-		rdata[0].len = SizeOfHeapNewpage;
-		rdata[0].next = &(rdata[1]);
-
-		rdata[1].buffer = InvalidBuffer;
-		rdata[1].data = (char *) blocks;
-		rdata[1].len = BLCKSZ;
-		rdata[1].next = NULL;
-
-		recptr = XLogInsert(RM_HEAP_ID, XLOG_HEAP_NEWPAGE, rdata);
-
-		/*
-		 * In nbtsort.c, the code looks as follows.   Here, because we need WAL
-		 * pointer fo the page header in the recovery, this pointer is not upadted.
-		 * TimeLineID has been set at block buffer initialization.	 It is not
-		 * updated here.
-		 */
-		/*
-		 * PageSetLSN(blocks, recptr);
-		 * PageSetTLI(blocks, ThisTimeLineID);
-		 */
-
-		END_CRIT_SECTION();
+		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
+			ls->ls.exist_cnt, loader->blocks);
 
 		/*
 		 * If postgres process, such as loader and COPY, is killed by "kill -9",
@@ -407,69 +308,77 @@ flush_pages(int fd, ControlInfo *ci, char *blocks, int num, LoadStatus *ls)
 	}
 
 	/*
-	 * Obtain number of blocks can be written to the current file.
+	 * Write blocks. We might need to write multiple files on boundary of
+	 * relation segments.
 	 */
-	flush_num = Min(num, RELSEG_SIZE - LS_TOTAL_CNT(ls) % RELSEG_SIZE);
-
-	/*
-	 * Write the last block number to the load status file.
-	 */
-	UpdateLSF(ls, flush_num);
-
-	/*
-	 * Flush flush_num data block to the current file.
-	 * Then the current file size becomes RELSEG_SIZE blocks.
-	 */
+	for (i = 0; i < num;)
 	{
-		int			write_len = 0;
+		char	   *buffer;
+		int			total;
+		int			written;
+		int			flush_num;
+		BlockNumber	relblks = LS_TOTAL_CNT(ls);
 
-		do
+		/* Switch to the next file if the current file has been filled up. */
+		if (relblks % RELSEG_SIZE == 0)
+			close_data_file(loader);
+		if (loader->datafd == -1)
+			loader->datafd = open_data_file(ls->ls.rnode, ls);
+
+		/* Number of blocks to be added to the current file. */
+		flush_num = Min(num, RELSEG_SIZE - relblks % RELSEG_SIZE);
+		Assert(flush_num > 0);
+
+		/* Write the last block number to the load status file. */
+		UpdateLSF(loader, flush_num);
+
+		/*
+		 * Flush flush_num data block to the current file.
+		 * Then the current file size becomes RELSEG_SIZE self->blocks.
+		 */
+		buffer = loader->blocks + BLCKSZ * i;
+		total = BLCKSZ * flush_num;
+		written = 0;
+		while (total > 0)
 		{
-			ret =
-				write(fd, blocks + write_len, BLCKSZ * flush_num - write_len);
-			if (ret == -1)
+			int	len = write(loader->datafd, buffer + written, total);
+			if (len == -1)
 			{
-				ci->ci_status = -1;
+				/*
+				 * TODO: retry if recoverable error
+				 */
+
+				/* fatal error, do not want to write blocks anymore */
 				ereport(ERROR, (errcode_for_file_access(),
 								errmsg("could not write to data file: %m")));
 			}
-			write_len += ret;
+			written += len;
+			total -= len;
 		}
-		while (write_len < BLCKSZ * flush_num);
+
+		i += flush_num;
 	}
 
 	/*
-	 * Initialize block buffers which have been flushed to the data file.
+	 * NOTICE: Be sure reset curblk to 0 and reinitialize recycled page
+	 * if you will continue to use blocks.
 	 */
-	for (i = 0; i < flush_num; i++)
-	{
-		PageInit(blocks + BLCKSZ * i, BLCKSZ, 0);
-		PageSetTLI(blocks + BLCKSZ * i, ThisTimeLineID);
-	}
-
-	/*
-	 * Flush block buffers if any buffers remain unflushed.
-	 */
-	if (flush_num < num)
-		fd = flush_pages(fd, ci, blocks + BLCKSZ * flush_num, num - flush_num, ls);
-
-	return fd;
 }
 
 /**
  * @brief Open the next data file and returns its descriptor.
- * @param ci [in] Control Info.
+ * @param rnode [in] RelFileNode of target relation.
  * @return File descriptor of the last data file.
  */
 static int
-open_data_file(ControlInfo *ci, LoadStatus *ls)
+open_data_file(RelFileNode rnode, LoadStatus *ls)
 {
 	int			fd = -1;
 	int			ret;
 	BlockNumber segno;
 	char	   *fname = NULL;
 
-	fname = relpath(ci->ci_rel->rd_node, MAIN_FORKNUM);
+	fname = relpath(rnode, MAIN_FORKNUM);
 	segno = LS_TOTAL_CNT(ls) / RELSEG_SIZE;
 	if (segno > 0)
 	{
@@ -502,166 +411,73 @@ open_data_file(ControlInfo *ci, LoadStatus *ls)
 
 /**
  * @brief Flush and close the data file.
- * @param ci [in] Control Info.
- * @param fd [in] Data file.
+ * @param loader [in] Direct Loader.
  * @return void
  */
 static void
-close_data_file(ControlInfo *ci, int fd)
+close_data_file(DirectLoader *loader)
 {
-	if (pg_fsync(fd) != 0)
+	if (loader->datafd != -1)
 	{
-		ci->ci_status = -1;
-		ereport(ERROR, (errcode_for_file_access(),
+		if (pg_fsync(loader->datafd) != 0)
+			ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not sync data file: %m")));
-	}
-	if (close(fd) < 0)
-	{
-		ci->ci_status = -1;
-		ereport(ERROR, (errcode_for_file_access(),
+		if (close(loader->datafd) < 0)
+			ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not close data file: %m")));
+		loader->datafd = -1;
 	}
-}
-
-/*
- * The target of computing CRC is from ls_create_cnt to ls_datafname
- * (This includes the end of NUL character.)
- * The total size of target area is as following:
- *	- ls_create_cnt
- *	- ls_exist_cnt
- *	- length of ls_datafname + 1(for NUL character)
- */
-#define CALC_CRC32(ls) \
-do { \
-	INIT_CRC32((ls)->ls_crc); \
-	COMP_CRC32((ls)->ls_crc, (char *)&(ls)->ls_create_cnt, \
-			(sizeof(BlockNumber) * 2) + \
-			strlen((ls)->ls_datafname) + 1 \
-	); \
-	FIN_CRC32((ls)->ls_crc); \
-} while (0);
-
-/**
- * @brief Create load status file
- * @param rel [in] Relation for loading
- * @return Load status information
- */
-static void
-CreateLSF(LoadStatus *ls, Relation rel)
-{
-	int			ret;
-	int			len;
-	char	   *datafname;
-
-	/*
-	 * Initialize load status information
-	 */
-	ls->ls_exist_cnt = 0;
-	ls->ls_create_cnt = 0;
-	ls->ls_lsfname[0] = '\0';
-	ls->ls_datafname[0] = '\0';
-	ls->ls_fd = -1;
-
-	/*
-	 * Create load statul file name based on database OID and table OID.
-	 */
-	snprintf(ls->ls_lsfname, MAXPATHLEN,
-			 "%s/pg_bulkload/%d.%d.loadstatus", DataDir, MyDatabaseId,
-			 RelationGetRelid(rel));
-
-	/*
-	 * Get the first data file segment name.
-	 * Note: We must release the area of file name returned by relpath() because
-	 * it was palloc()'ed.
-	 */
-	datafname = relpath(rel->rd_node, MAIN_FORKNUM);
-	strncpy(ls->ls_datafname, datafname, MAXPATHLEN - 1);
-	pfree(datafname);
-
-	/*
-	 * Acquire the number of existing blocks.
-	 */
-	ls->ls_exist_cnt = RelationGetNumberOfBlocks(rel);
-
-	/*
-	 * Now that all the contents for computing CRC are decided, so do it.
-	 */
-	CALC_CRC32(ls);
-
-	/*
-	 * Create a load status file and write the initial status for it.
-	 * At the time, if we find any existing load status files, exit with error
-	 * because recovery process haven't been executed after failing load to the
-	 * same table.
-	 */
-	ls->ls_fd = BasicOpenFile(ls->ls_lsfname,
-					 O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
-	if (ls->ls_fd == -1)
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not create loadstatus file \"%s\": %m", ls->ls_lsfname),
-						errhint("You might need to create directry \"%s/pg_bulkload\" in advance.", DataDir)));
-
-	len = offsetof(LoadStatus, ls_datafname) + strlen(ls->ls_datafname) + 1;
-	ret = write(ls->ls_fd, ls, len);
-	if (ret != len)
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not write loadstatus file \"%s\": %m",
-							   ls->ls_lsfname)));
-	if (pg_fsync(ls->ls_fd) != 0)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not fsync loadstatus file \"%s\": %m", ls->ls_lsfname)));
 }
 
 /**
  * @brief Update load status file.
- * @param ls [in/out] Load status information
+ * @param loader [in/out] Load status information
  * @param num [in] the number of blocks already written
  * @return void
  */
 static void
-UpdateLSF(LoadStatus *ls, BlockNumber num)
+UpdateLSF(DirectLoader *loader, BlockNumber num)
 {
 	int			ret;
+	LoadStatus *ls = &loader->ls;
 
-	ls->ls_create_cnt += num;
+	ls->ls.create_cnt += num;
 
-	/*
-	 * Computing CRC
-	 */
-	CALC_CRC32(ls);
-
-	/*
-	 * Write from CRC to data file name.
-	 * We BasicOpenFile()'ed it with O_SYNC flag, so don't sync it.
-	 */
-	lseek(ls->ls_fd, 0, SEEK_SET);
-	ret = write(ls->ls_fd, ls, offsetof(LoadStatus, ls_datafname));
-	if (ret != offsetof(LoadStatus, ls_datafname))
+	lseek(loader->lsf_fd, 0, SEEK_SET);
+	ret = write(loader->lsf_fd, ls, sizeof(LoadStatus));
+	if (ret != sizeof(LoadStatus))
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not write to \"%s\": %m",
-							   ls->ls_lsfname)));
-	if (pg_fsync(ls->ls_fd) != 0)
+							   loader->lsf_path)));
+	if (pg_fsync(loader->lsf_fd) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not fsync file \"%s\": %m", ls->ls_lsfname)));
+				 errmsg("could not fsync file \"%s\": %m", loader->lsf_path)));
 }
 
-/**
- * @brief Clean up load status information
- *
- * @param ls [in/out] Load status information
- * @return void
+/*
+ * Check for LSF directory. If not exists, create it.
  */
 static void
-CleanupLSF(LoadStatus *ls)
+ValidateLSFDirectory(const char *path)
 {
-	if (ls->ls_fd != -1)
+	struct stat	stat_buf;
+
+	if (stat(path, &stat_buf) == 0)
 	{
-		close(ls->ls_fd);
-		ls->ls_fd = -1;
-		if (unlink(ls->ls_lsfname) == -1)
-			ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not unlink load status file: %m")));
+		/* Check for weird cases where it exists but isn't a directory */
+		if (!S_ISDIR(stat_buf.st_mode))
+			ereport(ERROR,
+			(errmsg("pg_bulkload: required LSF directory \"%s\" does not exist",
+							path)));
+	}
+	else
+	{
+		ereport(LOG,
+				(errmsg("pg_bulkload: creating missing LSF directory \"%s\"", path)));
+		if (mkdir(path, 0700) < 0)
+			ereport(ERROR,
+					(errmsg("could not create missing directory \"%s\": %m",
+							path)));
 	}
 }

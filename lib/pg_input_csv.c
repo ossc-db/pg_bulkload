@@ -94,10 +94,10 @@ typedef struct CSVParser
  * Prototype declaration for local functions.
  */
 
-static void	InitializeCSV(CSVParser *self, ControlInfo *ci);
-static bool	ReadLineFromCSV(CSVParser *self, ControlInfo *ci);
-static void	CleanUpCSV(CSVParser *self);
-static bool ParamCSV(CSVParser *self, const char *keyword, char *value);
+static void	CSVParserInit(CSVParser *self, ControlInfo *ci);
+static bool	CSVParserRead(CSVParser *self, ControlInfo *ci);
+static void	CSVParserTerm(CSVParser *self, bool inError);
+static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
 
 static void	ExtractValuesFromCSV(CSVParser *self, ControlInfo *ci);
 
@@ -143,11 +143,10 @@ Parser *
 CreateCSVParser(void)
 {
 	CSVParser* self = palloc0(sizeof(CSVParser));
-	self->base.initialize = (ParserInitProc) InitializeCSV;
-	self->base.read_line = (ParserReadProc) ReadLineFromCSV;
-	self->base.cleanup = (ParserTermProc) CleanUpCSV;
-	self->base.param = (ParserParamProc) ParamCSV;
-
+	self->base.init = (ParserInitProc) CSVParserInit;
+	self->base.read = (ParserReadProc) CSVParserRead;
+	self->base.term = (ParserTermProc) CSVParserTerm;
+	self->base.param = (ParserParamProc) CSVParserParam;
 	return (Parser *)self;
 }
 
@@ -160,10 +159,10 @@ CreateCSVParser(void)
  *
  * @param ci [in] Control Info.
  * @return None
- * @note Caller must release the resource using CleanUpCSV().
+ * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-InitializeCSV(CSVParser* self, ControlInfo *ci)
+CSVParserInit(CSVParser* self, ControlInfo *ci)
 {
 	/*
 	 * set default values
@@ -218,15 +217,24 @@ InitializeCSV(CSVParser* self, ControlInfo *ci)
 		}
 	}
 
-	self->buf_len = 0;
-	self->rec_buf = NULL;
-	self->field_buf = NULL;
-	self->next = NULL;
-	self->eof = false;
+
+	/*
+	 * XXX Although we would like to set INITIAL_BUF_LEN size to buffer length
+	 * as initializing, only a half amount of memory has to be allocated here, 
+	 * because we would like to avoid extra "if" check for the first time 
+	 * allocation in loop(see "buflen *= 2" in this code). But this seems a 
+	 * little bit ugly...
+	 */
+	self->buf_len = INITIAL_BUF_LEN / 2;
+	self->rec_buf = palloc(self->buf_len);
+	self->rec_buf[0] = '\0';
+	self->used_len = 0;
+	self->field_buf = palloc(self->buf_len);
+	self->next = self->rec_buf;
 	self->fields = palloc(ci->ci_attnumcnt * sizeof(char *));
 	self->fields[0] = NULL;
-
 	self->null_len = strlen(self->null);
+	self->eof = false;
 
 	/* Skip first ci_offset lines in the input file */
 	if (ci->ci_offset > 0)
@@ -268,7 +276,8 @@ InitializeCSV(CSVParser* self, ControlInfo *ci)
 			}
 		}
 		ereport(ERROR, (errcode_for_file_access(),
-			errmsg("could not skip %d lines in the input file: %m", ci->ci_offset)));
+			errmsg("could not skip " int64_FMT " lines in the input file: %m",
+				ci->ci_offset)));
 skip_done:
 		;	/* done */
 	}
@@ -287,7 +296,7 @@ skip_done:
  * @return None
  */
 static void
-CleanUpCSV(CSVParser *self)
+CSVParserTerm(CSVParser *self, bool inError)
 {
 	if (self->fields)
 		pfree(self->fields);
@@ -336,7 +345,7 @@ checkFieldIsNull(CSVParser *self, ControlInfo *ci, int field_num, int len)
  * @note When an error is found, it returns to the caller through ereport().
  */
 static bool
-ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
+CSVParserRead(CSVParser* self, ControlInfo *ci)
 {
 	int			i = 0;			/* Index of the scanned character */
 	int			ret;
@@ -356,36 +365,13 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	int			dst;			/* Index to the next destination */
 	int			src;			/* Index to the next source */
 	int			field_num = 0;	/* Number of self->fields already parsed */
+	int			fetched_num;
 
 	/*
 	 * If EOF found in the previous calls, returns zero.
 	 */
 	if (self->eof)
 		return false;
-
-	/*
-	 * XXX Although we would like to set INITIAL_BUF_LEN size to buffer length
-	 * as initializing, only a half amount of memory has to be allocated here, 
-	 * because we would like to avoid extra "if" check for the first time 
-	 * allocation in loop(see "buflen *= 2" in this code). But this seems a 
-	 * little bit ugly...
-	 */
-	if (!self->rec_buf)
-	{
-		MemoryContext	cxt;
-
-		cxt = MemoryContextSwitchTo(ci->ci_estate->es_query_cxt);
-
-		self->buf_len = INITIAL_BUF_LEN / 2;
-		self->rec_buf = palloc(self->buf_len);
-		self->rec_buf[0] = '\0';
-		self->used_len = 0;
-		self->field_buf = palloc(self->buf_len);
-		need_data = true;
-		self->next = self->rec_buf;
-
-		MemoryContextSwitchTo(cxt);
-	}
 
 	cur = self->next;
 
@@ -395,7 +381,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	src = cur - self->rec_buf;
 	dst = 0;
 	field_head = src;
-	ci->ci_field = 1;
+	fetched_num = 1;
 	self->field_buf[dst] = '\0';
 	self->fields[field_num] = self->field_buf + dst;
 
@@ -456,11 +442,10 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				cur = self->rec_buf;
 			}
 
-			ret =
-				read(ci->ci_infd, self->rec_buf + self->used_len, self->buf_len - self->used_len - 1);
-			if (ret > 0)
-				;
-			else if (ret == 0)
+			ret = read(ci->ci_infd,
+					   self->rec_buf + self->used_len,
+					   self->buf_len - self->used_len - 1);
+			if (ret == 0)
 			{
 				self->eof = true;
 				/*
@@ -487,7 +472,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 					self->rec_buf[i] = '\n';
 				}
 			}
-			else if (ret == -1)
+			else if (ret < 0)
 				ereport(ERROR, (errcode_for_file_access(),
 								errmsg("could not read input file %m")));
 
@@ -606,7 +591,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 				 */
 				if (field_num + 1 < ci->ci_attnumcnt)
 					field_num++;
-				ci->ci_field++;
+				fetched_num++;
 
 				/*
 				 * The beginning of the next field is the next character from the delimiter.
@@ -635,7 +620,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	/*
 	 * It's an error if the number of self->fields exceeds the number of valid column. 
 	 */
-	if (ci->ci_field > ci->ci_attnumcnt)
+	if (fetched_num > ci->ci_attnumcnt)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("extra data after last expected column")));
@@ -643,12 +628,12 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 	/*
 	 * Error, if the number of self->fields is less than the number of valid columns.
 	 */
-	if (ci->ci_field < ci->ci_attnumcnt)
+	if (fetched_num < ci->ci_attnumcnt)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("missing data for column \"%s\"",
 							   NameStr(RelationGetDescr(ci->ci_rel)->
-									   attrs[ci->ci_attnumlist[ci->ci_field]]->
+									   attrs[ci->ci_attnumlist[fetched_num]]->
 									   attname))));
 	}
 
@@ -658,7 +643,7 @@ ReadLineFromCSV(CSVParser* self, ControlInfo *ci)
 }
 
 static bool
-ParamCSV(CSVParser *self, const char *keyword, char *value)
+CSVParserParam(CSVParser *self, const char *keyword, char *value)
 {
 	if (strcmp(keyword, "DELIMITER") == 0)
 	{
@@ -718,7 +703,6 @@ static void
 ExtractValuesFromCSV(CSVParser *self, ControlInfo *ci)
 {
 	int					i;
-	int					index;	/* Physical column index */
 	Form_pg_attribute  *attrs = RelationGetDescr(ci->ci_rel)->attrs;
 
 	/*
@@ -727,9 +711,11 @@ ExtractValuesFromCSV(CSVParser *self, ControlInfo *ci)
 	 */
 	for (i = 0; i < ci->ci_attnumcnt; i++)
 	{
-		index = ci->ci_attnumlist[i];
-		ci->ci_field = i + 1;	/* ci_field's origin is one */
+		int		index;
 
+		ci->ci_parsing_field = i + 1;		/* ci_parsing_field is 1 origin */
+
+		index = ci->ci_attnumlist[i];	/* Physical column index */
 		if (self->fields[i] || self->fnn[index])
 		{
 			ci->ci_isnull[index] = false;
