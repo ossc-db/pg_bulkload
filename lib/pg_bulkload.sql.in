@@ -13,6 +13,10 @@ CREATE FUNCTION pg_bulkload(ctlfilename text)
 	RETURNS integer
 	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
 
+CREATE FUNCTION pg_bulkload(ctlfilename text, options text)
+	RETURNS integer
+	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
+
 -- Triggers
 CREATE FUNCTION pg_bulkload_trigger_init() RETURNS trigger
 	AS 'MODULE_PATHNAME' LANGUAGE C;

@@ -99,6 +99,10 @@ BULKLOAD_PROFILE_PRINT()
  * Implementation
  * ========================================================================*/
 
+#define GETARG_CSTRING(n) \
+	((PG_NARGS() <= (n) || PG_ARGISNULL(n)) \
+	? NULL : text_to_cstring(PG_GETARG_TEXT_PP(n)))
+
 /**
  * @brief Entry point of the user-defined function for pg_bulkload.
  * @return Returns number of loaded tuples.  If the case of errors, -1 will be
@@ -108,7 +112,8 @@ Datum
 pg_bulkload(PG_FUNCTION_ARGS)
 {
 	ControlInfo	   *ci = NULL;
-	char		   *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	char		   *path;
+	char		   *options;
 	ResultRelInfo  *relinfo;
 	EState		   *estate;
 	TupleTableSlot *slot;
@@ -128,8 +133,13 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	 * STEP 0: Read control file
 	 */
 
+	path = GETARG_CSTRING(0);
+	options = GETARG_CSTRING(1);
+
+	ci = OpenControlInfo(path, options);
+
+	/* no contfile errors. start bulkloading */
 	ereport(NOTICE, (errmsg("BULK LOAD START")));
-	ci = OpenControlInfo(path);
 
 	/* create estate */
 	relinfo = makeNode(ResultRelInfo);

@@ -5,12 +5,12 @@
 #
 .PHONY: all install clean
 
-all: 
+all:
 	make -C bin
 	make -C lib
 	make -C util
 
-install: 
+install:
 	make -C bin install
 	make -C lib install
 	make -C util install
@@ -19,3 +19,10 @@ clean:
 	make -C bin clean
 	make -C lib clean
 	make -C util clean
+
+uninstall:
+	make -C bin uninstall
+	make -C lib uninstall
+
+installcheck:
+	make -C bin installcheck

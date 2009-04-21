@@ -24,7 +24,6 @@
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
-#include <getopt.h>
 #include <sys/stat.h>
 #ifndef WIN32
 #include <sys/shm.h>
@@ -39,10 +38,14 @@
 #include "storage/bufpage.h"
 #include "storage/pg_shmem.h"
 
-#define PROGRAM_NAME	"pg_bulkload"	/**< My program name */
 #define PROGRAM_VERSION	"2.4.0"			/**< My version string */
 #define PROGRAM_URL		"http://pgbulkload.projects.postgresql.org/"
 #define PROGRAM_EMAIL	"pgbulkload-general@pgfoundry.org"
+
+#include "pgut/pgut.h"
+
+/** exitcode for help and version mode */
+#define EXITCODE_HELP		2
 
 /**
  * @brief Definition of Assert() macros as done in PosgreSQL.
@@ -57,11 +60,6 @@
 #endif
 
 /**
- * @brief dirent struction for directory entry.
- */
-typedef struct dirent Dirent;
-
-/**
  * @brief length of ".loadstatus" file
  * (Used to search files whose names end with ".loadStatus".)
  */
@@ -71,68 +69,50 @@ typedef struct dirent Dirent;
  * Global variables
  */
 
-/**
- * @brief Database cluster directory.
- */
-char	   *DataDir;
+/** @brief Database cluster directory. */
+char	   *DataDir = NULL;
 
-/**
- * @brief argument obtained by getopt().
- */
-extern char *optarg;
+/** @Flag in silent mode? */
+bool		isSilentRecovery = false;
 
-/**
- * @brief Index of the argument being handled by getopt().
- */
-extern int	optind;
+/** @Flag dataload or recovery */
+bool		isDataLoad = true;
 
-/**
- * @brief Error number being handled by bgetopt().
- */
-extern int	opterr;
+/** @brief control file path */
+char		control_file[MAXPGPATH];
 
-/**
- * @brief Variable to store an option which getopt() did not recognize.
- */
-extern int	optopt;
+char	   *additional_options = NULL;
 
-/**
- * @brief Flag indicating interrupt.
- */
-bool		intrflag;
+static void
+add_option(const char *option)
+{
+	size_t	len;
+	size_t	addlen;
 
-/**
- * @brief Shared memory ID returned by shmget(2).
- * See the line 40, backend/port/pg_shmem.c.
- */
-typedef int IpcMemoryId;
+	if (!option || !option[0])
+		return;
 
-/**
- * @Flag to indicate that the recovery should be performed in the silent mode.
- */
-bool		isSilentRecovery;
+	len = (additional_options ? strlen(additional_options) : 0);
+	addlen = strlen(option);
+
+	additional_options = realloc(additional_options, len + addlen + 2);
+	memcpy(&additional_options[len], option, addlen);
+	additional_options[len + addlen] = '\n';
+	additional_options[len + addlen + 1] = '\0';
+}
 
 /*
  * Prototypes
  */
 
-/* Show the useage of the high-speed loader. */
-static void PrintUsage(void);
-
-/* Show the version of the high-speed loader. */
-static void PrintVersion(void);
+static void GetAbsPath(char *path, size_t pathlen, const char *relpath);
+static void GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno);
 
 /* Performs data loading. */
-static int	LoaderLoadMain(const char *dbname,
-						   const char *dbport,
-						   const char *dbuser,
-						   const char *dbpass, const char *ctlpath);
-
-/* Set the flag to indicate that SIGINT or SIGTERM has been notofied. */
-static void LoadInterrupt(void);
+static int	LoaderLoadMain(const char *ctlpath);
 
 /* Entry point for the recovery. */
-static void LoaderRecoveryMain(void);
+static int	LoaderRecoveryMain(void);
 
 /* Determins if the recovery is necessary, and then overwrites data file pages with the vacant one if needed. */
 static void StartLoaderRecovery(void);
@@ -158,7 +138,7 @@ static void ClearLoadedPage(RelFileNode rnode,
 							BlockNumber blkend);
 
 /* Write a log message. */
-static void LoaderLogMessage(bool cont, int elevel, const char *format, ...);
+static void LoaderLogMessage(int elevel, const char *format, ...);
 
 /* Tests if the data block is constructed by this loader. */
 static bool IsPageCreatedByLoader(Page page);
@@ -183,9 +163,6 @@ bool		PageHeaderIsValid(PageHeader page);
 /* Tests if the shared memory is in use. */
 bool		PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2);
 
-static const char *get_user_name(const char *progname);
-
-
 /**
  * @brief Entry point for pg_bulkload command.
  *
@@ -203,153 +180,11 @@ static const char *get_user_name(const char *progname);
 int
 main(int argc, char *argv[])
 {
-	int			exitcode;
-	int			opt;
-	const char *dbname = NULL;
-	const char *dbport = NULL;
-	const char *dbuser = NULL;
-	const char *dbpass = NULL;
-	char		ctlpath[MAXPGPATH];
-	char		curpath[MAXPGPATH];
-	bool		isDataLoad = true;
-	const char *login_user;
+	int		exitcode;
 
-	DataDir = NULL;
-	isSilentRecovery = false;
-
-	/*
-	 * Surpress error message output by getopt().
-	 */
-	opterr = 0;
-
-	/*
-	 * Help message and version are handled at first.
-	 */
-	if (argc > 1)
-	{
-		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
-		{
-			PrintUsage();
-			return 0;
-		}
-		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
-		{
-			PrintVersion();
-			return 0;
-		}
-	}
-
-	/*
-	 * Then, other options are handled by getopt().
-	 */
-	while ((opt = getopt(argc, argv, "rD:d:p:sU:W:")) != -1)
-	{
-		switch (opt)
-		{
-			case 'r':
-				isDataLoad = false;
-				break;
-
-			case 'D':
-				if ((DataDir = strdup(optarg)) == NULL)
-				{
-					fprintf(stderr, "can't duplicate input string '-D' : %s",
-							strerror(errno));
-					return 1;
-				}
-				break;
-
-			case 'd':
-				if ((dbname = strdup(optarg)) == NULL)
-				{
-					fprintf(stderr, "can't duplicate input string '-d' : %s",
-							strerror(errno));
-					return 1;
-				}
-				break;
-
-			case 'p':
-				if ((dbport = strdup(optarg)) == NULL)
-				{
-					fprintf(stderr, "can't duplicate input string '-p' : %s",
-							strerror(errno));
-					return 1;
-				}
-				break;
-
-			case 's':
-				isSilentRecovery = true;
-				break;
-
-			case 'U':
-				if ((dbuser = strdup(optarg)) == NULL)
-				{
-					fprintf(stderr, "can't duplicate input string '-U' : %s",
-							strerror(errno));
-					return 1;
-				}
-				break;
-
-			case 'W':
-				if ((dbpass = strdup(optarg)) == NULL)
-				{
-					fprintf(stderr, "can't duplicate input string '-W' : %s",
-							strerror(errno));
-					return 1;
-				}
-				break;
-
-			case '?':
-				PrintUsage();
-				return 1;
-
-			case '-':
-				PrintUsage();
-				return 1;
-
-			default:
-				/*
-				 * never reached
-				 */
-				PrintUsage();
-				return 1;
-		}
-	}
-
-	if (optind < argc)
-	{
-		int			pathlen;
-
-		if (argv[optind][0] != '/')
-		{
-			if (getcwd(curpath, MAXPGPATH) == NULL)
-			{
-				fprintf(stderr, "too long control file path\n");
-				return 1;
-			}
-
-			pathlen = snprintf(ctlpath, MAXPGPATH,
-							   "%s/%s", curpath, argv[optind]);
-		}
-		else
-			pathlen = snprintf(ctlpath, MAXPGPATH, "%s", argv[optind]);
-
-		if (pathlen >= MAXPGPATH)
-		{
-			fprintf(stderr, "too long control file path\n");
-			return 1;
-		}
-
-		optind++;
-	}
-	else
-		ctlpath[0] = '\0';
-
-	if (optind != argc)
-	{
-		fprintf(stderr, "illegal arguments : try %s --help\n", PROGRAM_NAME);
-		return 1;
-	}
+	exitcode = pgut_getopt(argc, argv);
+	if (exitcode != 0)
+		return exitcode;
 
 	/*
 	 * Determines data loading or recovery.
@@ -369,51 +204,23 @@ main(int argc, char *argv[])
 			fprintf(stderr, "invalid option '-s' for data load\n");
 			return 1;
 		}
-
-		login_user = get_user_name(PROGRAM_NAME);
-
-		/*
-		 * Sets default values.
-		 */
-		if (!dbname)
-			dbname = getenv("PGDATABASE");
-		if (!dbname)
-			dbname = login_user;
-
-		if (!dbport)
-			dbport = getenv("PGPORT");
-		if (!dbport)
-			dbport = DEF_PGPORT_STR;	/* include/pg_config.h:38 */
-
-		if (!dbuser)
-			dbuser = getenv("PGUSER");
-		if (!dbuser)
-			dbuser = login_user;
-
-		if (!dbpass)
-			dbpass = getenv("PGPASSWORD");
-
-		if (ctlpath[0] == '\0')
+		if (control_file[0] == '\0')
 		{
 			fprintf(stderr, "no control file path specified\n");
 			return 1;
 		}
 
-		exitcode = LoaderLoadMain(dbname, dbport, dbuser, dbpass, ctlpath);
+		exitcode = LoaderLoadMain(control_file);
 	}
 	else
 	{
-
 		/**
 		 * Determines database cluster directory.
 		 */
-		if (!DataDir)
+		if (!DataDir && (DataDir = getenv("PGDATA")) == NULL)
 		{
-			if ((DataDir = getenv("PGDATA")) == NULL)
-			{
-				fprintf(stderr, "no $PGDATA specified\n");
-				return 1;
-			}
+			fprintf(stderr, "no $PGDATA specified\n");
+			return 1;
 		}
 
 		/*
@@ -432,31 +239,7 @@ main(int argc, char *argv[])
 			return 1;
 		}
 
-		if (dbname)
-		{
-			fprintf(stderr, "invalid option '-d' for recovery\n");
-			return 1;
-		}
-
-		if (dbport)
-		{
-			fprintf(stderr, "invalid option '-p' for recovery\n");
-			return 1;
-		}
-
-		if (dbuser)
-		{
-			fprintf(stderr, "invalid option '-U' for recovery\n");
-			return 1;
-		}
-
-		if (dbpass)
-		{
-			fprintf(stderr, "invalid option '-W' for recovery\n");
-			return 1;
-		}
-
-		if (ctlpath[0] != '\0')
+		if (control_file[0] != '\0')
 		{
 			fprintf(stderr, "invalid argument 'control file' for recovery\n");
 			return 1;
@@ -465,99 +248,123 @@ main(int argc, char *argv[])
 		/*
 		 * Performs recovery.
 		 */
-		LoaderRecoveryMain();
-		exitcode = 0;
+		exitcode = LoaderRecoveryMain();
 	}
 
 	return exitcode;
 }
 
-
-/**
- * @brief Set flag indicating SIGINT and SIGTERM has been received.
- *
- * Flow
- * <ol>
- *	 <li>Set intrflag value to "true".	</li>
- * </ol>
- *
- * @param  None
- * @return None
+/*
+ * pgut framework callbacks
  */
-static void
-LoadInterrupt(void)
+
+const struct option pgut_longopts[] =
 {
-	intrflag = true;
+	{"infile", required_argument, NULL, 'i'},
+	{NULL, 0, NULL, 0}
+};
+
+const char *pgut_optstring = "rD:si:o:";
+
+bool
+pgut_argument(int c, const char *arg)
+{
+	switch (c)
+	{
+		case 0:	/* default arguments */
+			if (control_file[0])
+				return false;	/* two or more arguments */
+			GetAbsPath(control_file, MAXPGPATH, arg);
+			break;
+		case 'r':
+			isDataLoad = false;
+			break;
+		case 'D':
+			if ((DataDir = strdup(optarg)) == NULL)
+			{
+				fprintf(stderr, "can't duplicate input string '-D' : %s",
+						strerror(errno));
+				return 1;
+			}
+			break;
+		case 's':
+			isSilentRecovery = true;
+			break;
+		case 'i':
+		{
+			char	infile[MAXPGPATH] = "INFILE = ";
+			GetAbsPath(infile + 9, MAXPGPATH - 9, arg);
+			add_option(infile);
+			break;
+		}
+		case 'o':
+			add_option(arg);
+			break;
+		default:
+			return false;
+	}
+
+	return true;
 }
 
 /**
  * @brief Show pg_bulkload usage.
  *
  * @param  None
- * @return None
+ * @return exitcode
  */
-static void
-PrintUsage(void)
+int
+pgut_help(void)
 {
 	fprintf(stderr,
 		"%s is a bulk data loading tool for PostgreSQL\n"
 		"\n"
 		"Usage:\n"
-		"Data Load : pg_bulkload [-d DBNAME] [-p PORT] [-U USER]"
-		" [-W PASSWORD] control_file_path\n"
-		"Recovery  : pg_bulkload -r [-D DATADIR]\n"
+		"  Data Load : pg_bulkload [data load options] control_file_path\n"
+		"  Recovery  : pg_bulkload -r [-D DATADIR]\n"
 		"\n"
 		"Options for data load:\n"
 		"  -d DBNAME       database name\n"
 		"  -p PORT         port number to listen on\n"
 		"  -U USER         user name\n"
 		"  -W PASSWORD     password\n"
-		"If these options are omitted, "
-		"the environment variables are used.\n"
-		"And if the environment variables are omitted too, "
-		"internal default values are used.\n"
+		"  -i INFILE       INFILE path\n"
+		"  -o \"key = val\"  additional option\n"
 		"\n"
 		"Options for recovery:\n"
 		"  -r              execute recovery\n"
-		"  -D DATADIR      database directory\n\n"
-		"If the -D option is omitted, "
-		"the environment variable PGDATA is used.\n"
+		"  -D DATADIR      database directory\n"
 		"\n"
 		"Other options:\n"
 		"  --help, -?      show this help, then exit\n"
 		"  --version, -V   output version information, then exit\n",
-		PROGRAM_NAME);
+		progname);
 #ifdef PROGRAM_URL
-	printf("\nRead the website for details. <" PROGRAM_URL ">\n");
+	fprintf(stderr, "\nRead the website for details. <" PROGRAM_URL ">\n");
 #endif
 #ifdef PROGRAM_EMAIL
-	printf("\nReport bugs to <" PROGRAM_EMAIL ">.\n");
+	fprintf(stderr, "\nReport bugs to <" PROGRAM_EMAIL ">.\n");
 #endif
+	return EXITCODE_HELP;
 }
 
-
-/**
- * @brief Show the version of pg_bulkload.
- *
- * @param  None
- * @return None
- */
-static void
-PrintVersion(void)
+int
+pgut_version(void)
 {
-	fprintf(stderr, "pg_bulkload " PROGRAM_VERSION "\n");
+	fprintf(stderr, "%s %s\n", progname, PROGRAM_VERSION);
+	return EXITCODE_HELP;
 }
 
+void
+pgut_cleanup(void)
+{
+}
 
 /**
  * @brief Performs data loading.
  *
  * Invokes pg_bulkload() user-defined function giving the control file name
  * as specified in the command parameter, and performs data loading.
- *
- * Libpq protocol is used as an interface to PostgreSQL server.  Here, because
- * it is assumed that PostgreSQL server is running in the same host, local
- * connection (UNIX domain socket) is used.
  *
  * In pg_bulkload command, the whole loading is treated as a single transaction.
  * Because transaction control is not available within user-defined functions,
@@ -566,235 +373,40 @@ PrintVersion(void)
  * one loading includes only one transaction.	We cannot commit the transaction
  * until all the data is loaded.
  *
- * Flow
- * <ol>
- *	 <li> Connect to PostgreSQL server using PQsetdbLogin. </li>
- *	 <li> Obtain file descriptor using PQsocket(). </li>
- *	 <li> Setup a signal handler for SIGINT and SIGTERM. </li>
- *	 <li> Perform pg_bulkload() user-defined function in asynchronoous mode so
- *		  that signal can be handled during the loading. </li>
- *	 <li> Performs the following in a loop. </li>
- *	   <ul>
- *		 <li> Wait for incoming data by select().	If SIGINT or SIGTERM is
- *			  received, tell the server to stop the loading by PGcancel(). </li>
- *		 <li> Call PQconsumeInput() and PQisBusy.  If the loading is complete,
- *			  break from the loop. </li>
- *	   </ul>
- *	 <li> Obtain the result by PQgetResult(). </li>
- *	 <li> Confirm the result by PQresultStatus(). </li>
- *	   <ul>
- *		 <li> If loading is not successful, write an error message and exit. </li>
- *	   </ul>
- *	 <li> Write the number of loaded records to stdout. </li>
- *	 <li> Disconnect from the server using PQfinish(). </li>
- * </ol>
- *
- * @param dbname  [in] Database name,
- * @param dbport  [in] Port number,
- * @param dbuser  [in] User name,
- * @param dbpass  [in] Password,
  * @param ctlpath [in] Control file path name.
- * @return None (number of the loaded records will be written to stdout).
+ * @return exitcode (always 0).
  */
 static int
-LoaderLoadMain(const char *dbname,
-			   const char *dbport, const char *dbuser,
-			   const char *dbpass, const char *ctlpath)
+LoaderLoadMain(const char *ctlpath)
 {
-	PGconn	   *conn = NULL;
-	const char *paramValues[1];
-	PGresult   *res = NULL;
-	int			sock;
-	int			sendres;
-	fd_set		input_mask;
+	const char *params[2];
+	params[0] = ctlpath;
+	params[1] = (additional_options ? additional_options : "");
 
-	intrflag = false;
-
-	/*
-	 * Connect to the server
-	 */
-	conn = PQsetdbLogin(NULL, dbport, NULL, NULL, dbname, dbuser, dbpass);
-
-	if (!conn)
-	{
-		fprintf(stderr, "could not establish connection\n");
-		exit(1);
-	}
-
-	if (PQstatus(conn) != CONNECTION_OK)
-		goto err_pqfinish;
-
-	sock = PQsocket(conn);
-	if (sock < 0)
-		goto err_pqfinish;
-
-	FD_ZERO(&input_mask);
-	FD_SET(sock, &input_mask);
-
-	if (!FD_ISSET(sock, &input_mask))
-	{
-		fprintf(stderr, "could not monitor file discriptor: %s\n",
-				strerror(errno));
-		goto err_pqfinish;
-	}
-
-	/*
-	 * Setup signal handers.
-	 */
-	signal(SIGINT, (void *) LoadInterrupt);
-	signal(SIGTERM, (void *) LoadInterrupt);
-
-	res = PQexec(conn, "BEGIN");
-	if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
-		goto err_pqfinish;
-
-	PQclear(res);
-	res = NULL;
-
-	/*
-	 * Performs pg_bulkload() user-defined function.
-	 * Use PGsendQueryParams(), not PQexec(), to perform asynchronously.
-	 */
-	paramValues[0] = ctlpath;
-	sendres = PQsendQueryParams(conn,
-								"SELECT pg_bulkload($1)",
-								1, NULL, paramValues, NULL, NULL, 0);
-	if (!sendres)
-		goto err_rollback;
-
-	/*
-	 * Loop until the loading is complete.
-	 * We can receive signals during this loop.
-	 */
-	do
-	{
-		if (select(sock + 1, &input_mask, NULL, NULL, NULL) < 0)
-		{
-			if (errno == EINTR)
-			{
-				if (intrflag == true)
-				{
-					PGcancel   *cancel;
-
-					/*
-					 * Recomended value of errbuf size is 256 bytes.
-					 * (See interfaces/libpq:2381)
-					 */
-					char		errbuf[256];
-
-					cancel = PQgetCancel(conn);
-					if (!cancel)
-						goto err_rollback;
-
-					if (!PQcancel(cancel, errbuf, 256))
-					{
-						PQfreeCancel(cancel);
-						goto err_rollback;
-					}
-
-					PQfreeCancel(cancel);
-
-					intrflag = false;
-				}
-				continue;
-			}
-			else
-			{
-				/*
-				 * error number other tha EINTR is not the normal status.	Error exit.
-				 */
-				fprintf(stderr, "unexpected error : %s\n", strerror(errno));
-				goto err_rollback;
-			}
-		}
-
-		/* Receive an input from the server. */
-		if (!PQconsumeInput(conn))
-			goto err_rollback;
-
-	} while (PQisBusy(conn));
-
-	/* Receive asynchronous results */
-	res = PQgetResult(conn);
-	if (!res || PQresultStatus(res) != PGRES_TUPLES_OK)
-		goto err_rollback;
-	PQclear(res);
-
-	res = PQexec(conn, "COMMIT");
-	if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
-		goto err_rollback;
-	PQclear(res);
-
-	/*
-	 * Successful
-	 */
-	PQfinish(conn);
+	reconnect();
+	command("BEGIN", 0, NULL);
+	/* TODO: get num records? */
+	command("SELECT pg_bulkload($1, $2)", 2, params);
+	command("COMMIT", 0, NULL);
+	disconnect();
 	return 0;
-
-	/*
-	 * Error handling
-	 */
-	/*
-	 * err_rollback : If error occurd between BEGIN and COMMIT, rollback the transaction and terminate.  :
-	 */
-err_rollback:
-	fprintf(stderr, "%s", PQerrorMessage(conn));
-	PQclear(res);
-
-	if (PQstatus(conn) == CONNECTION_OK)
-	{
-		res = PQexec(conn, "ROLLBACK");
-		PQfinish(conn);
-	}
-	return 1;
-
-	/*
-	 * If error occured other than err_pqfinish, here's the error exit.
-	 */
-err_pqfinish:
-	fprintf(stderr, "%s", PQerrorMessage(conn));
-	PQclear(res);
-
-	PQfinish(conn);
-	return 1;
 }
 
 /**
  * @brief Entry point for recovery process
  *
- * Flow of recovery process
- * <ol>
- *	 <li> create a lock file not to execute postmaster/postgres or other recovery processes. </li>
- *	 <li> call a recovery process main routine. </li>
- *	 <li> delete the lock file. </li>
- * </ol>
- *
  * @param  none
- * @return void
+ * @return exitcode
  */
-static void
+static int
 LoaderRecoveryMain(void)
 {
-	/*
-	 * change working directory to DataDir
-	 */
 	if (chdir(DataDir) < 0)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not change directory to \"%s\"", DataDir);
 
-	/*
-	 * create lock file.
-	 */
 	LoaderCreateLockFile("postmaster.pid", true, true, DataDir);
-
-	/*
-	 * recovery process.
-	 */
 	StartLoaderRecovery();
-
-	/*
-	 * delete lock file
-	 */
 	LoaderUnlinkLockFile("postmaster.pid");
 }
 
@@ -882,7 +494,7 @@ StartLoaderRecovery(void)
 			 * XXX :need to store relaion name?
 			 */
 			if (!isSilentRecovery)
-				LoaderLogMessage(true, NOTICE,
+				LoaderLogMessage(NOTICE,
 								 "Starting pg_bulkload recovery for file \"%s\"",
 								 lsfname);
 
@@ -894,7 +506,7 @@ StartLoaderRecovery(void)
 							ls.ls.exist_cnt + ls.ls.create_cnt);
 
 			if (!isSilentRecovery)
-				LoaderLogMessage(true, NOTICE,
+				LoaderLogMessage(NOTICE,
 								 "Ended pg_bulkload recovery for file \"%s\"",
 								 lsfname);
 		}
@@ -903,19 +515,19 @@ StartLoaderRecovery(void)
 		 * delete load status file.
 		 */
 		if (unlink(lsfpath) != 0)
-			LoaderLogMessage(false, ERROR,
+			LoaderLogMessage(ERROR,
 							 "could not delete loadstatus file \"%s\" : %s",
 							 lsfpath, strerror(errno));
 
 		if (!isSilentRecovery)
-			LoaderLogMessage(true, LOG,
+			LoaderLogMessage(LOG,
 							 "delete loadstatus file \"%s\"", lsfname);
 	}
 
 	CleanUpList(lsflist);
 
 	if (!isSilentRecovery)
-		LoaderLogMessage(true, LOG, "recovered all relations");
+		LoaderLogMessage(LOG, "recovered all relations");
 	return;						/* revocery process successfully terminated, */
 }
 
@@ -945,7 +557,7 @@ GetLSFList(void)
 	char	   *tmp;
 	int			i,
 				filelen;
-	Dirent	   *dp;
+	struct dirent *dp;
 	List	   *list;
 	DIR		   *dir;
 
@@ -965,7 +577,7 @@ GetLSFList(void)
 	 *	   if exists, add file name to List.
 	 */
 	if ((dir = opendir(BULKLOAD_LSF_DIR)) == NULL)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not open LSF Directory \"%s\" : %s",
 						 BULKLOAD_LSF_DIR, strerror(errno));
 
@@ -985,7 +597,7 @@ GetLSFList(void)
 	}
 
 	if (closedir(dir) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not close LSF Directory \"%s\" : %s",
 						 BULKLOAD_LSF_DIR, strerror(errno));
 
@@ -1023,18 +635,18 @@ GetDBClusterState(void)
 	 * open, read, and close ControlFileData
 	 */
 	if ((fd = open("global/pg_control", O_RDONLY | PG_BINARY, 0)) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not open Control File \"global/pg_control\" : %s",
 						 strerror(errno));
 
 	if ((read(fd, &ControlFile,
 			  sizeof(ControlFileData))) != sizeof(ControlFileData))
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not read Control File \"global/pg_control\" : %s",
 						 strerror(errno));
 
 	if (close(fd) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not close Control File \"global/pg_control\" : %s",
 						 strerror(errno));
 
@@ -1068,20 +680,20 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
 	 * open and read LSF
 	 */
 	if ((fd = open(lsfpath, O_RDONLY | PG_BINARY, 0)) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not open LoadStatusFile \"%s\" : %s",
 						 lsfpath, strerror(errno));
 
 	read_len = read(fd, ls, sizeof(LoadStatus));
 	if (read_len != sizeof(LoadStatus))
 	{
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not read LoadStatusFile \"%s\" : %s",
 						 lsfpath, strerror(errno));
 	}
 
 	if (close(fd) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not close LoadStatusFile \"%s\" : %s",
 						 lsfpath, strerror(errno));
 }
@@ -1108,7 +720,7 @@ InitializeList(void)
 
 	new_list = (List *) malloc(sizeof(List));
 	if (new_list == NULL)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "not enough memory available to proceed");
 
 	new_list->type = T_Invalid;
@@ -1146,7 +758,7 @@ AddListLSFName(List *list, const char *filename)
 	 */
 	new_tail = (ListCell *) malloc(sizeof(ListCell));
 	if (new_tail == NULL)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "not enough memory available to proceed");
 
 	/*
@@ -1154,7 +766,7 @@ AddListLSFName(List *list, const char *filename)
 	 */
 	new_tail->data.ptr_value = (void *) strdup(filename);
 	if (new_tail->data.ptr_value == NULL)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not duplicate string : %s", strerror(errno));
 
 	new_tail->next = NULL;
@@ -1181,34 +793,6 @@ AddListLSFName(List *list, const char *filename)
 	 * increment length of List
 	 */
 	list->length++;
-}
-
-static void
-GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno)
-{
-	if (rnode.spcNode == GLOBALTABLESPACE_OID)
-	{
-		/* Shared system relations live in {datadir}/global */
-		snprintf(path, MAXPGPATH, "global/%u", rnode.relNode);
-	}
-	else if (rnode.spcNode == DEFAULTTABLESPACE_OID)
-	{
-		/* The default tablespace is {datadir}/base */
-		snprintf(path, MAXPGPATH, "base/%u/%u",
-					 rnode.dbNode, rnode.relNode);
-	}
-	else
-	{
-		/* All other tablespaces are accessed via symlinks */
-		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u",
-					 rnode.spcNode, rnode.dbNode, rnode.relNode);
-	}
-
-	if (segno > 0)
-	{
-		size_t	len = strlen(path);
-		snprintf(path + len, MAXPGPATH - len, ".%u", segno);
-	}
 }
 
 /**
@@ -1261,16 +845,20 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	segno = blkbeg / RELSEG_SIZE;
 	GetSegmentPath(segpath, rnode, segno);
 
+	/*
+	 * TODO: consider to use truncate instead of zero-fill to end of file.
+	 */
+
 	fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 	if (fd == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not open data file \"%s\" : %s",
 						 segpath, strerror(errno));
 
 	seekpos = lseek(fd, (blkbeg % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 	if (seekpos == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not seek the target position "
 						 "in the data file \"%s\" : %s", segpath,
 						 strerror(errno));
@@ -1297,7 +885,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 				if (errno == EAGAIN || errno == EINTR)
 					continue;
 				else
-					LoaderLogMessage(false, ERROR,
+					LoaderLogMessage(ERROR,
 									 "could not read data file \"%s\" : %s",
 									 segpath, strerror(errno));
 			}
@@ -1322,7 +910,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 			seekpos = lseek(fd, (blknum % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 			if (write(fd, zeropage, BLCKSZ) == -1)
-				LoaderLogMessage(false, ERROR,
+				LoaderLogMessage(ERROR,
 								 "could not write correct empty page : %s",
 								 strerror(errno));
 		}
@@ -1339,12 +927,12 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 		if (blknum % RELSEG_SIZE == 0)
 		{
 			if (fsync(fd) != 0)
-				LoaderLogMessage(false, ERROR,
+				LoaderLogMessage(ERROR,
 								 "could not sync data file \"%s\" : %s",
 								 segpath, strerror(errno));
 
 			if (close(fd) == -1)
-				LoaderLogMessage(false, ERROR,
+				LoaderLogMessage(ERROR,
 								 "could not close data file \"%s\" : %s",
 								 segpath, strerror(errno));
 
@@ -1353,7 +941,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 
 			fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 			if (fd == -1)
-				LoaderLogMessage(false, ERROR,
+				LoaderLogMessage(ERROR,
 								 "could not open data file \"%s\" : %s",
 								 segpath, strerror(errno));
 		}
@@ -1363,12 +951,12 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	 * post process
 	 */
 	if (fsync(fd) != 0)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not sync data file \"%s\" : %s",
 						 segpath, strerror(errno));
 
 	if (close(fd) == -1)
-		LoaderLogMessage(false, ERROR,
+		LoaderLogMessage(ERROR,
 						 "could not close data file \"%s\" : %s",
 						 segpath, strerror(errno));
 }
@@ -1377,15 +965,13 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 /**
  * @brief Output the log message of bulkloader.
  *
- * @param cont		  [in] continue to process or not after output the log message.
- *						  true for continue processing, false for not
- * @param elevel	  [in] error message level
+ * @param elevel	  [in] error message level. exit if ERROR or FATAL.
  * @param format, ... [in] error message(variable parameters)
  * @return void
  */
 
 static void
-LoaderLogMessage(bool cont, int elevel, const char *format, ...)
+LoaderLogMessage(int elevel, const char *format, ...)
 {
 	va_list		argpt;
 	time_t		etime;
@@ -1404,24 +990,18 @@ LoaderLogMessage(bool cont, int elevel, const char *format, ...)
 		case LOG:
 			fprintf(stderr, "LOG ");
 			break;
-
 		case NOTICE:
 			fprintf(stderr, "NOTICE ");
 			break;
-
 		case ERROR:
 			fprintf(stderr, "ERROR ");
 			break;
-
 		case FATAL:
 			fprintf(stderr, "FATAL ");
 			break;
 		default:
-			/*
-			 * never reached
-			 */
 			fprintf(stderr, "UNKNOWN ");
-
+			break;
 	}
 
 	vfprintf(stderr, format, argpt);
@@ -1429,11 +1009,10 @@ LoaderLogMessage(bool cont, int elevel, const char *format, ...)
 
 	va_end(argpt);
 
-	if (cont == false)
+	/* exit iff ERROR, FATAL or PANIC. */
+	if (elevel >= ERROR)
 		exit(1);
 }
-
-
 
 /**
  * @brief Is the page created by bulk loader?
@@ -1447,7 +1026,6 @@ LoaderLogMessage(bool cont, int elevel, const char *format, ...)
  * @param page [in] Page to be recovered
  * @return Return true if the page created by bulk loader else return false .
  */
-
 static bool
 IsPageCreatedByLoader(Page page)
 {
@@ -1461,7 +1039,6 @@ IsPageCreatedByLoader(Page page)
 	else
 		return false;
 }
-
 
 /**
  * @brief Release the resources hold in List structure.
@@ -1496,8 +1073,6 @@ CleanUpList(List *list)
 
 	free(list);
 }
-
-
 
 /*------------------------------------------------------------------------
  *	 The following codes are copied from PostgreSQL source code with some changes.
@@ -1615,7 +1190,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * Couldn't create the pid file. Probably it already exists.
 		 */
 		if ((errno != EEXIST && errno != EACCES) || ntries > 100)
-			LoaderLogMessage(false, FATAL,
+			LoaderLogMessage(FATAL,
 							 "could not create lock file \"%s\": %s",
 							 filename, strerror(errno));
 
@@ -1628,12 +1203,12 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		{
 			if (errno == ENOENT)
 				continue;		/* race condition; try again */
-			LoaderLogMessage(false, FATAL,
+			LoaderLogMessage(FATAL,
 							 "could not open lock file \"%s\": %s",
 							 filename, strerror(errno));
 		}
 		if ((len = read(fd, buffer, sizeof(buffer) - 1)) < 0)
-			LoaderLogMessage(false, FATAL,
+			LoaderLogMessage(FATAL,
 							 "could not read lock file \"%s\": %s",
 							 filename, strerror(errno));
 		close(fd);
@@ -1647,7 +1222,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		other_pid = (pid_t) (encoded_pid < 0 ? -encoded_pid : encoded_pid);
 
 		if (other_pid <= 0)
-			LoaderLogMessage(false, FATAL,
+			LoaderLogMessage(FATAL,
 							 "bogus data in lock file \"%s\": %s",
 							 filename, buffer);
 
@@ -1698,7 +1273,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 				/*
 				 * lockfile belongs to a live process
 				 */
-				LoaderLogMessage(false, FATAL,
+				LoaderLogMessage(FATAL,
 								 "lock file \"%s\" already exists. "
 								 "Is another postmaster (PID %d) "
 								 "running in data directory \"%s\"?",
@@ -1726,7 +1301,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 				if (sscanf(ptr, "%lu %lu", &id1, &id2) == 2)
 				{
 					if (PGSharedMemoryIsInUse(id1, id2))
-						LoaderLogMessage(false, FATAL,
+						LoaderLogMessage(FATAL,
 										 "pre-existing shared memory block "
 										 "(key %lu, ID %lu) is still in use "
 										 "If you're sure there are no old "
@@ -1744,7 +1319,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * would-be creators.
 		 */
 		if (unlink(filename) < 0)
-			LoaderLogMessage(false, FATAL,
+			LoaderLogMessage(FATAL,
 							 "could not remove old lock file \"%s\": %s ",
 							 "The file seems accidentally left over, but "
 							 "it could not be removed. Please remove the file "
@@ -1768,7 +1343,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * if write didn't set errno, assume problem is no disk space 
 		 */
 		errno = save_errno ? save_errno : ENOSPC;
-		LoaderLogMessage(false, FATAL,
+		LoaderLogMessage(FATAL,
 						 "could not write lock file \"%s\": %s",
 						 filename, strerror(errno));
 	}
@@ -1778,7 +1353,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 
 		unlink(filename);
 		errno = save_errno;
-		LoaderLogMessage(false, FATAL,
+		LoaderLogMessage(FATAL,
 						 "could not write lock file \"%s\": %s",
 						 filename, strerror(errno));
 	}
@@ -1877,35 +1452,51 @@ PageHeaderIsValid(PageHeader page)
 	return true;
 }
 
-/*
- * Returns the current user name.
- */
-static const char *
-get_user_name(const char *progname)
+static void
+GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno)
 {
-#ifndef WIN32
-	struct passwd *pw;
-
-	pw = getpwuid(geteuid());
-	if (!pw)
+	if (rnode.spcNode == GLOBALTABLESPACE_OID)
 	{
-		fprintf(stderr, _("%s: could not obtain information about current user: %s\n"),
-				progname, strerror(errno));
-		exit(1);
+		/* Shared system relations live in {datadir}/global */
+		snprintf(path, MAXPGPATH, "global/%u", rnode.relNode);
 	}
-	return pw->pw_name;
-#else
-	static char username[128];	/* remains after function exit */
-	DWORD		len = sizeof(username) - 1;
-
-	if (!GetUserName(username, &len))
+	else if (rnode.spcNode == DEFAULTTABLESPACE_OID)
 	{
-		fprintf(stderr, _("%s: could not get current user name: %s\n"),
-				progname, strerror(errno));
-		exit(1);
+		/* The default tablespace is {datadir}/base */
+		snprintf(path, MAXPGPATH, "base/%u/%u",
+					 rnode.dbNode, rnode.relNode);
 	}
-	return username;
-#endif
+	else
+	{
+		/* All other tablespaces are accessed via symlinks */
+		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u",
+					 rnode.spcNode, rnode.dbNode, rnode.relNode);
+	}
+
+	if (segno > 0)
+	{
+		size_t	len = strlen(path);
+		snprintf(path + len, MAXPGPATH - len, ".%u", segno);
+	}
+}
+
+
+static void
+GetAbsPath(char *path, size_t pathlen, const char *relpath)
+{
+	char	cwd[MAXPGPATH];
+
+	if (is_absolute_path(relpath))
+		strlcpy(path, relpath, pathlen);
+	else
+	{
+		if (getcwd(cwd, MAXPGPATH) == NULL)
+		{
+			fprintf(stderr, "cannot read current directory\n");
+			exit(1);
+		}
+		snprintf(path, pathlen, "%s/%s", cwd, relpath);
+	}
 }
 
 /*
@@ -1920,6 +1511,12 @@ get_user_name(const char *progname)
  * shmem segment IDs are reasonably common.
  */
 #ifndef WIN32
+
+/**
+ * @brief Shared memory ID returned by shmget(2).
+ * See the line 40, backend/port/pg_shmem.c.
+ */
+typedef int IpcMemoryId;
 
 #ifdef SHM_SHARE_MMU
 #define PG_SHMAT_FLAGS SHM_SHARE_MMU

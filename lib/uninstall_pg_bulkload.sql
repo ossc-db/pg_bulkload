@@ -6,11 +6,8 @@
 
 SET search_path = public;
 
-BEGIN;
-
 DROP FUNCTION pg_bulkload(text);
+DROP FUNCTION pg_bulkload(text, text);
 DROP FUNCTION pg_bulkload_trigger_init();
 DROP FUNCTION pg_bulkload_trigger_main();
 DROP FUNCTION pg_bulkload_trigger_term();
-
-COMMIT;

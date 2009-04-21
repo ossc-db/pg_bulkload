@@ -258,7 +258,7 @@ DirectLoaderTerm(DirectLoader *self, bool inError)
 	{
 		close(self->lsf_fd);
 		self->lsf_fd = -1;
-		if (unlink(self->lsf_path) == -1)
+		if (unlink(self->lsf_path) < 0 && errno != ENOENT)
 			ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not unlink load status file: %m")));
 	}

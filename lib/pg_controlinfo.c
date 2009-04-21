@@ -38,7 +38,7 @@ typedef struct ControlFileLine
 /*
  * prototype declaration of internal function
  */
-static void	ParseControlFile(ControlInfo *ci, FILE *file);
+static void	ParseControlFile(ControlInfo *ci, FILE *file, const char *options);
 static void	PrepareControlInfo(ControlInfo *ci);
 static void ParseErrorCallback(void *arg);
 
@@ -49,15 +49,10 @@ static void ParseErrorCallback(void *arg);
  * @return ControlInfo structure with control file information
  */
 ControlInfo *
-OpenControlInfo(const char *fname)
+OpenControlInfo(const char *fname, const char *options)
 {
 	ControlInfo	   *ci;
-	FILE		   *file;
-
-	if (!is_absolute_path(fname))
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_NAME),
-				 errmsg("control file name must be absolute path")));
+	FILE		   *file = NULL;
 
 	/*
 	 * initialization ControlInfo sttucture
@@ -68,32 +63,175 @@ OpenControlInfo(const char *fname)
 	ci->ci_limit = INT64_MAX;
 	ci->ci_infd = -1;
 
-	/*
-	 * open file
-	 */
-	if ((file = fopen(fname, "rt")) == NULL)
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not open \"%s\" %m", fname)));
+	/* open file */
+	if (fname)
+	{
+		if (!is_absolute_path(fname))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_NAME),
+					 errmsg("control file name must be absolute path")));
+
+		if ((file = fopen(fname, "rt")) == NULL)
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("could not open \"%s\" %m", fname)));
+	}
 
 	PG_TRY();
 	{
-		ParseControlFile(ci, file);
+		ParseControlFile(ci, file, options);
 		PrepareControlInfo(ci);
 	}
 	PG_CATCH();
 	{
-		fclose(file);	/* ignore errors */
+		if (file)
+			fclose(file);	/* ignore errors */
 		CloseControlInfo(ci, true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	/* close control file */
-	if (fclose(file) < 0)
+	if (file && fclose(file) < 0)
 		ereport(ERROR, (errcode_for_file_access(),
 					errmsg("could not close \"%s\" %m", fname)));
 
 	return ci;
+}
+
+static void
+parse_option(ControlInfo *ci, ControlFileLine *line, char *buf)
+{
+	char	   *keyword = NULL;
+	char	   *target = NULL;
+	char	   *p;
+	char	   *q;
+
+	line->line++;
+	line->keyword = NULL;
+	line->value = NULL;
+
+	if (buf[strlen(buf) - 1] != '\n')
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+						errmsg("too long line \"%s\"", buf)));
+
+	p = buf;				/* pointer to keyword */
+
+	/*
+	 * replace '\n' to '\0'
+	 */
+	q = strchr(buf, '\n');
+	if (q != NULL)
+		*q = '\0';
+
+	/*
+	 * delete strings after a comment letter outside quotations
+	 */
+	q = FindUnquotedChar(buf, '#', '"', '\\');
+	if (q != NULL)
+		*q = '\0';
+
+	/*
+	 * if result of trimming is a null string, it is treated as an empty line
+	 */
+	p = TrimSpace(buf);
+	if (*p == '\0')
+		return;
+
+	/*
+	 * devide after '='
+	 */
+	q = FindUnquotedChar(buf, '=', '"', '\\');
+	if (q != NULL)
+		*q = '\0';
+	else
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+						errmsg("invalid input \"%s\"", buf)));
+
+	q++;					/* pointer to input value */
+
+	/*
+	 * return a value trimmed space
+	 */
+	keyword = TrimSpace(p);
+	target = TrimSpace(q);
+	if (target)
+	{
+		target = UnquoteString(target, '"', '\\');
+		if (!target)
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+							errmsg("unterminated quoted field")));
+	}
+
+	line->keyword = keyword;
+	line->value = target;
+
+	/*
+	 * result
+	 */
+	if (strcmp(keyword, "TABLE") == 0)
+	{
+		ASSERT_ONCE(ci->ci_rv == NULL);
+
+		ci->ci_rv = makeRangeVarFromNameList(
+						stringToQualifiedNameList(target));
+	}
+	else if (strcmp(keyword, "INFILE") == 0)
+	{
+		ASSERT_ONCE(ci->ci_infname == NULL);
+
+		if (!is_absolute_path(target))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("relative path not allowed for INFILE: %s", target)));
+
+		ci->ci_infname = pstrdup(target);
+	}
+	else if (strcmp(keyword, "TYPE") == 0)
+	{
+		ASSERT_ONCE(ci->ci_parser == NULL);
+
+		if (strcmp(target, "FIXED") == 0)
+			ci->ci_parser = CreateFixedParser();
+		else if (strcmp(target, "CSV") == 0)
+			ci->ci_parser = CreateCSVParser();
+		else
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("invalid file type \"%s\"", target)));
+	}
+	else if (strcmp(keyword, "LOADER") == 0)
+	{
+		ASSERT_ONCE(ci->ci_loader == NULL);
+		
+		if (strcmp(target, "DIRECT") == 0)
+			ci->ci_loader = CreateDirectLoader();
+		else if (strcmp(target, "BUFFERED") == 0)
+			ci->ci_loader = CreateBufferedLoader();
+		else
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("invalid loader \"%s\"", target)));
+	}
+	else if (strcmp(keyword, "MAX_ERR_CNT") == 0)
+	{
+		ASSERT_ONCE(ci->ci_max_err_cnt < 0);
+		ci->ci_max_err_cnt = ParseInt32(target, 0);
+	}
+	else if (strcmp(keyword, "OFFSET") == 0)
+	{
+		ASSERT_ONCE(ci->ci_offset < 0);
+		ci->ci_offset = ParseInt64(target, 0);
+	}
+	else if (strcmp(keyword, "LIMIT") == 0)
+	{
+		ASSERT_ONCE(ci->ci_limit == INT64_MAX);
+		ci->ci_limit = ParseInt64(target, 0);
+	}
+	else if (ci->ci_parser == NULL ||
+			!ParserParam(ci->ci_parser, keyword, target))
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 errmsg("invalid keyword \"%s\"", keyword)));
+	}
 }
 
 /**
@@ -108,7 +246,7 @@ OpenControlInfo(const char *fname)
  * @return void
  */
 static void
-ParseControlFile(ControlInfo *ci, FILE *file)
+ParseControlFile(ControlInfo *ci, FILE *file, const char *options)
 {
 	char					buf[LINEBUF];
 	ControlFileLine			line;
@@ -119,144 +257,28 @@ ParseControlFile(ControlInfo *ci, FILE *file)
 	errcontext.previous = error_context_stack;
 	error_context_stack = &errcontext;
 
-	/*
-	 * extract keywords and input values
-	 */
+	/* extract keywords and values from control file */
 	line.line = 0;
 	while (fgets(buf, LINEBUF, file) != NULL)
 	{
-		char	   *keyword = NULL;
-		char	   *target = NULL;
-		char	   *p;
-		char	   *q;
+		parse_option(ci, &line, buf);
+	}
 
-		line.line++;
-		line.keyword = NULL;
-		line.value = NULL;
-
-		if (buf[strlen(buf) - 1] != '\n')
-			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-							errmsg("too long line \"%s\"", buf)));
-
-		p = buf;				/* pointer to keyword */
-
-		/*
-		 * replace '\n' to '\0'
-		 */
-		q = strchr(buf, '\n');
-		if (q != NULL)
-			*q = '\0';
-
-		/*
-		 * delete strings after a comment letter outside quotations
-		 */
-		q = FindUnquotedChar(buf, '#', '"', '\\');
-		if (q != NULL)
-			*q = '\0';
-
-		/*
-		 * if result of trimming is a null string, it is treated as an empty line
-		 */
-		p = TrimSpace(buf);
-		if (*p == '\0')
-			continue;
-
-		/*
-		 * devide after '='
-		 */
-		q = FindUnquotedChar(buf, '=', '"', '\\');
-		if (q != NULL)
-			*q = '\0';
-		else
-			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-							errmsg("invalid input \"%s\"", buf)));
-
-		q++;					/* pointer to input value */
-
-		/*
-		 * return a value trimmed space
-		 */
-		keyword = TrimSpace(p);
-		target = TrimSpace(q);
-		if (target)
+	/* extract keywords and values from text options */
+	if (options && options[0])
+	{
+		char *r;
+		for (r = strchr(options, '\n'); r; r = strchr(options, '\n'))
 		{
-			target = UnquoteString(target, '"', '\\');
-			if (!target)
-				ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-								errmsg("unterminated quoted field")));
-		}
-
-		line.keyword = keyword;
-		line.value = target;
-
-		/*
-		 * result
-		 */
-		if (strcmp(keyword, "TABLE") == 0)
-		{
-			ASSERT_ONCE(ci->ci_rv == NULL);
-
-			ci->ci_rv = makeRangeVarFromNameList(
-							stringToQualifiedNameList(target));
-		}
-		else if (strcmp(keyword, "INFILE") == 0)
-		{
-			ASSERT_ONCE(ci->ci_infname == NULL);
-
-			if (!is_absolute_path(target))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("relative path not allowed for INFILE: %s", target)));
-
-			ci->ci_infname = pstrdup(target);
-		}
-		else if (strcmp(keyword, "TYPE") == 0)
-		{
-			ASSERT_ONCE(ci->ci_parser == NULL);
-
-			if (strcmp(target, "FIXED") == 0)
-				ci->ci_parser = CreateFixedParser();
-			else if (strcmp(target, "CSV") == 0)
-				ci->ci_parser = CreateCSVParser();
-			else
-				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-								errmsg("invalid file type \"%s\"", target)));
-		}
-		else if (strcmp(keyword, "LOADER") == 0)
-		{
-			ASSERT_ONCE(ci->ci_loader == NULL);
-			
-			if (strcmp(target, "DIRECT") == 0)
-				ci->ci_loader = CreateDirectLoader();
-			else if (strcmp(target, "BUFFERED") == 0)
-				ci->ci_loader = CreateBufferedLoader();
-			else
-				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-								errmsg("invalid loader \"%s\"", target)));
-		}
-		else if (strcmp(keyword, "MAX_ERR_CNT") == 0)
-		{
-			ASSERT_ONCE(ci->ci_max_err_cnt < 0);
-			ci->ci_max_err_cnt = ParseInt32(target, 0);
-		}
-		else if (strcmp(keyword, "OFFSET") == 0)
-		{
-			ASSERT_ONCE(ci->ci_offset < 0);
-			ci->ci_offset = ParseInt64(target, 0);
-		}
-		else if (strcmp(keyword, "LIMIT") == 0)
-		{
-			ASSERT_ONCE(ci->ci_limit == INT64_MAX);
-			ci->ci_limit = ParseInt64(target, 0);
-		}
-		else if (ci->ci_parser == NULL ||
-				!ParserParam(ci->ci_parser, keyword, target))
-		{
-			ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("invalid keyword \"%s\"", keyword)));
+			size_t	len = Min(r - options + 1, LINEBUF);
+			memcpy(buf, options, len);
+			buf[len] = '\0';
+			parse_option(ci, &line, buf);
+			options = r + 1;
 		}
 	}
+
+	error_context_stack = errcontext.previous;
 
 	/*
 	 * checking necessary common setting items
@@ -280,8 +302,6 @@ ParseControlFile(ControlInfo *ci, FILE *file)
 		ci->ci_max_err_cnt = 0;
 	if (ci->ci_offset < 0)
 		ci->ci_offset = 0;
-
-	error_context_stack = errcontext.previous;
 }
 
 /**

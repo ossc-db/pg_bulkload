@@ -95,7 +95,7 @@ struct ControlInfo
 
 /* External declarations */
 
-extern ControlInfo *OpenControlInfo(const char *fname);
+extern ControlInfo *OpenControlInfo(const char *fname, const char *options);
 extern void CloseControlInfo(ControlInfo *ci, bool inError);
 
 extern Parser *CreateFixedParser(void);
