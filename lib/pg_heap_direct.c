@@ -20,13 +20,40 @@
 #include "pg_loadstatus.h"
 
 #if PG_VERSION_NUM < 80300
-#define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
-	PageAddItem((page), (item), (size), (offnum), LP_USED)
-#define toast_insert_or_update(rel, newtup, oldtup, options) \
-	toast_insert_or_update((rel), (newtup), (oldtup))
-#elif PG_VERSION_NUM < 80400
-#define toast_insert_or_update(rel, newtup, oldtup, options) \
-	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
+
+static XLogRecPtr
+log_newpage(RelFileNode *rnode, int fork, BlockNumber blkno, Page page)
+{
+	xl_heap_newpage xlrec;
+	XLogRecPtr	recptr;
+	XLogRecData rdata[2];
+
+	/* NO ELOG(ERROR) from here till newpage op is logged */
+	START_CRIT_SECTION();
+
+	xlrec.node = *rnode;
+	xlrec.blkno = blkno;
+
+	rdata[0].data = (char *) &xlrec;
+	rdata[0].len = SizeOfHeapNewpage;
+	rdata[0].buffer = InvalidBuffer;
+	rdata[0].next = &(rdata[1]);
+
+	rdata[1].data = (char *) page;
+	rdata[1].len = BLCKSZ;
+	rdata[1].buffer = InvalidBuffer;
+	rdata[1].next = NULL;
+
+	recptr = XLogInsert(RM_HEAP_ID, XLOG_HEAP_NEWPAGE, rdata);
+
+	PageSetLSN(page, recptr);
+	PageSetTLI(page, ThisTimeLineID);
+
+	END_CRIT_SECTION();
+
+	return recptr;
+}
+
 #endif
 
 /**

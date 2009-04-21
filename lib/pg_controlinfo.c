@@ -10,6 +10,7 @@
  */
 #include "postgres.h"
 
+#include "access/heapam.h"
 #include "catalog/namespace.h"
 #include "executor/executor.h"
 #include "miscadmin.h"

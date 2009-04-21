@@ -10,6 +10,8 @@
  */
 #include "postgres.h"
 
+#include "access/heapam.h"
+
 #include "pg_bulkload.h"
 #include "pg_controlinfo.h"
 

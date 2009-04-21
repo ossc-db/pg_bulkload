@@ -10,6 +10,8 @@
  */
 #include "postgres.h"
 
+#include "access/heapam.h"
+#include "access/transam.h"
 #include "access/tuptoaster.h"
 #include "access/xact.h"
 #include "executor/executor.h"
@@ -28,6 +30,14 @@ PG_FUNCTION_INFO_V1(pg_bulkload);
 Datum		pg_bulkload(PG_FUNCTION_ARGS);
 
 static HeapTuple ReadTuple(ControlInfo *ci, TransactionId xid, CommandId cid);
+
+#if PG_VERSION_NUM < 80300
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
+	toast_insert_or_update((rel), (newtup), (oldtup))
+#elif PG_VERSION_NUM < 80400
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
+	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
+#endif
 
 #ifdef ENABLE_BULKLOAD_PROFILE
 static instr_time prof_init;
@@ -199,12 +209,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		MemoryContextSwitchTo(ctx);
 		use_wal = ci->ci_loader->use_wal;
 
-		/* Terminate spooler. */
-		ExecDropSingleTupleTableSlot(slot);
-		if (estate->es_result_relation_info)
-			ExecCloseIndices(estate->es_result_relation_info);
-		FreeExecutorState(estate);
-
 		/* Terminate loader. Be sure to set ci_loader to NULL. */
 		LoaderTerm(ci->ci_loader, false);
 		ci->ci_loader = NULL;
@@ -254,7 +258,12 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		 * STEP 4: Postprocessing
 		 */
 
-		/* Save the number of loaded tuples and release control info. */
+		/* Terminate spooler. */
+		ExecDropSingleTupleTableSlot(slot);
+		if (estate->es_result_relation_info)
+			ExecCloseIndices(estate->es_result_relation_info);
+		FreeExecutorState(estate);
+
 		CloseControlInfo(ci, false);
 		ci = NULL;
 
@@ -378,3 +387,25 @@ ReadTuple(ControlInfo *ci, TransactionId xid, CommandId cid)
 
 	return tuple;
 }
+
+#if PG_VERSION_NUM < 80400
+
+char *
+text_to_cstring(const text *t)
+{
+	/* must cast away the const, unfortunately */
+	text	   *tunpacked = pg_detoast_datum_packed((struct varlena *) t);
+	int			len = VARSIZE_ANY_EXHDR(tunpacked);
+	char	   *result;
+
+	result = (char *) palloc(len + 1);
+	memcpy(result, VARDATA_ANY(tunpacked), len);
+	result[len] = '\0';
+
+	if (tunpacked != t)
+		pfree(tunpacked);
+	
+	return result;
+}
+
+#endif

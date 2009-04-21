@@ -12,14 +12,11 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
-#include "access/nbtree.h"
 #include "access/xact.h"
-#include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "executor/executor.h"
-#include "storage/bufmgr.h"
 #include "storage/lmgr.h"
-#include "storage/smgr.h"
+#include "utils/lsyscache.h"
 #include "utils/tqual.h"
 
 #include "pg_bulkload_win32.h"
@@ -68,6 +65,7 @@ static void _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal);
 static void _bt_mergeload(BTWriteState *wstate, BTSpool *btspool,
 						  BTReader *btspool2, Relation heapRel);
 static bool heap_is_visible(Relation heapRel, ItemPointer htid);
+static void report_unique_violation(Relation rel, IndexTuple itup);
 
 /*
  * IndexSpoolBegin - Initialize spools.
@@ -410,10 +408,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 
 			/* The tuple pointed by the old index should not be visible. */
 			if (heap_is_visible(heapRel, &itup2->t_tid))
-				ereport(ERROR,
-						(errcode(ERRCODE_UNIQUE_VIOLATION),
-						 errmsg("could not create unique index"),
-						 errdetail("Table contains duplicated values.")));
+				report_unique_violation(wstate->index, itup);
 
 			/* Discard itup2 and read next */
 			itup2 = BTReaderGetNextItem(btspool2);
@@ -700,4 +695,64 @@ heap_is_visible(Relation heapRel, ItemPointer htid)
 
 	return visible;
 #endif
+}
+
+/*
+ * borrowing from ri_ReportViolation.
+ */
+static void
+report_unique_violation(Relation rel, IndexTuple itup)
+{
+#define BUFLENGTH	512
+	char		key_names[BUFLENGTH];
+	char		key_values[BUFLENGTH];
+	char	   *name_ptr = key_names;
+	char	   *val_ptr = key_values;
+	int			i;
+
+	TupleDesc	tupdesc = rel->rd_att;
+
+	for (i = 0; i < tupdesc->natts; i++)
+	{
+		Datum		value;
+		bool		isnull;
+		char	   *name,
+				   *val;
+
+		name = NameStr(tupdesc->attrs[i]->attname);
+		value = index_getattr(itup, i + 1, tupdesc, &isnull);
+		if (isnull)
+			val = "null";
+		else
+		{
+			Oid			foutoid;
+			bool		typisvarlena;
+
+			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
+							  &foutoid, &typisvarlena);
+			val = OidOutputFunctionCall(foutoid, value);
+		}
+
+		/*
+		 * Go to "..." if name or value doesn't fit in buffer.  We reserve 5
+		 * bytes to ensure we can add comma, "...", null.
+		 */
+		if (strlen(name) >= (key_names + BUFLENGTH - 5) - name_ptr ||
+			strlen(val) >= (key_values + BUFLENGTH - 5) - val_ptr)
+		{
+			sprintf(name_ptr, "...");
+			sprintf(val_ptr, "...");
+			break;
+		}
+
+		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? "," : "", name);
+		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? "," : "", val);
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_UNIQUE_VIOLATION),
+			 errmsg("duplicate key value violates unique constraint \"%s\"",
+					RelationGetRelationName(rel)),
+		errdetail("Key (%s)=(%s) already exists.",
+				  key_names, key_values)));
 }

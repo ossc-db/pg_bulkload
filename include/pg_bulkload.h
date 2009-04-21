@@ -41,7 +41,7 @@ typedef struct Loader		Loader;
  */
 #if PG_VERSION_NUM < 80400
 
-#define MAIN_FORKNUM
+#define MAIN_FORKNUM					0
 #define relpath(rnode, forknum)			relpath((rnode))
 #define smgrimmedsync(reln, forknum)	smgrimmedsync((reln))
 #define smgrread(reln, forknum, blocknum, buffer) \
@@ -54,11 +54,23 @@ typedef struct Loader		Loader;
 typedef void *BulkInsertState;
 #define GetBulkInsertState()			(NULL)
 #define FreeBulkInsertState(bistate)	((void)0)
+extern char *text_to_cstring(const text *t);
+
+#if PG_VERSION_NUM >= 80300
+#define log_newpage(rnode, forknum, blk, page) \
+	log_newpage((rnode), (blk), (page))
+#endif
 
 #endif
 
 #if PG_VERSION_NUM < 80300
 
+#define PG_GETARG_TEXT_PP(n)		PG_GETARG_TEXT_P(n)
+#define VARSIZE_ANY_EXHDR(v)		(VARSIZE(v) - VARHDRSZ)
+#define VARDATA_ANY(v)				VARDATA(v)
+#define SET_VARSIZE(v, sz)			(VARATT_SIZEP(v) = (sz))
+#define pg_detoast_datum_packed(v)	pg_detoast_datum(v)
+#define DatumGetTextPP(v)			DatumGetTextP(v)
 #define SK_BT_DESC					0	/* Always ASC */
 #define SK_BT_NULLS_FIRST			0	/* Always NULLS LAST */
 #define MaxHeapTupleSize			MaxTupleSize
@@ -69,6 +81,8 @@ typedef void *BulkInsertState;
     stringToQualifiedNameList((str), "pg_bulkload")
 #define setNewRelfilenode(rel, xid) \
 	setNewRelfilenode((rel))
+#define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
+	PageAddItem((page), (item), (size), (offnum), LP_USED)
 
 #endif
 
