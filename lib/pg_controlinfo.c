@@ -38,7 +38,7 @@ typedef struct ControlFileLine
 /*
  * prototype declaration of internal function
  */
-static void	ParseControlFile(ControlInfo *ci, FILE *file, const char *options);
+static void	ParseControlFile(ControlInfo *ci, const char *fname, const char *options);
 static void	PrepareControlInfo(ControlInfo *ci);
 static void ParseErrorCallback(void *arg);
 
@@ -52,48 +52,24 @@ ControlInfo *
 OpenControlInfo(const char *fname, const char *options)
 {
 	ControlInfo	   *ci;
-	FILE		   *file = NULL;
 
-	/*
-	 * initialization ControlInfo sttucture
-	 */
 	ci = (ControlInfo *) palloc0(sizeof(ControlInfo));
 	ci->ci_max_err_cnt = -1;
 	ci->ci_offset = -1;
 	ci->ci_limit = INT64_MAX;
 	ci->ci_infd = -1;
 
-	/* open file */
-	if (fname)
-	{
-		if (!is_absolute_path(fname))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_NAME),
-					 errmsg("control file name must be absolute path")));
-
-		if ((file = fopen(fname, "rt")) == NULL)
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open \"%s\" %m", fname)));
-	}
-
 	PG_TRY();
 	{
-		ParseControlFile(ci, file, options);
+		ParseControlFile(ci, fname, options);
 		PrepareControlInfo(ci);
 	}
 	PG_CATCH();
 	{
-		if (file)
-			fclose(file);	/* ignore errors */
 		CloseControlInfo(ci, true);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	/* close control file */
-	if (file && fclose(file) < 0)
-		ereport(ERROR, (errcode_for_file_access(),
-					errmsg("could not close \"%s\" %m", fname)));
 
 	return ci;
 }
@@ -246,7 +222,7 @@ parse_option(ControlInfo *ci, ControlFileLine *line, char *buf)
  * @return void
  */
 static void
-ParseControlFile(ControlInfo *ci, FILE *file, const char *options)
+ParseControlFile(ControlInfo *ci, const char *fname, const char *options)
 {
 	char					buf[LINEBUF];
 	ControlFileLine			line;
@@ -257,11 +233,26 @@ ParseControlFile(ControlInfo *ci, FILE *file, const char *options)
 	errcontext.previous = error_context_stack;
 	error_context_stack = &errcontext;
 
-	/* extract keywords and values from control file */
 	line.line = 0;
-	while (fgets(buf, LINEBUF, file) != NULL)
+
+	/* extract keywords and values from control file */
+	if (fname && fname[0])
 	{
-		parse_option(ci, &line, buf);
+		FILE	   *file;
+
+		if (!is_absolute_path(fname))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_NAME),
+					 errmsg("control file name must be absolute path")));
+
+		if ((file = AllocateFile(fname, "rt")) == NULL)
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("could not open \"%s\" %m", fname)));
+
+		while (fgets(buf, LINEBUF, file) != NULL)
+			parse_option(ci, &line, buf);
+
+		FreeFile(file);
 	}
 
 	/* extract keywords and values from text options */
