@@ -27,4 +27,13 @@ subdir = contrib/pg_bulkload
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
+pg_btree.o: nbtsort.c
+nbtsort.c:
+	cp $(top_srcdir)/src/backend/access/nbtree/nbtsort.c .
 endif
+
+.PHONY: subclean
+clean: subclean
+
+subclean:
+	rm -f nbtsort.c

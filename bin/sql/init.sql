@@ -29,7 +29,7 @@ CREATE TABLE customer (
 );
 
 ALTER TABLE customer ADD PRIMARY KEY (c_w_id, c_d_id, c_id);
-CREATE INDEX idx_btree ON customer (c_d_id, c_last);
-CREATE INDEX idx_btree_fn ON customer ((abs(c_w_id) + c_d_id));
-CREATE INDEX idx_hash ON customer (c_d_id, c_last);
-CREATE INDEX idx_hash_fn ON customer ((abs(c_w_id) + c_d_id));
+CREATE INDEX idx_btree ON customer USING btree (c_d_id, c_last);
+CREATE INDEX idx_btree_fn ON customer USING btree ((abs(c_w_id) + c_d_id));
+CREATE INDEX idx_hash ON customer USING hash (c_d_id);
+CREATE INDEX idx_hash_fn ON customer USING hash ((abs(c_w_id) + c_d_id));

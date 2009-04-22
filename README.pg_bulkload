@@ -86,6 +86,14 @@ $ postgresql start
 $ psql -f $PGHOME/share/contrib/pg_bulkload.sql database_name
 $ psql -f $PGHOME/share/contrib/pg_timestamp.sql database_name
 
+3. PGXS support
+pg_bulkload requires postgres source codes. If you build it with pgxs,
+input like as:
+
+$ cp $PGSRC/src/backend/access/nbtree/nbtsort.c bin/
+$ make USE_PGXS=1
+$ make install
+$ (same as the above)
 
 Usage
 -----

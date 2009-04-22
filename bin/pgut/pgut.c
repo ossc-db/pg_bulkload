@@ -10,8 +10,6 @@
 
 #include <unistd.h>
 
-#include "common.h"
-
 const char *progname = NULL;
 const char *dbname = NULL;
 char	   *host = NULL;
@@ -32,6 +30,8 @@ static void on_before_exec(PGconn *conn);
 static void on_after_exec(void);
 static void on_interrupt(void);
 static void on_exit(void);
+static void exit_or_abort(int exitcode);
+const char *get_user_name(const char *progname);
 
 const char default_optstring[] = "d:h:p:U:W";
 
@@ -132,7 +132,7 @@ pgut_getopt(int argc, char **argv)
 			if (!pgut_argument(c, optarg))
 			{
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
-				exit(1);
+				exit_or_abort(EXITCODE_ERROR);
 			}
 			break;
 		}
@@ -145,7 +145,7 @@ pgut_getopt(int argc, char **argv)
 			fprintf(stderr, _("%s: too many command-line arguments (first is \"%s\")\n"),
 					progname, argv[optind]);
 			fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
-			exit(1);
+			exit_or_abort(EXITCODE_ERROR);
 		}
 	}
 
@@ -163,8 +163,52 @@ pgut_getopt(int argc, char **argv)
 void
 reconnect(void)
 {
+	PGconn	   *conn;
+	char	   *pwd = NULL;
+	bool		new_pass;
+
 	disconnect();
-	current_conn = connectDatabase(dbname, host, port, username, password, progname);
+
+	if (password)
+		pwd = simple_prompt("Password: ", 100, false);
+
+	/*
+	 * Start the connection.  Loop until we have a password if requested by
+	 * backend.
+	 */
+	do
+	{
+		new_pass = false;
+		conn = PQsetdbLogin(host, port, NULL, NULL, dbname, username, pwd);
+
+		if (!conn)
+		{
+			fprintf(stderr, _("%s: could not connect to database %s\n"),
+					progname, dbname);
+			exit_or_abort(EXITCODE_ERROR);
+		}
+
+		if (PQstatus(conn) == CONNECTION_BAD &&
+			PQconnectionNeedsPassword(conn) &&
+			pwd == NULL)
+		{
+			PQfinish(conn);
+			pwd = simple_prompt("Password: ", 100, false);
+			new_pass = true;
+		}
+	} while (new_pass);
+
+	free(pwd);
+
+	/* check to see that the backend connection was successfully made */
+	if (PQstatus(conn) == CONNECTION_BAD)
+	{
+		fprintf(stderr, _("%s: could not connect to database %s: %s"),
+				progname, dbname, PQerrorMessage(conn));
+		exit_or_abort(EXITCODE_ERROR);
+	}
+
+	current_conn = conn;
 }
 
 void
@@ -193,7 +237,7 @@ execute_nothrow(const char *query, int nParams, const char **params)
 }
 
 /*
- * execute - Execute a SQL and return the result, or exit() if failed.
+ * execute - Execute a SQL and return the result, or exit_or_abort() if failed.
  */
 PGresult *
 execute(const char *query, int nParams, const char **params)
@@ -218,12 +262,12 @@ execute(const char *query, int nParams, const char **params)
 		PQclear(res);
 	}
 
-	exit(1);
+	exit_or_abort(EXITCODE_ERROR);
 	return NULL;	/* keep compiler quiet */
 }
 
 /*
- * command - Execute a SQL and discard the result, or exit() if failed.
+ * command - Execute a SQL and discard the result, or exit_or_abort() if failed.
  */
 void
 command(const char *query, int nParams, const char **params)
@@ -313,11 +357,61 @@ on_interrupt(void)
 	errno = save_errno;			/* just in case the write changed it */
 }
 
+static pqbool	in_cleanup = false;
+
 static void
 on_exit(void)
 {
-	pgut_cleanup();
+	in_cleanup = true;
+	pgut_cleanup(false);
 	disconnect();
+}
+
+static void
+exit_or_abort(int exitcode)
+{
+	if (in_cleanup)
+	{
+		/* oops, error in cleanup*/
+		pgut_cleanup(true);
+		abort();
+	}
+	else
+	{
+		/* normal exit */
+		exit(exitcode);
+	}
+}
+
+/*
+ * Returns the current user name.
+ */
+const char *
+get_user_name(const char *progname)
+{
+#ifndef WIN32
+	struct passwd *pw;
+
+	pw = getpwuid(geteuid());
+	if (!pw)
+	{
+		fprintf(stderr, _("%s: could not obtain information about current user: %s\n"),
+				progname, strerror(errno));
+		exit_or_abort(EXITCODE_ERROR);
+	}
+	return pw->pw_name;
+#else
+	static char username[128];	/* remains after function exit */
+	DWORD		len = sizeof(username) - 1;
+
+	if (!GetUserName(username, &len))
+	{
+		fprintf(stderr, _("%s: could not get current user name: %s\n"),
+				progname, strerror(errno));
+		exit_or_abort(EXITCODE_ERROR);
+	}
+	return username;
+#endif
 }
 
 #ifndef WIN32
@@ -361,6 +455,13 @@ init_cancel_handler(void)
 	InitializeCriticalSection(&cancelConnLock);
 
 	SetConsoleCtrlHandler(consoleHandler, TRUE);
+}
+
+unsigned int
+sleep(unsigned int seconds)
+{
+	Sleep(seconds * 1000);
+	return 0;
 }
 
 #endif   /* WIN32 */

@@ -44,9 +44,6 @@
 
 #include "pgut/pgut.h"
 
-/** exitcode for help and version mode */
-#define EXITCODE_HELP		2
-
 /**
  * @brief Definition of Assert() macros as done in PosgreSQL.
  */
@@ -320,8 +317,8 @@ pgut_help(void)
 		"%s is a bulk data loading tool for PostgreSQL\n"
 		"\n"
 		"Usage:\n"
-		"  Data Load : pg_bulkload [data load options] control_file_path\n"
-		"  Recovery  : pg_bulkload -r [-D DATADIR]\n"
+		"  Data Load : %s [data load options] control_file_path\n"
+		"  Recovery  : %s -r [-D DATADIR]\n"
 		"\n"
 		"Options for data load:\n"
 		"  -d DBNAME       database name\n"
@@ -338,7 +335,7 @@ pgut_help(void)
 		"Other options:\n"
 		"  --help, -?      show this help, then exit\n"
 		"  --version, -V   output version information, then exit\n",
-		progname);
+		progname, progname, progname);
 #ifdef PROGRAM_URL
 	fprintf(stderr, "\nRead the website for details. <" PROGRAM_URL ">\n");
 #endif
@@ -356,7 +353,7 @@ pgut_version(void)
 }
 
 void
-pgut_cleanup(void)
+pgut_cleanup(pqbool fatal)
 {
 }
 

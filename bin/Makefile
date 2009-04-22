@@ -4,12 +4,12 @@
 #    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c pgut/pgut.c
-OBJS = $(SRCS:.c=.o) $(top_builddir)/src/bin/scripts/common.o
+OBJS = $(SRCS:.c=.o)
 PROGRAM = pg_bulkload
 SCRIPTS = postgresql
 REGRESS = init load_bin load_csv
 
-PG_CPPFLAGS = -I../include -I$(libpq_srcdir) -I$(top_builddir)/src/bin/scripts
+PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 PG_LIBS = $(libpq)
 
 ifdef USE_PGXS

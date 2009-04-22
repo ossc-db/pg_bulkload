@@ -32,7 +32,7 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #define _bt_spool			unused_bt_spool
 #define _bt_leafbuild		unused_bt_leafbuild
 
-#include "../../src/backend/access/nbtree/nbtsort.c"
+#include "nbtsort.c"
 
 #undef _bt_spoolinit
 #undef _bt_spooldestroy
