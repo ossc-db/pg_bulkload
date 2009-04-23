@@ -10,6 +10,9 @@
  */
 #include "postgres.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "access/heapam.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"

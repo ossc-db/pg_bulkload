@@ -19,6 +19,10 @@
 #include "utils/lsyscache.h"
 #include "utils/tqual.h"
 
+#if PG_VERSION_NUM >= 80400
+#include "utils/snapmgr.h"
+#endif
+
 #include "pg_bulkload_win32.h"
 #include "pg_btree.h"
 

@@ -405,6 +405,7 @@ LoaderRecoveryMain(void)
 	LoaderCreateLockFile("postmaster.pid", true, true, DataDir);
 	StartLoaderRecovery();
 	LoaderUnlinkLockFile("postmaster.pid");
+	return 0;
 }
 
 
