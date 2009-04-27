@@ -10,11 +10,11 @@ SET search_path = public;
 BEGIN;
 
 CREATE FUNCTION pg_bulkload(ctlfilename text)
-	RETURNS integer
+	RETURNS bigint
 	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
 
 CREATE FUNCTION pg_bulkload(ctlfilename text, options text)
-	RETURNS integer
+	RETURNS bigint
 	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
 
 -- Triggers

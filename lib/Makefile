@@ -19,9 +19,16 @@ DATA_built = pg_bulkload.sql
 DATA = uninstall_pg_bulkload.sql 
 PG_CPPFLAGS = -I../include
 
+ifndef MAJORVERSION
+MAJORVERSION := $(basename $(VERSION))
+endif
+
 ifdef USE_PGXS
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
+pg_btree.o: nbtsort.c
+nbtsort.c:
+	cp nbtree/nbtsort-$(MAJORVERSION).c ./nbtsort.c
 else
 subdir = contrib/pg_bulkload
 top_builddir = ../../..
