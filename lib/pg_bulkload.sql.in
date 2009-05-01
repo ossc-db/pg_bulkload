@@ -17,14 +17,32 @@ CREATE FUNCTION pg_bulkload(ctlfilename text, options text)
 	RETURNS bigint
 	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
 
--- Triggers
-CREATE FUNCTION pg_bulkload_trigger_init() RETURNS trigger
-	AS 'MODULE_PATHNAME' LANGUAGE C;
+CREATE FUNCTION pg_bulkread(ctlfilename text)
+	RETURNS SETOF record
+	AS 'MODULE_PATHNAME', 'pg_bulkread' LANGUAGE C;
 
-CREATE FUNCTION pg_bulkload_trigger_main() RETURNS trigger
-	AS 'MODULE_PATHNAME' LANGUAGE C;
+CREATE FUNCTION pg_bulkread(ctlfilename text, options text)
+	RETURNS SETOF record
+	AS 'MODULE_PATHNAME', 'pg_bulkread' LANGUAGE C;
 
-CREATE FUNCTION pg_bulkload_trigger_term() RETURNS trigger
-	AS 'MODULE_PATHNAME' LANGUAGE C;
+CREATE FUNCTION pg_bulkread(ctlfilename text, options text, anyelement)
+	RETURNS SETOF anyelement
+	AS 'MODULE_PATHNAME', 'pg_bulkread' LANGUAGE C;
+
+-- Load with aggregates
+CREATE FUNCTION pg_bulkwrite_accum(internal, regclass, record)
+	RETURNS internal
+	AS 'MODULE_PATHNAME', 'pg_bulkwrite_accum' LANGUAGE C;
+
+CREATE FUNCTION pg_bulkwrite_finish(internal)
+	RETURNS bigint
+	AS 'MODULE_PATHNAME', 'pg_bulkwrite_finish' LANGUAGE C;
+
+CREATE AGGREGATE pg_bulkwrite(regclass, record)
+(
+	SFUNC = pg_bulkwrite_accum,
+	STYPE = internal,
+	FINALFUNC = pg_bulkwrite_finish
+);
 
 COMMIT;

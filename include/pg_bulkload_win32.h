@@ -6,6 +6,8 @@
 #ifndef BULKLOAD_WIN32_H_INCLUDED
 #define BULKLOAD_WIN32_H_INCLUDED
 
+#include "access/xlogdefs.h"
+
 /*
  * Windows compatibility issues.
  */

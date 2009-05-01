@@ -14,13 +14,15 @@
 #include <unistd.h>
 
 #include "access/heapam.h"
+#include "access/transam.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "storage/fd.h"
+#include "utils/rel.h"
 
-#include "pg_bulkload.h"
-#include "pg_controlinfo.h"
 #include "pg_loadstatus.h"
+#include "writer.h"
 
 #if PG_VERSION_NUM < 80300
 
@@ -70,6 +72,9 @@ typedef struct DirectLoader
 	int				lsf_fd;		/**< File descriptor of load status file */
 	char			lsf_path[MAXPGPATH];	/**< Load status file path */
 
+	TransactionId	xid;
+	CommandId		cid;
+
 	int				datafd;		/**< File descriptor of data file */
 
 	char		   *blocks;		/**< Local heap block buffer */
@@ -85,9 +90,8 @@ typedef struct DirectLoader
  * Prototype declaration for local functions.
  */
 
-static void	DirectLoaderInit(DirectLoader *self, Relation rel);
 static void	DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple);
-static void	DirectLoaderTerm(DirectLoader *self, bool inError);
+static void	DirectLoaderClose(DirectLoader *self);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
 
@@ -97,81 +101,99 @@ static void	DirectLoaderTerm(DirectLoader *self, bool inError);
 #define LS_TOTAL_CNT(ls)	((ls)->ls.exist_cnt + (ls)->ls.create_cnt)
 
 /* Signature of static functions */
-static int	open_data_file(RelFileNode rnode, LoadStatus *ls);
+static int	open_data_file(RelFileNode rnode, BlockNumber blknum);
 static void	flush_pages(DirectLoader *loader);
 static void	close_data_file(DirectLoader *loader);
 static void	UpdateLSF(DirectLoader *loader, BlockNumber num);
+static void UnlinkLSF(DirectLoader *loader);
 static void ValidateLSFDirectory(const char *path);
+
+/*
+ * TODO: If we need more loaders oncurrently, modify this variable
+ * to something like a linked list.
+ */
+static DirectLoader ActiveLoader =
+{
+	{
+		(LoaderInsertProc) DirectLoaderInsert,
+		(LoaderCloseProc) DirectLoaderClose,
+		false
+	},
+	{},
+	-1,
+	"",
+	InvalidTransactionId,
+	0,
+	-1,
+	NULL,
+	0
+};
 
 /* ========================================================================
  * Implementation
  * ========================================================================*/
 
 /**
- * @brief Create a new DirectLoader
- */
-Loader *
-CreateDirectLoader(void)
-{
-	DirectLoader* self = palloc0(sizeof(DirectLoader));
-	self->base.init = (LoaderInitProc) DirectLoaderInit;
-	self->base.insert = (LoaderInsertProc) DirectLoaderInsert;
-	self->base.term = (LoaderTermProc) DirectLoaderTerm;
-	self->base.use_wal = false;
-	self->datafd = -1;
-	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
-	return (Loader *) self;
-}
-
-/**
- * @brief Create load status file
- * @param self [in/out] Load status information
+ * @brief Initialize a new DirectLoader
+ * Create load status file
  * @param rel [in] Relation for loading
  */
-static void
-DirectLoaderInit(DirectLoader *self, Relation rel)
+Loader *
+CreateDirectLoader(Relation rel)
 {
-	int			ret;
-	LoadStatus *ls = &self->ls;
+	DirectLoader	   *self;
+	LoadStatus		   *ls;
+
+	if (ActiveLoader.lsf_fd != -1)
+		elog(ERROR, "already direct loader is active");
+
+	self = &ActiveLoader;
+	self->lsf_fd = -1;
+	self->datafd = -1;
+	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
+
+	/* Verify DataDir/pg_bulkload directory */
+	ValidateLSFDirectory(BULKLOAD_LSF_DIR);
 
 	/* Initialize first block */
 	PageInit(GetCurrentPage(self), BLCKSZ, 0);
 	PageSetTLI(GetCurrentPage(self), ThisTimeLineID);
 
-	ValidateLSFDirectory(BULKLOAD_LSF_DIR);
+	/* Obtain transaction ID and command ID. */
+	self->xid = GetCurrentTransactionId();
+	self->cid = GetCurrentCommandId(true);
 
 	/*
 	 * Initialize load status information
 	 */
+	ls = &self->ls;
 	ls->ls.relid = RelationGetRelid(rel);
 	ls->ls.rnode = rel->rd_node;
 	ls->ls.exist_cnt = RelationGetNumberOfBlocks(rel);
 	ls->ls.create_cnt = 0;
-	self->lsf_fd = -1;
-
-	BULKLOAD_LSF_PATH(self->lsf_path, ls);
 
 	/*
 	 * Create a load status file and write the initial status for it.
-	 * At the time, if we find any existing load status files, exit with error
-	 * because recovery process haven't been executed after failing load to the
-	 * same table.
+	 * At the time, if we find any existing load status files, exit with
+	 * error because recovery process haven't been executed after failing
+	 * load to the same table.
 	 */
+	BULKLOAD_LSF_PATH(self->lsf_path, ls);
 	self->lsf_fd = BasicOpenFile(self->lsf_path,
-					 O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 	if (self->lsf_fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not create loadstatus file \"%s\": %m", self->lsf_path)));
+			errmsg("could not create loadstatus file \"%s\": %m", self->lsf_path)));
 
-	ret = write(self->lsf_fd, ls, sizeof(LoadStatus));
-	if (ret != sizeof(LoadStatus))
+	if (write(self->lsf_fd, ls, sizeof(LoadStatus)) != sizeof(LoadStatus) ||
+		pg_fsync(self->lsf_fd) != 0)
+	{
+		UnlinkLSF(self);
 		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not write loadstatus file \"%s\": %m",
-							   self->lsf_path)));
-	if (pg_fsync(self->lsf_fd) != 0)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not fsync loadstatus file \"%s\": %m", self->lsf_path)));
+			errmsg("could not write loadstatus file \"%s\": %m", self->lsf_path)));
+	}
+
+	return (Loader *) self;
 }
 
 /**
@@ -187,9 +209,7 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 	Item			item;
 	LoadStatus	   *ls = &self->ls;
 
-	/*
-	 * If we're gonna fail for oversize tuple, do it right away
-	 */
+	/* Assume the tuple has been toasted already. */
 	if (MAXALIGN(tuple->t_len) > MaxHeapTupleSize)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
@@ -197,22 +217,7 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 						(unsigned long) tuple->t_len,
 						(unsigned long) MaxHeapTupleSize)));
 
-	/*
-	 * Tuples are added from the end of each page, we have to determine
-	 * the insersion point regarding alignment.   For this, we have to
-	 * compare tuple size and the free area of a give page considering
-	 * this alignment.
-	 *
-	 * We don't have to consider this alignment if free area of pages
-	 * decreases in the unit of MAXIMUM_ALIGNOF.
-	 *
-	 * In the other cases, we have to consider this alignment to prevent
-	 * incorrect page update.
-	 *
-	 * Here, we use MAXALIGN() macro to obtain tuple size with alignment
-	 * and compare this with free are in this page.   We flush the buffer
-	 * and obtain new block if sufficient free area is not found in the page.
-	 */
+	/* Fill current page, or go to next page if the page is full. */
 	page = GetCurrentPage(self);
 	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
 		RelationGetTargetPageFreeSpace(rel, HEAP_DEFAULT_FILLFACTOR))
@@ -232,6 +237,18 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 		PageSetTLI(page, ThisTimeLineID);
 	}
 
+	tuple->t_data->t_infomask &= ~(HEAP_XACT_MASK);
+#if PG_VERSION_NUM >= 80300
+	tuple->t_data->t_infomask2 &= ~(HEAP2_XACT_MASK);
+#endif
+	tuple->t_data->t_infomask |= HEAP_XMAX_INVALID;
+	HeapTupleHeaderSetXmin(tuple->t_data, self->xid);
+	HeapTupleHeaderSetCmin(tuple->t_data, self->cid);
+	HeapTupleHeaderSetXmax(tuple->t_data, 0);
+#if PG_VERSION_NUM < 80300
+	HeapTupleHeaderSetCmax(tuple->t_data, 0);
+#endif
+
 	/* put the tuple on local page. */
 	offnum = PageAddItem(page, (Item) tuple->t_data,
 		tuple->t_len, InvalidOffsetNumber, false, true);
@@ -246,29 +263,32 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
  * @brief Clean up load status information
  *
  * @param self [in/out] Load status information
- * @param 
  * @return void
  */
 static void
-DirectLoaderTerm(DirectLoader *self, bool inError)
+DirectLoaderClose(DirectLoader *self)
 {
 	/* Flush unflushed block buffer and close the heap file. */
-	if (!inError)
-		flush_pages(self);
+	flush_pages(self);
 	close_data_file(self);
-
-	if (self->lsf_fd != -1)
-	{
-		close(self->lsf_fd);
-		self->lsf_fd = -1;
-		if (unlink(self->lsf_path) < 0 && errno != ENOENT)
-			ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not unlink load status file: %m")));
-	}
-
+	UnlinkLSF(self);
 	if (self->blocks)
+	{
 		pfree(self->blocks);
-	pfree(self);
+		self->blocks = NULL;
+	}
+}
+
+/**
+ * @brief Clean up direct loader on error.
+ * Data file and LSF might be still open.
+ * @return void
+ */
+void
+AtEOXact_DirectLoader(XactEvent event, void *arg)
+{
+	close_data_file(&ActiveLoader);
+	UnlinkLSF(&ActiveLoader);
 }
 
 /**
@@ -281,7 +301,6 @@ DirectLoaderTerm(DirectLoader *self, bool inError)
  *	 <li>Compute block number which can be written to the current file.</li>
  *	 <li>Save the last block number in the load status file.</li>
  *	 <li>Write to the current file.</li>
- *	 <li>Initialize the flushed block buffers.</li>
  *	 <li>If there are other data, write them too.</li>
  * </ol>
  *
@@ -303,8 +322,25 @@ flush_pages(DirectLoader *loader)
 		return;		/* no work */
 
 	/*
-	 * Add WAL entry (only the first page).
-	 * See backend/access/nbtree/nbtsort.c : _bt_blwritepage()
+	 * Add WAL entry (only the first page) to ensure the current xid will
+	 * be recorded in xlog. We must flush some xlog records with XLogFlush()
+	 * before write any data blocks to follow the WAL protocol.
+	 *
+	 * If postgres process, such as loader and COPY, is killed by "kill -9",
+	 * database will be rewound to the last checkpoint and recovery will
+	 * be performed using WAL.
+	 *
+	 * After the recovery, if there are xid's which have not been recorded
+	 * to WAL, such xid's will be reused.
+	 *
+	 * However, in the loader and COPY, data file is actually updated and
+	 * xid must not be reused.
+	 *
+	 * WAL entry with such xid can be added using XLogInsert().  However,
+	 * such entries are not really written to the disk immediately.
+	 * WAL entries are flushed to the disk by XLogFlush(), typically
+	 * when a transaction is commited.	COPY prevents xid reuse by
+	 * this method.
 	 */
 	if (ls->ls.create_cnt == 0)
 	{
@@ -312,28 +348,6 @@ flush_pages(DirectLoader *loader)
 
 		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
 			ls->ls.exist_cnt, loader->blocks);
-
-		/*
-		 * If postgres process, such as loader and COPY, is killed by "kill -9",
-		 * database will be rewound to the last checkpoint and recovery will
-		 * be performed using WAL.
-		 *
-		 * After the recovery, if there are xid's which have not been recorded
-		 * to WAL, such xid's will be reused.
-		 *
-		 * However, in the loader and COPY, data file is actually updated and
-		 * xid must not be reused.
-		 *
-		 * WAL entry with such xid can be added using XLogInsert().  However,
-		 * such entries are not really written to the disk immediately.
-		 * WAL entries are flushed to the disk by XLogFlush(), typically
-		 * when a transaction is commited.	COPY prevents xid reuse by
-		 * this method.
-		 *
-		 * In the case of the loader, xid reuse is avoided by calling
-		 * XLogFlush() right after adding a WAL entry, before flushing
-		 * data block to follow the WAL protocol.
-		 */
 		XLogFlush(recptr);
 	}
 
@@ -353,7 +367,7 @@ flush_pages(DirectLoader *loader)
 		if (relblks % RELSEG_SIZE == 0)
 			close_data_file(loader);
 		if (loader->datafd == -1)
-			loader->datafd = open_data_file(ls->ls.rnode, ls);
+			loader->datafd = open_data_file(ls->ls.rnode, relblks);
 
 		/* Number of blocks to be added to the current file. */
 		flush_num = Min(num, RELSEG_SIZE - relblks % RELSEG_SIZE);
@@ -397,11 +411,12 @@ flush_pages(DirectLoader *loader)
 
 /**
  * @brief Open the next data file and returns its descriptor.
- * @param rnode [in] RelFileNode of target relation.
+ * @param rnode  [in] RelFileNode of target relation.
+ * @param blknum [in] Block number to seek.
  * @return File descriptor of the last data file.
  */
 static int
-open_data_file(RelFileNode rnode, LoadStatus *ls)
+open_data_file(RelFileNode rnode, BlockNumber blknum)
 {
 	int			fd = -1;
 	int			ret;
@@ -409,7 +424,7 @@ open_data_file(RelFileNode rnode, LoadStatus *ls)
 	char	   *fname = NULL;
 
 	fname = relpath(rnode, MAIN_FORKNUM);
-	segno = LS_TOTAL_CNT(ls) / RELSEG_SIZE;
+	segno = blknum / RELSEG_SIZE;
 	if (segno > 0)
 	{
 		/*
@@ -425,7 +440,7 @@ open_data_file(RelFileNode rnode, LoadStatus *ls)
 	if (fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not open data file: %m")));
-	ret = lseek(fd, BLCKSZ * ((LS_TOTAL_CNT(ls)) % RELSEG_SIZE), SEEK_SET);
+	ret = lseek(fd, BLCKSZ * (blknum % RELSEG_SIZE), SEEK_SET);
 	if (ret == -1)
 	{
 		close(fd);
@@ -450,10 +465,10 @@ close_data_file(DirectLoader *loader)
 	if (loader->datafd != -1)
 	{
 		if (pg_fsync(loader->datafd) != 0)
-			ereport(ERROR, (errcode_for_file_access(),
+			ereport(WARNING, (errcode_for_file_access(),
 						errmsg("could not sync data file: %m")));
 		if (close(loader->datafd) < 0)
-			ereport(ERROR, (errcode_for_file_access(),
+			ereport(WARNING, (errcode_for_file_access(),
 						errmsg("could not close data file: %m")));
 		loader->datafd = -1;
 	}
@@ -483,6 +498,19 @@ UpdateLSF(DirectLoader *loader, BlockNumber num)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not fsync file \"%s\": %m", loader->lsf_path)));
+}
+
+static void
+UnlinkLSF(DirectLoader *loader)
+{
+	if (loader->lsf_fd != -1)
+	{
+		close(loader->lsf_fd);
+		loader->lsf_fd = -1;
+		if (unlink(loader->lsf_path) < 0 && errno != ENOENT)
+			ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not unlink load status file: %m")));
+	}
 }
 
 /*

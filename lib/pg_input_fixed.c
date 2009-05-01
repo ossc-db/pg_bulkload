@@ -15,22 +15,23 @@
 #include "access/htup.h"
 #include "catalog/pg_type.h"
 #include "utils/builtins.h"
+#include "utils/rel.h"
 
-#include "pg_controlinfo.h"
 #include "pg_strutil.h"
+#include "reader.h"
 
 typedef struct Field	Field;
-typedef Datum (*Reader)(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
+typedef Datum (*Read)(Reader *rd, char *in, const Field* field, int i, bool *isnull);
 
-static Datum Read_char(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_varchar(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int16(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int32(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int64(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint16(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint32(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float4(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float8(ControlInfo *ci, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_char(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_varchar(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int16(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int32(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int64(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_uint16(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_uint32(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_float4(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_float8(Reader *rd, char *in, const Field* field, int i, bool *isnull);
 
 /**
  * @brief  The number of records read at one time
@@ -53,7 +54,7 @@ typedef enum TypeId
 struct TypeInfo
 {
 	const char *name;
-	Reader		read;
+	Read		read;
 	int			len;
 }
 TYPES[] =
@@ -94,7 +95,7 @@ ALIASES[] =
 
 struct Field
 {
-	Reader	read;		/**< reader of the field */
+	Read	read;		/**< reader of the field */
 	int		offset;		/**< offset from head */
 	int		len;		/**< byte length of the field */
 	char   *nullif;		/**< null pattern, if any */
@@ -119,12 +120,12 @@ typedef struct FixedParser
 /*
  * Prototype declaration for local functions
  */
-static void	FixedParserInit(FixedParser *self, ControlInfo *ci);
-static bool	FixedParserRead(FixedParser *self, ControlInfo *ci);
-static void	FixedParserTerm(FixedParser *self, bool inError);
+static void	FixedParserInit(FixedParser *self, Reader *rd);
+static bool	FixedParserRead(FixedParser *self, Reader *rd);
+static void	FixedParserTerm(FixedParser *self);
 static bool FixedParserParam(FixedParser *self, const char *keyword, char *value);
 
-static void ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record);
+static void ExtractValuesFromFixed(FixedParser *self, Reader *rd, char *record);
 
 /**
  * @brief Create a new CSV parser.
@@ -147,7 +148,7 @@ CreateFixedParser(void)
  *	 -# Acquire a list of valid column numbers
  *	 -# Compute a record length
  *	 -# Allocate ((record length) * READ_LINE_NUM + 1) bytes for record buffer
- * @param ci [in] Control information
+ * @param rd [in] Control information
  * @return void
  * @note Return to caller by ereport() if the number of fields in the table
  * definition is not correspond to the number of fields in input file.
@@ -155,7 +156,7 @@ CreateFixedParser(void)
  * function.
  */
 static void
-FixedParserInit(FixedParser *self, ControlInfo *ci)
+FixedParserInit(FixedParser *self, Reader *rd)
 {
 	int		i;
 	int		maxlen;
@@ -171,7 +172,7 @@ FixedParserInit(FixedParser *self, ControlInfo *ci)
 	 * Error if the number of valid fields is not equal to the number of
 	 * fields
 	 */
-	if (ci->ci_attnumcnt != self->nfield)
+	if (rd->ci_attnumcnt != self->nfield)
 		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
 						errmsg("invalid field count (%d)", self->nfield)));
 
@@ -192,20 +193,20 @@ FixedParserInit(FixedParser *self, ControlInfo *ci)
 	self->record_buf = palloc(self->rec_len * READ_LINE_NUM + 1);
 
 	/* Skip first ci_offset lines in the input file */
-	if (ci->ci_offset > 0)
+	if (rd->ci_offset > 0)
 	{
 		long	skipbytes;
 
-		skipbytes = ci->ci_offset * self->rec_len;
+		skipbytes = rd->ci_offset * self->rec_len;
 
-		if (skipbytes > lseek(ci->ci_infd, 0, SEEK_END) ||
-			skipbytes != lseek(ci->ci_infd, skipbytes, SEEK_SET))
+		if (skipbytes > fseek(rd->ci_infd, 0, SEEK_END) ||
+			skipbytes != fseek(rd->ci_infd, skipbytes, SEEK_SET))
 		{
 			if (errno == 0)
 				errno = EINVAL;
 			ereport(ERROR, (errcode_for_file_access(),
 							errmsg("could not skip " int64_FMT " lines (%ld bytes) in the input file: %m",
-							ci->ci_offset, skipbytes)));
+							rd->ci_offset, skipbytes)));
 		}
 	}
 }
@@ -220,7 +221,7 @@ FixedParserInit(FixedParser *self, ControlInfo *ci)
  * @return void
  */
 static void
-FixedParserTerm(FixedParser *self, bool inError)
+FixedParserTerm(FixedParser *self)
 {
 	if (self->record_buf)
 		pfree(self->record_buf);
@@ -245,11 +246,11 @@ FixedParserTerm(FixedParser *self, bool inError)
  *	   enough room, notify it to the caller by ereport().
  *	 - Get back the stored head byte, and store the head byte of the next record.
  *	 - Update the number of records used.
- * @param ci [in/out] Control information
+ * @param rd [in/out] Control information
  * @return	Return true if there is a next record, or false if EOF.
  */
 static bool
-FixedParserRead(FixedParser *self, ControlInfo *ci)
+FixedParserRead(FixedParser *self, Reader *rd)
 {
 	char	   *record;
 
@@ -262,8 +263,8 @@ FixedParserRead(FixedParser *self, ControlInfo *ci)
 		int		len;
 		div_t	v;
 
-		while ((len = read(ci->ci_infd,
-			self->record_buf, self->rec_len * READ_LINE_NUM)) < 0)
+		while ((len = SourceRead(rd, self->record_buf,
+						self->rec_len * READ_LINE_NUM)) < 0)
 		{
 			if (errno != EAGAIN && errno != EINTR)
 				ereport(ERROR, (errcode_for_file_access(),
@@ -298,9 +299,9 @@ FixedParserRead(FixedParser *self, ControlInfo *ci)
 	 */
 	self->next_head = record[self->rec_len];
 	self->used_rec_cnt++;
-	ci->ci_read_cnt++;
+	rd->ci_read_cnt++;
 
-	ExtractValuesFromFixed(self, ci, record);
+	ExtractValuesFromFixed(self, rd, record);
 
 	return true;
 }
@@ -625,20 +626,20 @@ FixedParserParam(FixedParser *self, const char *keyword, char *value)
 
 /* Read null-terminated string and convert to internal format */
 static Datum
-ReadCString(ControlInfo *ci, const char *in, int idx)
+ReadCString(Reader *rd, const char *in, int idx)
 {
-	Form_pg_attribute *attrs = RelationGetDescr(ci->ci_rel)->attrs;
+	Form_pg_attribute *attrs = RelationGetDescr(rd->ci_rel)->attrs;
 
-	return FunctionCall3(&ci->ci_in_functions[idx],
+	return FunctionCall3(&rd->ci_in_functions[idx],
         CStringGetDatum(in),
-        ObjectIdGetDatum(ci->ci_typeioparams[idx]),
+        ObjectIdGetDatum(rd->ci_typeioparams[idx]),
         Int32GetDatum(attrs[idx]->atttypmod));
 }
 
 #define IsWhiteSpace(c)	((c) == ' ' || (c) == '\0')
 
 static Datum
-Read_char(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull)
+Read_char(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
 	const int	len = field->len;
@@ -660,7 +661,7 @@ Read_char(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull)
 		in[k + 1] = '\0';
 
 		*isnull = false;
-		value = ReadCString(ci, in, idx);
+		value = ReadCString(rd, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -668,7 +669,7 @@ Read_char(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull)
 }
 
 static Datum
-Read_varchar(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull)
+Read_varchar(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
 	const int	len = field->len;
@@ -684,7 +685,7 @@ Read_varchar(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnul
 	else
 	{
 		*isnull = false;
-		value = ReadCString(ci, in, idx);
+		value = ReadCString(rd, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -719,7 +720,7 @@ Read_varchar(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnul
  */
 #define DefineRead(T) \
 static Datum \
-Read_##T(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull) \
+Read_##T(Reader *rd, char *in, const Field* field, int idx, bool *isnull) \
 { \
 	char	str[32]; \
 	T		v; \
@@ -731,7 +732,7 @@ Read_##T(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull) \
 	} \
 	memcpy(&v, in, sizeof(v)); \
 	*isnull = false; \
-	switch (RelationGetDescr(ci->ci_rel)->attrs[idx]->atttypid) \
+	switch (RelationGetDescr(rd->ci_rel)->attrs[idx]->atttypid) \
 	{ \
 	case INT2OID: \
 		return Int16GetDatum((int16)v); \
@@ -747,7 +748,7 @@ Read_##T(ControlInfo *ci, char *in, const Field* field, int idx, bool *isnull) \
 		return DirectFunctionCall1(T##_numeric, T##_GetDatum(v)); \
 	default: \
 		snprintf(str, lengthof(str), T##_FMT, v); \
-		return ReadCString(ci, str, idx); \
+		return ReadCString(rd, str, idx); \
 	} \
 }
 
@@ -775,7 +776,7 @@ DefineRead(float8)
  *		 -# Transfer each field value to internal format by FunctionCall3()
  *	 -# Retrurn the stored value to next field
  *
- * @param ci [in/out] Controll information
+ * @param rd [in/out] Controll information
  * @param record [in/out] One record data (which must be NUL terminated)
  * @return void
  * @note Memory allocated in this function is not able to be freed. So if you
@@ -785,22 +786,22 @@ DefineRead(float8)
  * @note If error occurs, return to the caller by ereport().
  */
 static void
-ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record)
+ExtractValuesFromFixed(FixedParser *self, Reader *rd, char *record)
 {
 	int			i;
-	Form_pg_attribute *attrs = RelationGetDescr(ci->ci_rel)->attrs;
+	Form_pg_attribute *attrs = RelationGetDescr(rd->ci_rel)->attrs;
 
 	/*
 	 * Loop for fields in the input file
 	 */
 	for (i = 0; i < self->nfield; i++)
 	{
-		int			j = ci->ci_attnumlist[i];	/* Index of physical fields */
+		int			j = rd->ci_attnumlist[i];	/* Index of physical fields */
 		bool		isnull;
 		Datum		value;
 
-		ci->ci_parsing_field = i + 1;	/* ci_parsing_field is 1 origin */
-		value = self->fields[i].read(ci,
+		rd->ci_parsing_field = i + 1;	/* ci_parsing_field is 1 origin */
+		value = self->fields[i].read(rd,
 			record + self->fields[i].offset, &self->fields[i], j, &isnull);
 
 		/* Check NOT NULL constraint. */
@@ -810,7 +811,7 @@ ExtractValuesFromFixed(FixedParser *self, ControlInfo *ci, char *record)
 				 errmsg("null value in column \"%s\" violates not-null constraint",
 					  NameStr(attrs[j]->attname))));
 
-		ci->ci_isnull[j] = isnull;
-		ci->ci_values[j] = value;
+		rd->ci_isnull[j] = isnull;
+		rd->ci_values[j] = value;
 	}
 }

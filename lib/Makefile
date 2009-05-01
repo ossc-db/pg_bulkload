@@ -6,13 +6,13 @@
 SRCS = \
 	pg_btree.c \
 	pg_bulkload.c \
-	pg_controlinfo.c \
 	pg_heap_buffered.c \
 	pg_heap_direct.c \
 	pg_input_csv.c \
 	pg_input_fixed.c \
 	pg_strutil.c \
-	trigger.c
+	reader.c \
+	writer.c
 OBJS = $(SRCS:.c=.o)
 MODULE_big = pg_bulkload
 DATA_built = pg_bulkload.sql

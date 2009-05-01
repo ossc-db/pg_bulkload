@@ -247,6 +247,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 {
 	BTWriteState	wstate;
 	BTReader		reader;
+	bool			merge;
 
 	Assert(btspool->index->rd_index->indisvalid);
 
@@ -275,37 +276,28 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 	FlushRelationBuffers(wstate.index);
 	BULKLOAD_PROFILE(&prof_index_merge_flush);
 
-	PG_TRY();
+	merge = BTReaderInit(&reader, wstate.index);
+
+	elog(DEBUG1, "pg_bulkload: build \"%s\" %s merge (%s wal)",
+		RelationGetRelationName(wstate.index),
+		merge ? "with" : "without",
+		wstate.btws_use_wal ? "with" : "without");
+
+	if (merge)
 	{
-		bool	merge = BTReaderInit(&reader, wstate.index);
-
-		elog(DEBUG1, "pg_bulkload: build \"%s\" %s merge (%s wal)",
-			RelationGetRelationName(wstate.index),
-			merge ? "with" : "without",
-			wstate.btws_use_wal ? "with" : "without");
-
-		if (merge)
-		{
-			/* Assign a new file node and merge two streams into it. */
-			setNewRelfilenode(wstate.index, RecentXmin);
-			BULKLOAD_PROFILE_PUSH();
-			_bt_mergeload(&wstate, btspool, &reader, heapRel);
-			BULKLOAD_PROFILE_POP();
-		}
-		else
-		{
-			/* Fast path for newly created index. */
-			_bt_load(&wstate, btspool, NULL);
-		}
-
-		BTReaderTerm(&reader);
+		/* Assign a new file node and merge two streams into it. */
+		setNewRelfilenode(wstate.index, RecentXmin);
+		BULKLOAD_PROFILE_PUSH();
+		_bt_mergeload(&wstate, btspool, &reader, heapRel);
+		BULKLOAD_PROFILE_POP();
 	}
-	PG_CATCH();
+	else
 	{
-		BTReaderTerm(&reader);
-		PG_RE_THROW();
+		/* Fast path for newly created index. */
+		_bt_load(&wstate, btspool, NULL);
 	}
-	PG_END_TRY();
+
+	BTReaderTerm(&reader);
 
 	BULKLOAD_PROFILE(&prof_index_merge_build);
 }

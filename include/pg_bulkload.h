@@ -7,16 +7,15 @@
 #define BULKLOAD_H_INCLUDED
 
 #include "postgres.h"
-#include "access/xlogdefs.h"
 
 /**
  * @file
  * @brief General definition in pg_bulkload.
  */
 
-typedef struct ControlInfo	ControlInfo;
-typedef struct Parser		Parser;
-typedef struct Loader		Loader;
+typedef struct Reader	Reader;
+typedef struct Parser	Parser;
+typedef struct Loader	Loader;
 
 /*
  * 64bit integer utils

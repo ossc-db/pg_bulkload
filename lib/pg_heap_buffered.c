@@ -6,29 +6,29 @@
 
 /**
  * @file
- * @brief Direct heap writer
+ * @brief Buffered heap writer
  */
 #include "postgres.h"
 
 #include "access/heapam.h"
+#include "access/xact.h"
 
-#include "pg_bulkload.h"
-#include "pg_controlinfo.h"
+#include "writer.h"
 
 typedef struct BufferedLoader
 {
 	Loader	base;
 
 	BulkInsertState bistate;	/* use bulk insert storategy */
+	CommandId		cid;
 } BufferedLoader;
 
 /*
  * Prototype declaration for local functions.
  */
 
-static void	BufferedLoaderInit(BufferedLoader *self, Relation rel);
 static void	BufferedLoaderInsert(BufferedLoader *self, Relation rel, HeapTuple tuple);
-static void	BufferedLoaderTerm(BufferedLoader *self, bool inError);
+static void	BufferedLoaderClose(BufferedLoader *self);
 
 /* ========================================================================
  * Implementation
@@ -38,20 +38,15 @@ static void	BufferedLoaderTerm(BufferedLoader *self, bool inError);
  * @brief Create a new BufferedLoader
  */
 Loader *
-CreateBufferedLoader(void)
+CreateBufferedLoader(Relation rel)
 {
 	BufferedLoader* self = palloc0(sizeof(BufferedLoader));
-	self->base.init = (LoaderInitProc) BufferedLoaderInit;
 	self->base.insert = (LoaderInsertProc) BufferedLoaderInsert;
-	self->base.term = (LoaderTermProc) BufferedLoaderTerm;
+	self->base.close = (LoaderCloseProc) BufferedLoaderClose;
 	self->base.use_wal = true;
-	return (Loader *) self;
-}
-
-static void
-BufferedLoaderInit(BufferedLoader *self, Relation rel)
-{
 	self->bistate = GetBulkInsertState();
+	self->cid = GetCurrentCommandId(true);
+	return (Loader *) self;
 }
 
 /**
@@ -61,14 +56,12 @@ BufferedLoaderInit(BufferedLoader *self, Relation rel)
 static void
 BufferedLoaderInsert(BufferedLoader *self, Relation rel, HeapTuple tuple)
 {
-	CommandId		cid = HeapTupleHeaderGetCmin(tuple->t_data);
-
 	/* Insert the heap tuple and index entries. */
-	heap_insert(rel, tuple, cid, 0, self->bistate);
+	heap_insert(rel, tuple, self->cid, 0, self->bistate);
 }
 
 static void
-BufferedLoaderTerm(BufferedLoader *self, bool inError)
+BufferedLoaderClose(BufferedLoader *self)
 {
 	if (self->bistate)
 		FreeBulkInsertState(self->bistate);
