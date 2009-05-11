@@ -13,10 +13,7 @@
  *	If -r option is specified, performs recovery to cancel inconveniences caused
  *	by errors in the previous loading.
  */
-#include "postgres.h"
-
-#undef PGDLLIMPORT
-#define PGDLLIMPORT
+#include "postgres_fe.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -38,22 +35,24 @@
 #include "storage/bufpage.h"
 #include "storage/pg_shmem.h"
 
-#define PROGRAM_VERSION	"2.4.0"			/**< My version string */
-#define PROGRAM_URL		"http://pgbulkload.projects.postgresql.org/"
-#define PROGRAM_EMAIL	"pgbulkload-general@pgfoundry.org"
+const char *PROGRAM_VERSION	= "2.4.0";		/**< My version string */
+const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
+const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
 #include "pgut/pgut.h"
 
 /**
  * @brief Definition of Assert() macros as done in PosgreSQL.
  */
-#ifdef Assert
 #undef Assert
-#endif
+#undef AssertMacro
+
 #ifdef USE_ASSERT_CHECKING
-#define Assert(x) assert(x)
+#define Assert(x)		assert(x)
+#define AssertMacro(x)	assert(x)
 #else
-#define Assert(x)
+#define Assert(x)		((void) 0)
+#define AssertMacro(x)	((void) 0)
 #endif
 
 /**
@@ -134,9 +133,6 @@ static void ClearLoadedPage(RelFileNode rnode,
 							BlockNumber blkbeg,
 							BlockNumber blkend);
 
-/* Write a log message. */
-static void LoaderLogMessage(int elevel, const char *format, ...);
-
 /* Tests if the data block is constructed by this loader. */
 static bool IsPageCreatedByLoader(Page page);
 
@@ -177,11 +173,7 @@ bool		PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2);
 int
 main(int argc, char *argv[])
 {
-	int		exitcode;
-
-	exitcode = pgut_getopt(argc, argv);
-	if (exitcode != 0)
-		return exitcode;
+	parse_options(argc, argv);
 
 	/*
 	 * Determines data loading or recovery.
@@ -207,7 +199,7 @@ main(int argc, char *argv[])
 			return 1;
 		}
 
-		exitcode = LoaderLoadMain(control_file);
+		return LoaderLoadMain(control_file);
 	}
 	else
 	{
@@ -242,13 +234,8 @@ main(int argc, char *argv[])
 			return 1;
 		}
 
-		/*
-		 * Performs recovery.
-		 */
-		exitcode = LoaderRecoveryMain();
+		return LoaderRecoveryMain();
 	}
-
-	return exitcode;
 }
 
 /*
@@ -310,46 +297,24 @@ pgut_argument(int c, const char *arg)
  * @param  None
  * @return exitcode
  */
-int
+void
 pgut_help(void)
 {
 	fprintf(stderr,
 		"%s is a bulk data loading tool for PostgreSQL\n"
 		"\n"
 		"Usage:\n"
-		"  Data Load : %s [data load options] control_file_path\n"
-		"  Recovery  : %s -r [-D DATADIR]\n"
+		"  Dataload: %s [data load options] control_file_path\n"
+		"  Recovery: %s -r [-D DATADIR]\n"
 		"\n"
-		"Options for data load:\n"
-		"  -d DBNAME       database name\n"
-		"  -p PORT         port number to listen on\n"
-		"  -U USER         user name\n"
-		"  -W PASSWORD     password\n"
+		"Dataload options:\n"
 		"  -i INFILE       INFILE path\n"
 		"  -o \"key = val\"  additional option\n"
 		"\n"
-		"Options for recovery:\n"
+		"Recovery options:\n"
 		"  -r              execute recovery\n"
-		"  -D DATADIR      database directory\n"
-		"\n"
-		"Other options:\n"
-		"  --help, -?      show this help, then exit\n"
-		"  --version, -V   output version information, then exit\n",
-		progname, progname, progname);
-#ifdef PROGRAM_URL
-	fprintf(stderr, "\nRead the website for details. <" PROGRAM_URL ">\n");
-#endif
-#ifdef PROGRAM_EMAIL
-	fprintf(stderr, "\nReport bugs to <" PROGRAM_EMAIL ">.\n");
-#endif
-	return EXITCODE_HELP;
-}
-
-int
-pgut_version(void)
-{
-	fprintf(stderr, "%s %s\n", progname, PROGRAM_VERSION);
-	return EXITCODE_HELP;
+		"  -D DATADIR      database directory\n",
+		PROGRAM_NAME, PROGRAM_NAME, PROGRAM_NAME);
 }
 
 void
@@ -399,8 +364,7 @@ static int
 LoaderRecoveryMain(void)
 {
 	if (chdir(DataDir) < 0)
-		LoaderLogMessage(ERROR,
-						 "could not change directory to \"%s\"", DataDir);
+		elog(ERROR, "could not change directory to \"%s\"", DataDir);
 
 	LoaderCreateLockFile("postmaster.pid", true, true, DataDir);
 	StartLoaderRecovery();
@@ -492,9 +456,9 @@ StartLoaderRecovery(void)
 			 * XXX :need to store relaion name?
 			 */
 			if (!isSilentRecovery)
-				LoaderLogMessage(NOTICE,
-								 "Starting pg_bulkload recovery for file \"%s\"",
-								 lsfname);
+				elog(NOTICE,
+					 "Starting pg_bulkload recovery for file \"%s\"",
+					 lsfname);
 
 			/*
 			 * overwrite pages created by the loader by blank pages
@@ -504,28 +468,27 @@ StartLoaderRecovery(void)
 							ls.ls.exist_cnt + ls.ls.create_cnt);
 
 			if (!isSilentRecovery)
-				LoaderLogMessage(NOTICE,
-								 "Ended pg_bulkload recovery for file \"%s\"",
-								 lsfname);
+				elog(NOTICE,
+					 "Ended pg_bulkload recovery for file \"%s\"",
+					 lsfname);
 		}
 
 		/*
 		 * delete load status file.
 		 */
 		if (unlink(lsfpath) != 0)
-			LoaderLogMessage(ERROR,
-							 "could not delete loadstatus file \"%s\" : %s",
-							 lsfpath, strerror(errno));
+			elog(ERROR,
+				 "could not delete loadstatus file \"%s\" : %s",
+				 lsfpath, strerror(errno));
 
 		if (!isSilentRecovery)
-			LoaderLogMessage(LOG,
-							 "delete loadstatus file \"%s\"", lsfname);
+			elog(LOG, "delete loadstatus file \"%s\"", lsfname);
 	}
 
 	CleanUpList(lsflist);
 
 	if (!isSilentRecovery)
-		LoaderLogMessage(LOG, "recovered all relations");
+		elog(LOG, "recovered all relations");
 	return;						/* revocery process successfully terminated, */
 }
 
@@ -575,9 +538,9 @@ GetLSFList(void)
 	 *	   if exists, add file name to List.
 	 */
 	if ((dir = opendir(BULKLOAD_LSF_DIR)) == NULL)
-		LoaderLogMessage(ERROR,
-						 "could not open LSF Directory \"%s\" : %s",
-						 BULKLOAD_LSF_DIR, strerror(errno));
+		elog(ERROR,
+			 "could not open LSF Directory \"%s\" : %s",
+			 BULKLOAD_LSF_DIR, strerror(errno));
 
 	while ((dp = readdir(dir)) != NULL)
 	{
@@ -595,9 +558,9 @@ GetLSFList(void)
 	}
 
 	if (closedir(dir) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not close LSF Directory \"%s\" : %s",
-						 BULKLOAD_LSF_DIR, strerror(errno));
+		elog(ERROR,
+			 "could not close LSF Directory \"%s\" : %s",
+			 BULKLOAD_LSF_DIR, strerror(errno));
 
 	return list;
 }
@@ -633,20 +596,20 @@ GetDBClusterState(void)
 	 * open, read, and close ControlFileData
 	 */
 	if ((fd = open("global/pg_control", O_RDONLY | PG_BINARY, 0)) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not open Control File \"global/pg_control\" : %s",
-						 strerror(errno));
+		elog(ERROR,
+			 "could not open Control File \"global/pg_control\" : %s",
+			 strerror(errno));
 
 	if ((read(fd, &ControlFile,
 			  sizeof(ControlFileData))) != sizeof(ControlFileData))
-		LoaderLogMessage(ERROR,
-						 "could not read Control File \"global/pg_control\" : %s",
-						 strerror(errno));
+		elog(ERROR,
+			 "could not read Control File \"global/pg_control\" : %s",
+			 strerror(errno));
 
 	if (close(fd) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not close Control File \"global/pg_control\" : %s",
-						 strerror(errno));
+		elog(ERROR,
+			 "could not close Control File \"global/pg_control\" : %s",
+			 strerror(errno));
 
 	return ControlFile.state;
 }
@@ -678,22 +641,20 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
 	 * open and read LSF
 	 */
 	if ((fd = open(lsfpath, O_RDONLY | PG_BINARY, 0)) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not open LoadStatusFile \"%s\" : %s",
-						 lsfpath, strerror(errno));
+		elog(ERROR,
+			 "could not open LoadStatusFile \"%s\" : %s",
+			 lsfpath, strerror(errno));
 
 	read_len = read(fd, ls, sizeof(LoadStatus));
 	if (read_len != sizeof(LoadStatus))
-	{
-		LoaderLogMessage(ERROR,
-						 "could not read LoadStatusFile \"%s\" : %s",
-						 lsfpath, strerror(errno));
-	}
+		elog(ERROR,
+			 "could not read LoadStatusFile \"%s\" : %s",
+			 lsfpath, strerror(errno));
 
 	if (close(fd) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not close LoadStatusFile \"%s\" : %s",
-						 lsfpath, strerror(errno));
+		elog(ERROR,
+			 "could not close LoadStatusFile \"%s\" : %s",
+			 lsfpath, strerror(errno));
 }
 
 /**
@@ -718,8 +679,7 @@ InitializeList(void)
 
 	new_list = (List *) malloc(sizeof(List));
 	if (new_list == NULL)
-		LoaderLogMessage(ERROR,
-						 "not enough memory available to proceed");
+		elog(ERROR, "not enough memory available to proceed");
 
 	new_list->type = T_Invalid;
 	new_list->length = 0;
@@ -756,16 +716,14 @@ AddListLSFName(List *list, const char *filename)
 	 */
 	new_tail = (ListCell *) malloc(sizeof(ListCell));
 	if (new_tail == NULL)
-		LoaderLogMessage(ERROR,
-						 "not enough memory available to proceed");
+		elog(ERROR, "not enough memory available to proceed");
 
 	/*
 	 * add file name
 	 */
 	new_tail->data.ptr_value = (void *) strdup(filename);
 	if (new_tail->data.ptr_value == NULL)
-		LoaderLogMessage(ERROR,
-						 "could not duplicate string : %s", strerror(errno));
+		elog(ERROR, "could not duplicate string : %s", strerror(errno));
 
 	new_tail->next = NULL;
 
@@ -849,17 +807,16 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 
 	fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 	if (fd == -1)
-		LoaderLogMessage(ERROR,
-						 "could not open data file \"%s\" : %s",
-						 segpath, strerror(errno));
+		elog(ERROR,
+			 "could not open data file \"%s\" : %s",
+			 segpath, strerror(errno));
 
 	seekpos = lseek(fd, (blkbeg % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 	if (seekpos == -1)
-		LoaderLogMessage(ERROR,
-						 "could not seek the target position "
-						 "in the data file \"%s\" : %s", segpath,
-						 strerror(errno));
+		elog(ERROR,
+			 "could not seek the target position in the data file \"%s\" : %s",
+			 segpath, strerror(errno));
 
 	blknum = blkbeg;
 
@@ -883,9 +840,9 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 				if (errno == EAGAIN || errno == EINTR)
 					continue;
 				else
-					LoaderLogMessage(ERROR,
-									 "could not read data file \"%s\" : %s",
-									 segpath, strerror(errno));
+					elog(ERROR,
+						 "could not read data file \"%s\" : %s",
+						 segpath, strerror(errno));
 			}
 			else if (ret == 0)
 			{
@@ -908,9 +865,9 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 			seekpos = lseek(fd, (blknum % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 			if (write(fd, zeropage, BLCKSZ) == -1)
-				LoaderLogMessage(ERROR,
-								 "could not write correct empty page : %s",
-								 strerror(errno));
+				elog(ERROR,
+					 "could not write correct empty page : %s",
+					 strerror(errno));
 		}
 
 		blknum++;
@@ -925,23 +882,23 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 		if (blknum % RELSEG_SIZE == 0)
 		{
 			if (fsync(fd) != 0)
-				LoaderLogMessage(ERROR,
-								 "could not sync data file \"%s\" : %s",
-								 segpath, strerror(errno));
+				elog(ERROR,
+					 "could not sync data file \"%s\" : %s",
+					 segpath, strerror(errno));
 
 			if (close(fd) == -1)
-				LoaderLogMessage(ERROR,
-								 "could not close data file \"%s\" : %s",
-								 segpath, strerror(errno));
+				elog(ERROR,
+					 "could not close data file \"%s\" : %s",
+					 segpath, strerror(errno));
 
 			++segno;
 			GetSegmentPath(segpath, rnode, segno);
 
 			fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 			if (fd == -1)
-				LoaderLogMessage(ERROR,
-								 "could not open data file \"%s\" : %s",
-								 segpath, strerror(errno));
+				elog(ERROR,
+					 "could not open data file \"%s\" : %s",
+					 segpath, strerror(errno));
 		}
 	}
 
@@ -949,67 +906,14 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	 * post process
 	 */
 	if (fsync(fd) != 0)
-		LoaderLogMessage(ERROR,
-						 "could not sync data file \"%s\" : %s",
-						 segpath, strerror(errno));
+		elog(ERROR,
+			 "could not sync data file \"%s\" : %s",
+			 segpath, strerror(errno));
 
 	if (close(fd) == -1)
-		LoaderLogMessage(ERROR,
-						 "could not close data file \"%s\" : %s",
-						 segpath, strerror(errno));
-}
-
-
-/**
- * @brief Output the log message of bulkloader.
- *
- * @param elevel	  [in] error message level. exit if ERROR or FATAL.
- * @param format, ... [in] error message(variable parameters)
- * @return void
- */
-
-static void
-LoaderLogMessage(int elevel, const char *format, ...)
-{
-	va_list		argpt;
-	time_t		etime;
-	char		etimebuf[128];
-
-	va_start(argpt, format);
-
-	etime = time(NULL);
-	strftime(etimebuf, sizeof(etimebuf),
-			 "%Y-%m-%d %H:%M:%S %Z", localtime(&etime));
-
-	fprintf(stderr, "%s BULK LOAD ", etimebuf);
-
-	switch (elevel)
-	{
-		case LOG:
-			fprintf(stderr, "LOG ");
-			break;
-		case NOTICE:
-			fprintf(stderr, "NOTICE ");
-			break;
-		case ERROR:
-			fprintf(stderr, "ERROR ");
-			break;
-		case FATAL:
-			fprintf(stderr, "FATAL ");
-			break;
-		default:
-			fprintf(stderr, "UNKNOWN ");
-			break;
-	}
-
-	vfprintf(stderr, format, argpt);
-	fprintf(stderr, "\n");
-
-	va_end(argpt);
-
-	/* exit iff ERROR, FATAL or PANIC. */
-	if (elevel >= ERROR)
-		exit(1);
+		elog(ERROR,
+			 "could not close data file \"%s\" : %s",
+			 segpath, strerror(errno));
 }
 
 /**
@@ -1142,9 +1046,9 @@ LoaderUnlinkLockFile(const char *fname)
 /**
  * @brief  Create a lockfile.
  *
- * Changes with the original source code.
+ * Changes from the original source code.
  * <ol>
- *	 <li> Use LoaderLogMessage() to replace ereport(). </li>
+ *	 <li> Use elog() to replace ereport(). </li>
  * </ol>
  */
 
@@ -1188,9 +1092,9 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * Couldn't create the pid file. Probably it already exists.
 		 */
 		if ((errno != EEXIST && errno != EACCES) || ntries > 100)
-			LoaderLogMessage(FATAL,
-							 "could not create lock file \"%s\": %s",
-							 filename, strerror(errno));
+			elog(FATAL,
+				 "could not create lock file \"%s\": %s",
+				 filename, strerror(errno));
 
 		/*
 		 * Read the file to get the old owner's PID.  Note race condition
@@ -1201,14 +1105,14 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		{
 			if (errno == ENOENT)
 				continue;		/* race condition; try again */
-			LoaderLogMessage(FATAL,
-							 "could not open lock file \"%s\": %s",
-							 filename, strerror(errno));
+			elog(FATAL,
+				 "could not open lock file \"%s\": %s",
+				 filename, strerror(errno));
 		}
 		if ((len = read(fd, buffer, sizeof(buffer) - 1)) < 0)
-			LoaderLogMessage(FATAL,
-							 "could not read lock file \"%s\": %s",
-							 filename, strerror(errno));
+			elog(FATAL,
+				 "could not read lock file \"%s\": %s",
+				 filename, strerror(errno));
 		close(fd);
 
 		buffer[len] = '\0';
@@ -1220,9 +1124,7 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		other_pid = (pid_t) (encoded_pid < 0 ? -encoded_pid : encoded_pid);
 
 		if (other_pid <= 0)
-			LoaderLogMessage(FATAL,
-							 "bogus data in lock file \"%s\": %s",
-							 filename, buffer);
+			elog(FATAL, "bogus data in lock file \"%s\": %s", filename, buffer);
 
 		/*
 		 * Check to see if the other process still exists
@@ -1271,12 +1173,9 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 				/*
 				 * lockfile belongs to a live process
 				 */
-				LoaderLogMessage(FATAL,
-								 "lock file \"%s\" already exists. "
-								 "Is another postmaster (PID %d) "
-								 "running in data directory \"%s\"?",
-								 filename, (int) other_pid, refName);
-
+				elog(FATAL, "lock file \"%s\" already exists.\n"
+					"Is another postmaster (PID %d) running in data directory \"%s\"?",
+					filename, (int) other_pid, refName);
 		}
 
 		/*
@@ -1299,14 +1198,14 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 				if (sscanf(ptr, "%lu %lu", &id1, &id2) == 2)
 				{
 					if (PGSharedMemoryIsInUse(id1, id2))
-						LoaderLogMessage(FATAL,
-										 "pre-existing shared memory block "
-										 "(key %lu, ID %lu) is still in use "
-										 "If you're sure there are no old "
-										 "server processes still running, remove "
-										 "the shared memory block with the command "
-										 "\"ipcrm\", or just delete the file \"%s\".",
-										 id1, id2, filename);
+						elog(FATAL,
+							 "pre-existing shared memory block "
+							 "(key %lu, ID %lu) is still in use "
+							 "If you're sure there are no old "
+							 "server processes still running, remove "
+							 "the shared memory block with the command "
+							 "\"ipcrm\", or just delete the file \"%s\".",
+							 id1, id2, filename);
 				}
 			}
 		}
@@ -1317,12 +1216,12 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * would-be creators.
 		 */
 		if (unlink(filename) < 0)
-			LoaderLogMessage(FATAL,
-							 "could not remove old lock file \"%s\": %s ",
-							 "The file seems accidentally left over, but "
-							 "it could not be removed. Please remove the file "
-							 "by hand and try again.",
-							 filename, strerror(errno));
+			elog(FATAL,
+				 "could not remove old lock file \"%s\": %s "
+				 "The file seems accidentally left over, but "
+				 "it could not be removed. Please remove the file "
+				 "by hand and try again.",
+				 filename, strerror(errno));
 	}
 
 	/*
@@ -1341,9 +1240,9 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 		 * if write didn't set errno, assume problem is no disk space 
 		 */
 		errno = save_errno ? save_errno : ENOSPC;
-		LoaderLogMessage(FATAL,
-						 "could not write lock file \"%s\": %s",
-						 filename, strerror(errno));
+		elog(FATAL,
+			 "could not write lock file \"%s\": %s",
+			 filename, strerror(errno));
 	}
 	if (close(fd))
 	{
@@ -1351,9 +1250,9 @@ LoaderCreateLockFile(const char *filename, bool amPostmaster,
 
 		unlink(filename);
 		errno = save_errno;
-		LoaderLogMessage(FATAL,
-						 "could not write lock file \"%s\": %s",
-						 filename, strerror(errno));
+		elog(FATAL,
+			 "could not write lock file \"%s\": %s",
+			 filename, strerror(errno));
 	}
 }
 
