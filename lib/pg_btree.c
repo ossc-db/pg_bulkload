@@ -12,10 +12,12 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/nbtree.h"
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "executor/executor.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/tqual.h"
 
@@ -24,7 +26,6 @@
 #endif
 
 #include "pg_bulkload_win32.h"
-#include "pg_btree.h"
 
 static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
 static void unused_bt_spooldestroy(BTSpool *);
@@ -44,6 +45,7 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #undef _bt_leafbuild
 
 #include "pg_bulkload.h"
+#include "pg_btree.h"
 #include "pg_profile.h"
 
 /**
@@ -60,16 +62,21 @@ typedef struct BTReader
 	char			   *page;	/**< Cached page */
 } BTReader;
 
+static IndexTuple BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free);
 static bool BTReaderInit(BTReader *reader, Relation rel);
 static void BTReaderTerm(BTReader *reader);
 static void BTReaderReadPage(BTReader *reader, BlockNumber blkno);
 static IndexTuple BTReaderGetNextItem(BTReader *reader);
 
-static void _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal);
+static void _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal,
+						   ON_DUPLICATE on_duplicate);
 static void _bt_mergeload(BTWriteState *wstate, BTSpool *btspool,
-						  BTReader *btspool2, Relation heapRel);
+						  BTReader *btspool2, Relation heapRel,
+						  ON_DUPLICATE on_duplicate);
 static bool heap_is_visible(Relation heapRel, ItemPointer htid);
 static void report_unique_violation(Relation rel, IndexTuple itup);
+static void remove_duplicate(Relation heap, IndexTuple itup);
+static char *tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple);
 
 /*
  * IndexSpoolBegin - Initialize spools.
@@ -107,7 +114,8 @@ void
 IndexSpoolEnd(BTSpool **spools,
 			  ResultRelInfo *relinfo,
 			  bool reindex,
-			  bool use_wal)
+			  bool use_wal,
+			  ON_DUPLICATE on_duplicate)
 {
 	int				i;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
@@ -120,7 +128,7 @@ IndexSpoolEnd(BTSpool **spools,
 		if (spools[i] != NULL)
 		{
 			BULKLOAD_PROFILE_PUSH();
-			_bt_mergebuild(spools[i], relinfo->ri_RelationDesc, use_wal);
+			_bt_mergebuild(spools[i], relinfo->ri_RelationDesc, use_wal, on_duplicate);
 			BULKLOAD_PROFILE_POP();
 			_bt_spooldestroy(spools[i]);
 			BULKLOAD_PROFILE(&prof_index_merge);
@@ -243,7 +251,7 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 
 
 static void
-_bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
+_bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on_duplicate)
 {
 	BTWriteState	wstate;
 	BTReader		reader;
@@ -288,7 +296,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
 		/* Assign a new file node and merge two streams into it. */
 		setNewRelfilenode(wstate.index, RecentXmin);
 		BULKLOAD_PROFILE_PUSH();
-		_bt_mergeload(&wstate, btspool, &reader, heapRel);
+		_bt_mergeload(&wstate, btspool, &reader, heapRel, on_duplicate);
 		BULKLOAD_PROFILE_POP();
 	}
 	else
@@ -307,12 +315,12 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal)
  */
 static void
 _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
-			  Relation heapRel)
+			  Relation heapRel, ON_DUPLICATE on_duplicate)
 {
 	BTPageState	   *state = NULL;
 	IndexTuple		itup,
 					itup2;
-	bool			should_free;
+	bool			should_free = false;
 	TupleDesc		tupdes = RelationGetDescr(wstate->index);
 	int				keysz = RelationGetNumberOfAttributes(wstate->index);
 	ScanKey			indexScanKey;
@@ -321,7 +329,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 	Assert(btspool2 != NULL);
 
 	/* the preparation of merge */
-	itup = tuplesort_getindextuple(btspool->sortstate, true, &should_free);
+	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
 	indexScanKey = _bt_mkscankey_nodata(wstate->index);
 
@@ -404,10 +412,27 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 
 			/* The tuple pointed by the old index should not be visible. */
 			if (heap_is_visible(heapRel, &itup2->t_tid))
-				report_unique_violation(wstate->index, itup);
-
-			/* Discard itup2 and read next */
-			itup2 = BTReaderGetNextItem(btspool2);
+			{
+				switch (on_duplicate)
+				{
+					case ON_DUPLICATE_REMOVE_NEW:
+						remove_duplicate(heapRel, itup);
+						itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+						continue;
+					case ON_DUPLICATE_REMOVE_OLD:
+						remove_duplicate(heapRel, itup2);
+						itup2 = BTReaderGetNextItem(btspool2);
+						continue;
+					default:
+						report_unique_violation(wstate->index, itup);
+						break;
+				}
+			}
+			else
+			{
+				/* Discard itup2 and read next */
+				itup2 = BTReaderGetNextItem(btspool2);
+			}
 		}
 		BULKLOAD_PROFILE(&prof_index_merge_build_unique);
 
@@ -418,10 +443,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 		if (load1)
 		{
 			_bt_buildadd(wstate, state, itup);
-			if (should_free)
-				pfree(itup);
-			itup = tuplesort_getindextuple(btspool->sortstate,
-										   true, &should_free);
+			itup = BTSpoolGetNextItem(btspool, itup, &should_free);
 		}
 		else
 		{
@@ -457,6 +479,14 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
 	BULKLOAD_PROFILE(&prof_index_merge_build_flush);
+}
+
+static IndexTuple
+BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free)
+{
+	if (*should_free)
+		pfree(itup);
+	return tuplesort_getindextuple(spool->sortstate, true, should_free);
 }
 
 /**
@@ -751,4 +781,134 @@ report_unique_violation(Relation rel, IndexTuple itup)
 					RelationGetRelationName(rel)),
 		errdetail("Key (%s)=(%s) already exists.",
 				  key_names, key_values)));
+}
+
+static void
+remove_duplicate(Relation heap, IndexTuple itup)
+{
+	HeapTupleData	tuple;
+	BlockNumber		blknum;
+	BlockNumber		offnum;
+	Buffer			buffer;
+	Page			page;
+	ItemId			itemid;
+
+	blknum = ItemPointerGetBlockNumber(&itup->t_tid);
+	offnum = ItemPointerGetOffsetNumber(&itup->t_tid);
+	buffer = ReadBuffer(heap, blknum);
+
+	LockBuffer(buffer, BUFFER_LOCK_SHARE);
+	page = BufferGetPage(buffer);
+	itemid = PageGetItemId(page, offnum);
+	tuple.t_data = ItemIdIsNormal(itemid)
+		? (HeapTupleHeader) PageGetItem(page, itemid)
+		: NULL;
+	LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
+
+	if (tuple.t_data != NULL)
+	{
+		char		   *str;
+		TupleDesc		tupdesc;
+
+		tupdesc = RelationGetDescr(heap);
+		tuple.t_len = ItemIdGetLength(itemid);
+		tuple.t_self = itup->t_tid;
+
+		str = tuple_to_cstring(RelationGetDescr(heap), &tuple);
+		elog(WARNING, "duplicate tuple removed: %s", str);
+
+		simple_heap_delete(heap, &itup->t_tid);
+	}
+
+	ReleaseBuffer(buffer);
+}
+
+static char *
+tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
+{
+	bool		needComma = false;
+	int			ncolumns;
+	int			i;
+	Datum	   *values;
+	bool	   *nulls;
+	StringInfoData buf;
+
+	ncolumns = tupdesc->natts;
+
+	values = (Datum *) palloc(ncolumns * sizeof(Datum));
+	nulls = (bool *) palloc(ncolumns * sizeof(bool));
+
+	/* Break down the tuple into fields */
+	heap_deform_tuple(tuple, tupdesc, values, nulls);
+
+	/* And build the result string */
+	initStringInfo(&buf);
+
+	appendStringInfoChar(&buf, '(');
+
+	for (i = 0; i < ncolumns; i++)
+	{
+		char	   *value;
+		char	   *tmp;
+		bool		nq;
+
+		/* Ignore dropped columns in datatype */
+		if (tupdesc->attrs[i]->attisdropped)
+			continue;
+
+		if (needComma)
+			appendStringInfoChar(&buf, ',');
+		needComma = true;
+
+		if (nulls[i])
+		{
+			/* emit nothing... */
+			continue;
+		}
+		else
+		{
+			Oid			foutoid;
+			bool		typisvarlena;
+
+			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
+							  &foutoid, &typisvarlena);
+			value = OidOutputFunctionCall(foutoid, values[i]);
+		}
+
+		/* Detect whether we need double quotes for this value */
+		nq = (value[0] == '\0');	/* force quotes for empty string */
+		for (tmp = value; *tmp; tmp++)
+		{
+			char		ch = *tmp;
+
+			if (ch == '"' || ch == '\\' ||
+				ch == '(' || ch == ')' || ch == ',' ||
+				isspace((unsigned char) ch))
+			{
+				nq = true;
+				break;
+			}
+		}
+
+		/* And emit the string */
+		if (nq)
+			appendStringInfoChar(&buf, '"');
+		for (tmp = value; *tmp; tmp++)
+		{
+			char		ch = *tmp;
+
+			if (ch == '"' || ch == '\\')
+				appendStringInfoChar(&buf, ch);
+			appendStringInfoChar(&buf, ch);
+		}
+		if (nq)
+			appendStringInfoChar(&buf, '"');
+	}
+
+	appendStringInfoChar(&buf, ')');
+
+	pfree(values);
+	pfree(nulls);
+
+	return buf.data;
 }

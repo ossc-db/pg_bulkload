@@ -578,7 +578,7 @@ ParseFormat(const char *value, Field *field)
 static bool
 FixedParserParam(FixedParser *self, const char *keyword, char *value)
 {
-	if (strcmp(keyword, "COL") == 0)
+	if (pg_strcasecmp(keyword, "COL") == 0)
 	{
 		Field  *field;
 
@@ -609,11 +609,11 @@ FixedParserParam(FixedParser *self, const char *keyword, char *value)
 
 		self->nfield++;
 	}
-	else if (strcmp(keyword, "PRESERVE_BLANKS") == 0)
+	else if (pg_strcasecmp(keyword, "PRESERVE_BLANKS") == 0)
 	{
 		self->preserve_blanks = ParseBoolean(value, true);
 	}
-	else if (strcmp(keyword, "STRIDE") == 0)
+	else if (pg_strcasecmp(keyword, "STRIDE") == 0)
 	{
 		ASSERT_ONCE(self->rec_len == 0);
 		self->rec_len = ParseInt32(value, 1);

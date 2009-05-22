@@ -52,6 +52,7 @@ typedef struct Writer
 	EState		   *estate;		/**<  */
 	TupleTableSlot *slot;		/**<  */
 	int64			count;		/**< number of inserted tuples */
+	ON_DUPLICATE	on_duplicate;
 } Writer;
 
 extern void WriterOpen(Writer *wt, Relation rel);

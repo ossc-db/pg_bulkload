@@ -140,6 +140,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	ReaderOpen(&rd, path, options);
 	WriterOpen(&wt, rd.ci_rel);
 	wt.loader = rd.ci_loader(rd.ci_rel);
+	wt.on_duplicate = rd.on_duplicate;
 	rel = rd.ci_rel;
 
 	BULKLOAD_PROFILE(&prof_init);
@@ -356,25 +357,3 @@ VerifyTarget(Relation rel)
 		aclcheck_error(aclresult, ACL_KIND_CLASS,
 					   RelationGetRelationName(rel));
 }
-
-#if PG_VERSION_NUM < 80400
-
-char *
-text_to_cstring(const text *t)
-{
-	/* must cast away the const, unfortunately */
-	text	   *tunpacked = pg_detoast_datum_packed((struct varlena *) t);
-	int			len = VARSIZE_ANY_EXHDR(tunpacked);
-	char	   *result;
-
-	result = (char *) palloc(len + 1);
-	memcpy(result, VARDATA_ANY(tunpacked), len);
-	result[len] = '\0';
-
-	if (tunpacked != t)
-		pfree(tunpacked);
-	
-	return result;
-}
-
-#endif

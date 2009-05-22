@@ -223,14 +223,14 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 	/*
 	 * result
 	 */
-	if (strcmp(keyword, "TABLE") == 0)
+	if (pg_strcasecmp(keyword, "TABLE") == 0)
 	{
 		ASSERT_ONCE(rd->ci_rv == NULL);
 
 		rd->ci_rv = makeRangeVarFromNameList(
 						stringToQualifiedNameList(target));
 	}
-	else if (strcmp(keyword, "INFILE") == 0)
+	else if (pg_strcasecmp(keyword, "INFILE") == 0)
 	{
 		ASSERT_ONCE(rd->ci_infname == NULL);
 
@@ -241,44 +241,56 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 
 		rd->ci_infname = pstrdup(target);
 	}
-	else if (strcmp(keyword, "TYPE") == 0)
+	else if (pg_strcasecmp(keyword, "TYPE") == 0)
 	{
 		ASSERT_ONCE(rd->ci_parser == NULL);
 
-		if (strcmp(target, "FIXED") == 0)
+		if (pg_strcasecmp(target, "FIXED") == 0)
 			rd->ci_parser = CreateFixedParser();
-		else if (strcmp(target, "CSV") == 0)
+		else if (pg_strcasecmp(target, "CSV") == 0)
 			rd->ci_parser = CreateCSVParser();
 		else
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 							errmsg("invalid file type \"%s\"", target)));
 	}
-	else if (strcmp(keyword, "LOADER") == 0)
+	else if (pg_strcasecmp(keyword, "LOADER") == 0)
 	{
 		ASSERT_ONCE(rd->ci_loader == NULL);
 		
-		if (strcmp(target, "DIRECT") == 0)
+		if (pg_strcasecmp(target, "DIRECT") == 0)
 			rd->ci_loader = CreateDirectLoader;
-		else if (strcmp(target, "BUFFERED") == 0)
+		else if (pg_strcasecmp(target, "BUFFERED") == 0)
 			rd->ci_loader = CreateBufferedLoader;
 		else
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 							errmsg("invalid loader \"%s\"", target)));
 	}
-	else if (strcmp(keyword, "MAX_ERR_CNT") == 0)
+	else if (pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
 	{
 		ASSERT_ONCE(rd->ci_max_err_cnt < 0);
 		rd->ci_max_err_cnt = ParseInt32(target, 0);
 	}
-	else if (strcmp(keyword, "OFFSET") == 0)
+	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
 	{
 		ASSERT_ONCE(rd->ci_offset < 0);
 		rd->ci_offset = ParseInt64(target, 0);
 	}
-	else if (strcmp(keyword, "LIMIT") == 0)
+	else if (pg_strcasecmp(keyword, "LIMIT") == 0)
 	{
 		ASSERT_ONCE(rd->ci_limit == INT64_MAX);
 		rd->ci_limit = ParseInt64(target, 0);
+	}
+	else if (pg_strcasecmp(keyword, "ON_DUPLICATE") == 0)
+	{
+		if (pg_strcasecmp(target, "ERROR") == 0)
+			rd->on_duplicate = ON_DUPLICATE_ERROR;
+		else if (pg_strcasecmp(target, "REMOVE_NEW") == 0)
+			rd->on_duplicate = ON_DUPLICATE_REMOVE_NEW;
+		else if (pg_strcasecmp(target, "REMOVE_OLD") == 0)
+			rd->on_duplicate = ON_DUPLICATE_REMOVE_OLD;
+		else
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("invalid ON_DUPLICATE \"%s\"", target)));
 	}
 	else if (rd->ci_parser == NULL ||
 			!ParserParam(rd->ci_parser, keyword, target))

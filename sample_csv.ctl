@@ -9,3 +9,4 @@ TYPE = CSV                            # Input file type
 QUOTE = "\""                          # Quoting character
 ESCAPE = \                            # Escape character for Quoting
 DELIMITER = ","                       # Delimiter
+ON_DUPLICATE = ERROR                  # ERROR, REMOVE_NEW, or REMOVE_OLD

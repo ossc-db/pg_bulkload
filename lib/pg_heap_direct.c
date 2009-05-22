@@ -24,7 +24,13 @@
 #include "pg_loadstatus.h"
 #include "writer.h"
 
-#if PG_VERSION_NUM < 80300
+#if PG_VERSION_NUM >= 80400
+#elif PG_VERSION_NUM >= 80300
+
+#define log_newpage(rnode, forknum, blk, page) \
+	log_newpage((rnode), (blk), (page))
+
+#elif PG_VERSION_NUM < 80300
 
 static XLogRecPtr
 log_newpage(RelFileNode *rnode, int fork, BlockNumber blkno, Page page)
@@ -370,7 +376,7 @@ flush_pages(DirectLoader *loader)
 			loader->datafd = open_data_file(ls->ls.rnode, relblks);
 
 		/* Number of blocks to be added to the current file. */
-		flush_num = Min(num, RELSEG_SIZE - relblks % RELSEG_SIZE);
+		flush_num = Min(num - i, RELSEG_SIZE - relblks % RELSEG_SIZE);
 		Assert(flush_num > 0);
 
 		/* Write the last block number to the load status file. */

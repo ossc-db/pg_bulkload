@@ -77,7 +77,7 @@ WriterInsert(Writer *wt, HeapTuple tuple)
 void
 WriterClose(Writer *wt)
 {
-	bool		use_wal = true;
+	bool			use_wal = true;
 
 	/* Terminate loader. Be sure to set loader to NULL. */
 	if (wt->loader != NULL)
@@ -91,7 +91,7 @@ WriterClose(Writer *wt)
 	if (wt->spools != NULL)
 	{
 		BULKLOAD_PROFILE_PUSH();
-		IndexSpoolEnd(wt->spools, wt->relinfo, true, use_wal);
+		IndexSpoolEnd(wt->spools, wt->relinfo, true, use_wal, wt->on_duplicate);
 		BULKLOAD_PROFILE_POP();
 	}
 

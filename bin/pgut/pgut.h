@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * pgut.c
+ * pgut.h
  *
  * Copyright (c) 2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
@@ -30,8 +30,7 @@ typedef char bool;
 /*
  * pgut client variables and functions
  */
-extern const char		   *pgut_optstring;
-extern const struct option	pgut_longopts[];
+extern const struct option	pgut_options[];
 
 extern bool	pgut_argument(int c, const char *arg);
 extern void	pgut_help(void);
@@ -51,6 +50,7 @@ extern const char  *host;
 extern const char  *port;
 extern const char  *username;
 extern bool			password;
+extern bool			debug;
 
 extern PGconn	   *connection;
 
@@ -59,7 +59,7 @@ extern bool	assign_option(const char **value, int c, const char *arg);
 
 extern void reconnect(void);
 extern void disconnect(void);
-extern PGresult *execute_nothrow(const char *query, int nParams, const char **params);
+extern PGresult *execute_elevel(const char *query, int nParams, const char **params, int elevel);
 extern PGresult *execute(const char *query, int nParams, const char **params);
 extern void command(const char *query, int nParams, const char **params);
 
@@ -87,8 +87,10 @@ __attribute__((format(printf, 2, 3)));
 /*
  * StringInfo
  */
-typedef PQExpBufferData			StringInfoData;
-typedef PQExpBuffer				StringInfo;
+#define STRINGINFO_H
+
+#define StringInfoData			PQExpBufferData
+#define StringInfo				PQExpBuffer
 #define makeStringInfo			createPQExpBuffer
 #define initStringInfo			initPQExpBuffer
 #define freeStringInfo			destroyPQExpBuffer
@@ -102,5 +104,25 @@ typedef PQExpBuffer				StringInfo;
 #define appendStringInfoString	appendPQExpBufferStr
 #define appendStringInfoChar	appendPQExpBufferChar
 #define appendBinaryStringInfo	appendBinaryPQExpBuffer
+
+/*
+ * import from postgres.h and catalog/genbki.h in 8.4
+ */
+#if PG_VERSION_NUM < 80400
+
+typedef unsigned long Datum;
+typedef struct MemoryContextData *MemoryContext;
+
+#define CATALOG(name,oid)	typedef struct CppConcat(FormData_,name)
+#define BKI_BOOTSTRAP
+#define BKI_SHARED_RELATION
+#define BKI_WITHOUT_OIDS
+#define DATA(x)   extern int no_such_variable
+#define DESCR(x)  extern int no_such_variable
+#define SHDESCR(x) extern int no_such_variable
+typedef int aclitem;
+
+#endif
+
 
 #endif   /* PGUT_H */

@@ -29,6 +29,8 @@
 #include "pg_loadstatus.h"
 #include "libpq-fe.h"
 
+#include "pgut/pgut.h"
+
 #include "catalog/pg_control.h"
 #include "catalog/pg_tablespace.h"
 #include "nodes/pg_list.h"
@@ -38,8 +40,6 @@
 const char *PROGRAM_VERSION	= "2.4.0";		/**< My version string */
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
-
-#include "pgut/pgut.h"
 
 /**
  * @brief Definition of Assert() macros as done in PosgreSQL.
@@ -242,13 +242,15 @@ main(int argc, char *argv[])
  * pgut framework callbacks
  */
 
-const struct option pgut_longopts[] =
+const struct option pgut_options[] =
 {
+	{"pgdata", required_argument, NULL, 'D'},
 	{"infile", required_argument, NULL, 'i'},
+	{"recovery", no_argument, NULL, 'r'},
+	{"silent", no_argument, NULL, 's'},
+	{"option", required_argument, NULL, 'o'},
 	{NULL, 0, NULL, 0}
 };
-
-const char *pgut_optstring = "rD:si:o:";
 
 bool
 pgut_argument(int c, const char *arg)
@@ -304,21 +306,21 @@ pgut_help(void)
 		"%s is a bulk data loading tool for PostgreSQL\n"
 		"\n"
 		"Usage:\n"
-		"  Dataload: %s [data load options] control_file_path\n"
+		"  Dataload: %s [dataload options] control_file_path\n"
 		"  Recovery: %s -r [-D DATADIR]\n"
 		"\n"
 		"Dataload options:\n"
-		"  -i INFILE       INFILE path\n"
-		"  -o \"key = val\"  additional option\n"
+		"  -i, --infile=INFILE       INFILE path\n"
+		"  -o, --option=\"key=val\"    additional option\n"
 		"\n"
 		"Recovery options:\n"
-		"  -r              execute recovery\n"
-		"  -D DATADIR      database directory\n",
+		"  -r, --recovery            execute recovery\n"
+		"  -D, --pgdata=DATADIR      database directory\n",
 		PROGRAM_NAME, PROGRAM_NAME, PROGRAM_NAME);
 }
 
 void
-pgut_cleanup(pqbool fatal)
+pgut_cleanup(bool fatal)
 {
 }
 
@@ -482,13 +484,13 @@ StartLoaderRecovery(void)
 				 lsfpath, strerror(errno));
 
 		if (!isSilentRecovery)
-			elog(LOG, "delete loadstatus file \"%s\"", lsfname);
+			elog(NOTICE, "delete loadstatus file \"%s\"", lsfname);
 	}
 
 	CleanUpList(lsflist);
 
 	if (!isSilentRecovery)
-		elog(LOG, "recovered all relations");
+		elog(NOTICE, "recovered all relations");
 	return;						/* revocery process successfully terminated, */
 }
 

@@ -12,7 +12,8 @@ SRCS = \
 	pg_input_fixed.c \
 	pg_strutil.c \
 	reader.c \
-	writer.c
+	writer.c \
+	pgut/pgut-be.c
 OBJS = $(SRCS:.c=.o)
 MODULE_big = pg_bulkload
 DATA_built = pg_bulkload.sql

@@ -18,7 +18,7 @@
 
 /* External declarations */
 extern BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo);
-extern void	IndexSpoolEnd(BTSpool **spools, ResultRelInfo *relinfo, bool reindex, bool use_wal);
+extern void	IndexSpoolEnd(BTSpool **spools, ResultRelInfo *relinfo, bool reindex, bool use_wal, ON_DUPLICATE on_duplicate);
 extern void	IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex);
 
 #endif   /* BTREE_H */

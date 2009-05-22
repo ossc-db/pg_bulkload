@@ -189,7 +189,7 @@ CSVParserInit(CSVParser* self, Reader *rd)
 	/*
 	 * set not NULL column information
 	 */
-	if (1)
+	do
 	{
 		int			i;
 		ListCell   *name;
@@ -215,8 +215,7 @@ CSVParserInit(CSVParser* self, Reader *rd)
 								errmsg("invalid column name [%s]",
 									   (char *) lfirst(name))));
 		}
-	}
-
+	} while(0);
 
 	/*
 	 * XXX Although we would like to set INITIAL_BUF_LEN size to buffer length
@@ -644,27 +643,27 @@ CSVParserRead(CSVParser* self, Reader *rd)
 static bool
 CSVParserParam(CSVParser *self, const char *keyword, char *value)
 {
-	if (strcmp(keyword, "DELIMITER") == 0)
+	if (pg_strcasecmp(keyword, "DELIMITER") == 0)
 	{
 		ASSERT_ONCE(!self->delim);
 		self->delim = ParseSingleChar(value);
 	}
-	else if (strcmp(keyword, "QUOTE") == 0)
+	else if (pg_strcasecmp(keyword, "QUOTE") == 0)
 	{
 		ASSERT_ONCE(!self->quote);
 		self->quote = ParseSingleChar(value);
 	}
-	else if (strcmp(keyword, "ESCAPE") == 0)
+	else if (pg_strcasecmp(keyword, "ESCAPE") == 0)
 	{
 		ASSERT_ONCE(!self->escape);
 		self->escape = ParseSingleChar(value);
 	}
-	else if (strcmp(keyword, "NULL") == 0)
+	else if (pg_strcasecmp(keyword, "NULL") == 0)
 	{
 		ASSERT_ONCE(!self->null);
 		self->null = pstrdup(value);
 	}
-	else if (strcmp(keyword, "FORCE_NOT_NULL") == 0)
+	else if (pg_strcasecmp(keyword, "FORCE_NOT_NULL") == 0)
 	{
 		self->fnn_name = lappend(self->fnn_name, pstrdup(value));
 	}

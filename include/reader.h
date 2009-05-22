@@ -101,6 +101,7 @@ struct Reader
 	 * Loader information from control file
 	 */
 	Loader	   *(*ci_loader)(Relation rel);	/**< loader factory */
+	ON_DUPLICATE	on_duplicate;
 };
 
 extern void ReaderOpen(Reader *rd, const char *fname, const char *options);
