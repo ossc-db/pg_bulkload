@@ -84,8 +84,7 @@ ReaderOpen(Reader *rd, const char *fname, const char *options)
 	/*
 	 * open relation and do a sanity check
 	 */
-	rd->ci_rel = heap_openrv(rd->ci_rv, AccessExclusiveLock);
-	VerifyTarget(rd->ci_rel);
+	rd->ci_rel = heap_openrv(rd->ci_rv, AccessShareLock);
 
 	/*
 	 * allocate buffer to store columns
@@ -433,6 +432,8 @@ ReaderClose(Reader *rd)
 		ereport(WARNING, (errcode_for_file_access(),
 			errmsg("could not close \"%s\" %m", rd->ci_infname)));
 	}
+
+	heap_close(rd->ci_rel, AccessShareLock);
 
 	/*
 	 * FIXME: We might not need to free each fields because memories

@@ -53,6 +53,7 @@ extern bool			password;
 extern bool			debug;
 
 extern PGconn	   *connection;
+extern bool			interrupted;
 
 extern void	parse_options(int argc, char **argv);
 extern bool	assign_option(const char **value, int c, const char *arg);
@@ -97,9 +98,7 @@ __attribute__((format(printf, 2, 3)));
 #define termStringInfo			termPQExpBuffer
 #define resetStringInfo			resetPQExpBuffer
 #define enlargeStringInfo		enlargePQExpBuffer
-/*
-#define printfPQExpBuffer		= resetStringInfo + appendStringInfo
-*/
+#define printfStringInfo		printfPQExpBuffer	/* reset + append */
 #define appendStringInfo		appendPQExpBuffer
 #define appendStringInfoString	appendPQExpBufferStr
 #define appendStringInfoChar	appendPQExpBufferChar
@@ -123,6 +122,5 @@ typedef struct MemoryContextData *MemoryContext;
 typedef int aclitem;
 
 #endif
-
 
 #endif   /* PGUT_H */

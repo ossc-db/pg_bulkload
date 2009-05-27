@@ -9,6 +9,8 @@
 #include "access/tuptoaster.h"
 #include "catalog/catalog.h"
 #include "executor/executor.h"
+#include "miscadmin.h"
+#include "utils/acl.h"
 #include "utils/memutils.h"
 
 #include "writer.h"
@@ -23,19 +25,22 @@
 	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
 #endif
 
+static void VerifyTarget(Relation rel);
+
 /* ========================================================================
  * Implementation
  * ========================================================================*/
 
 void
-WriterOpen(Writer *wt, Relation rel)
+WriterOpen(Writer *wt, Oid relid)
 {
 	memset(wt, 0, sizeof(Writer));
-	wt->rel = rel;
+	wt->rel = heap_open(relid, AccessExclusiveLock);
+	VerifyTarget(wt->rel);
 
 	wt->relinfo = makeNode(ResultRelInfo);
 	wt->relinfo->ri_RangeTableIndex = 1;	/* dummy */
-	wt->relinfo->ri_RelationDesc = rel;
+	wt->relinfo->ri_RelationDesc = wt->rel;
 	wt->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	wt->relinfo->ri_TrigInstrument = NULL;
 
@@ -46,7 +51,7 @@ WriterOpen(Writer *wt, Relation rel)
 	wt->estate->es_result_relations = wt->relinfo;
 	wt->estate->es_result_relation_info = wt->relinfo;
 
-	wt->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
+	wt->slot = MakeSingleTupleTableSlot(RelationGetDescr(wt->rel));
 
 	wt->spools = IndexSpoolBegin(wt->relinfo);
 }
@@ -100,4 +105,42 @@ WriterClose(Writer *wt)
 	if (wt->estate->es_result_relation_info)
 		ExecCloseIndices(wt->estate->es_result_relation_info);
 	FreeExecutorState(wt->estate);
+
+	/* Close heap relation. */
+	heap_close(wt->rel, AccessExclusiveLock);
+}
+
+/*
+ * Check iff the write target is ok
+ */
+static void
+VerifyTarget(Relation rel)
+{
+	AclResult	aclresult;
+	if (rel->rd_rel->relkind != RELKIND_RELATION)
+	{
+		const char *type;
+		switch (rel->rd_rel->relkind)
+		{
+			case RELKIND_VIEW:
+				type = "view";
+				break;
+			case RELKIND_SEQUENCE:
+				type = "sequence";
+				break;
+			default:
+				type = "non-table relation";
+				break;
+		}
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot load to %s \"%s\"",
+					type, RelationGetRelationName(rel))));
+	}
+
+	aclresult = pg_class_aclcheck(
+		RelationGetRelid(rel), GetUserId(), ACL_INSERT);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, ACL_KIND_CLASS,
+					   RelationGetRelationName(rel));
 }

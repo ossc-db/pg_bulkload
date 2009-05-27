@@ -28,7 +28,7 @@ PGconn	   *connection = NULL;
 static PGcancel *volatile cancel_conn = NULL;
 
 /* Interrupted by SIGINT (Ctrl+C) ? */
-static bool		interrupted = false;
+bool		interrupted = false;
 
 /* Connection routines */
 static void init_cancel_handler(void);
@@ -292,8 +292,6 @@ execute_elevel(const char *query, int nParams, const char **params, int elevel)
 		case PGRES_COMMAND_OK:
 			break;
 		default:
-			PQclear(res);
-			res = NULL;
 			elog(elevel, "query failed: %squery was: %s",
 				PQerrorMessage(connection), query);
 			break;

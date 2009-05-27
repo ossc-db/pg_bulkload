@@ -55,12 +55,8 @@ typedef struct Writer
 	ON_DUPLICATE	on_duplicate;
 } Writer;
 
-extern void WriterOpen(Writer *wt, Relation rel);
+extern void WriterOpen(Writer *wt, Oid relid);
 extern void WriterInsert(Writer *wt, HeapTuple tuple);
 extern void WriterClose(Writer *wt);
-
-/* Utilitiy functions */
-
-extern void VerifyTarget(Relation rel);
 
 #endif   /* WRITER_H_INCLUDED */

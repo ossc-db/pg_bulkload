@@ -12,7 +12,6 @@
 
 #include "funcapi.h"
 #include "miscadmin.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
 
 #include "reader.h"
@@ -138,7 +137,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	options = GETARG_CSTRING(1);
 
 	ReaderOpen(&rd, path, options);
-	WriterOpen(&wt, rd.ci_rel);
+	WriterOpen(&wt, RelationGetRelid(rd.ci_rel));
 	wt.loader = rd.ci_loader(rd.ci_rel);
 	wt.on_duplicate = rd.on_duplicate;
 	rel = rd.ci_rel;
@@ -192,13 +191,11 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	 * STEP 4: Postprocessing
 	 */
 
-	/* We should close the relation because reader won't close it. */
-	heap_close(rel, AccessExclusiveLock);
-
 	/* Write end log. */
 	ereport(NOTICE,
 			(errmsg("BULK LOAD END (" int64_FMT " records)", count)));
 
+	/* TODO: remove prof_term because there are no jobs in term phase. */
 	BULKLOAD_PROFILE(&prof_term);
 
 	BULKLOAD_PROFILE_POP();
@@ -215,6 +212,7 @@ pg_bulkread(PG_FUNCTION_ARGS)
 {
 	FuncCallContext	   *funcctx;
 	Reader			   *rd;
+	HeapTuple			tuple;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -244,21 +242,11 @@ pg_bulkread(PG_FUNCTION_ARGS)
 	}
 
 	/* read the next tuple and return it, or close reader. */
-	if (funcctx->call_cntr < rd->ci_limit)
-	{
-		HeapTuple	tuple;
+	if (funcctx->call_cntr < rd->ci_limit && (tuple = ReaderNext(rd)) != NULL)
+		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
 
-		/* Read next tuple */
-		if ((tuple = ReaderNext(rd)) != NULL)
-			SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-	}
-	else
-	{
-		Relation	rel = rd->ci_rel;
-
-		ReaderClose(rd);
-		heap_close(rel, AccessExclusiveLock);
-	}
+	/* done */
+	ReaderClose(rd);
 
 	SRF_RETURN_DONE(funcctx);
 }
@@ -276,16 +264,13 @@ pg_bulkwrite_accum(PG_FUNCTION_ARGS)
 
 	if (wt == NULL)
 	{
-		Relation		rel;
 		MemoryContext	ctx;
 
-		rel = heap_open(relid, AccessExclusiveLock);
-		VerifyTarget(rel);
 		ctx = MemoryContextSwitchTo(fcinfo->flinfo->fn_mcxt);
 		wt = (Writer *) palloc(sizeof(Writer));
-		WriterOpen(wt, rel);
-		wt->loader = CreateBufferedLoader(rel);
-//					 CreateDirectLoader(rel);
+		WriterOpen(wt, relid);
+		wt->loader = CreateBufferedLoader(wt->rel);
+//					 CreateDirectLoader(wt->rel);
 		MemoryContextSwitchTo(ctx);
 	}
 	else if (RelationGetRelid(wt->rel) != relid)
@@ -313,47 +298,9 @@ pg_bulkwrite_finish(PG_FUNCTION_ARGS)
 
 	if (wt)
 	{
-		Relation	rel = wt->rel;
-
 		count = wt->count;
 		WriterClose(wt);
-		heap_close(rel, AccessExclusiveLock);
 	}
 
 	PG_RETURN_INT64(count);
-}
-
-/*
- * Check iff the write target is ok
- */
-void
-VerifyTarget(Relation rel)
-{
-	AclResult	aclresult;
-	if (rel->rd_rel->relkind != RELKIND_RELATION)
-	{
-		const char *type;
-		switch (rel->rd_rel->relkind)
-		{
-			case RELKIND_VIEW:
-				type = "view";
-				break;
-			case RELKIND_SEQUENCE:
-				type = "sequence";
-				break;
-			default:
-				type = "non-table relation";
-				break;
-		}
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot load to %s \"%s\"",
-					type, RelationGetRelationName(rel))));
-	}
-
-	aclresult = pg_class_aclcheck(
-		RelationGetRelid(rel), GetUserId(), ACL_INSERT);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_CLASS,
-					   RelationGetRelationName(rel));
 }
