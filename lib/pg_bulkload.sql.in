@@ -1,5 +1,5 @@
 /*
- * pg_bulkload: lib/pg_bulkload.sql.in
+ * pg_bulkload.sql
  * 
  *    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */

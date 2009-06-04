@@ -26,7 +26,7 @@ CREATE TABLE customer (
     c_payment_cnt   float4 NOT NULL,
     c_delivery_cnt  float8 NOT NULL,
     c_data          varchar(500) NOT NULL
-);
+) WITH (oids, fillfactor=20);
 
 ALTER TABLE customer ADD PRIMARY KEY (c_w_id, c_d_id, c_id);
 CREATE INDEX idx_btree ON customer USING btree (c_d_id, c_last);

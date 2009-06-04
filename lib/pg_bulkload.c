@@ -12,7 +12,9 @@
 
 #include "funcapi.h"
 #include "miscadmin.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/memutils.h"
 
 #include "reader.h"
 #include "writer.h"
@@ -36,14 +38,17 @@ extern void _PG_fini(void);
 
 #ifdef ENABLE_BULKLOAD_PROFILE
 static instr_time prof_init;
-static instr_time prof_heap;
-static instr_time prof_index;
-static instr_time prof_term;
+static instr_time prof_reader;
+static instr_time prof_writer;
+static instr_time prof_reader_close;
+static instr_time prof_writer_close;
 
-instr_time prof_heap_read;
-instr_time prof_heap_toast;
-instr_time prof_heap_table;
-instr_time prof_heap_index;
+instr_time prof_reader_read;
+instr_time prof_reader_parse;
+
+instr_time prof_writer_toast;
+instr_time prof_writer_table;
+instr_time prof_writer_index;
 
 instr_time prof_index_merge;
 instr_time prof_index_reindex;
@@ -66,16 +71,18 @@ static void
 BULKLOAD_PROFILE_PRINT()
 {
 	elog(INFO, "<GLOBAL>");
-	elog(INFO, "  INIT  : %.7f", INSTR_TIME_GET_DOUBLE(prof_init));
-	elog(INFO, "  HEAP  : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap));
-	elog(INFO, "  INDEX : %.7f", INSTR_TIME_GET_DOUBLE(prof_index));
-	elog(INFO, "  TERM  : %.7f", INSTR_TIME_GET_DOUBLE(prof_term));
-	elog(INFO, "<HEAP>");
-	elog(INFO, "  READ  : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_read));
-	elog(INFO, "  TOAST : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_toast));
-	elog(INFO, "  TABLE : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_table));
-	elog(INFO, "  INDEX : %.7f", INSTR_TIME_GET_DOUBLE(prof_heap_index));
-	elog(INFO, "<INDEX>");
+	elog(INFO, "  INIT   : %.7f", INSTR_TIME_GET_DOUBLE(prof_init));
+	elog(INFO, "  READER : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader));
+	elog(INFO, "  WRITER : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer));
+	elog(INFO, "  MERGE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_close));
+	elog(INFO, "<READER>");
+	elog(INFO, "  READ   : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader_read));
+	elog(INFO, "  PARSE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader_parse));
+	elog(INFO, "<WRITER>");
+	elog(INFO, "  TOAST  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_toast));
+	elog(INFO, "  TABLE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_table));
+	elog(INFO, "  INDEX  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_index));
+	elog(INFO, "<MERGE>");
 	elog(INFO, "  MERGE      : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge));
 	elog(INFO, "    FLUSH    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_flush));
 	elog(INFO, "    BUILD    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build));
@@ -120,45 +127,42 @@ Datum
 pg_bulkload(PG_FUNCTION_ARGS)
 {
 	Reader			rd;
-	Writer			wt;
-	Relation		rel;
+	Writer		   *wt;
 	char		   *path;
 	char		   *options;
 	MemoryContext	ctx;
 	int64			count;
 
-	BULKLOAD_PROFILE_PUSH();
-
 	/*
 	 * STEP 1: Initialization
 	 */
 
+	BULKLOAD_PROFILE_PUSH();
+
 	path = GETARG_CSTRING(0);
 	options = GETARG_CSTRING(1);
 
+	/* open reader - TODO: split reader and controlfile parser. */
 	ReaderOpen(&rd, path, options);
-	WriterOpen(&wt, RelationGetRelid(rd.ci_rel));
-	wt.loader = rd.ci_loader(rd.ci_rel);
-	wt.on_duplicate = rd.on_duplicate;
-	rel = rd.ci_rel;
 
-	BULKLOAD_PROFILE(&prof_init);
+	/* open writer - TODO: pass wt and on_duplicate from parser is ugly. */
+	wt = rd.writer(rd.relid, rd.on_duplicate);
 
 	/* no contfile errors. start bulkloading */
-	ereport(NOTICE, (errmsg("BULK LOAD START")));
+	elog(NOTICE, "BULK LOAD START");
+
+	BULKLOAD_PROFILE(&prof_init);
 
 	/*
 	 * STEP 2: Build heap
 	 */
 
-	BULKLOAD_PROFILE_PUSH();
-
 	/* Switch into its memory context */
-	ctx = MemoryContextSwitchTo(
-		GetPerTupleMemoryContext(wt.estate));
+	Assert(wt->context);
+	ctx = MemoryContextSwitchTo(wt->context);
 
 	/* Loop for each input file record. */
-	while (wt.count < rd.ci_limit)
+	while (wt->count < rd.ci_limit)
 	{
 		HeapTuple	tuple;
 
@@ -166,37 +170,36 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		if ((tuple = ReaderNext(&rd)) == NULL)
 			break;
-		BULKLOAD_PROFILE(&prof_heap_read);
+		BULKLOAD_PROFILE(&prof_reader);
 
 		/* Insert the heap tuple and index entries. */
-		WriterInsert(&wt, tuple);
+		WriterInsert(wt, tuple);
+		wt->count += 1;
+
+		BULKLOAD_PROFILE(&prof_writer);
+
+		MemoryContextReset(wt->context);
 	}
 
 	MemoryContextSwitchTo(ctx);
 
 	ReaderClose(&rd);
-
-	BULKLOAD_PROFILE_POP();
-	BULKLOAD_PROFILE(&prof_heap);
+	BULKLOAD_PROFILE(&prof_reader_close);
 
 	/*
 	 * STEP 3: Finalize heap and merge indexes
 	 */
 
-	count = wt.count;
-	WriterClose(&wt);
-	BULKLOAD_PROFILE(&prof_index);
+	count = wt->count;
+	WriterClose(wt);
+	BULKLOAD_PROFILE(&prof_writer_close);
 
 	/*
 	 * STEP 4: Postprocessing
 	 */
 
 	/* Write end log. */
-	ereport(NOTICE,
-			(errmsg("BULK LOAD END (" int64_FMT " records)", count)));
-
-	/* TODO: remove prof_term because there are no jobs in term phase. */
-	BULKLOAD_PROFILE(&prof_term);
+	elog(NOTICE, "BULK LOAD END (" int64_FMT " records)", count);
 
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();
@@ -267,14 +270,12 @@ pg_bulkwrite_accum(PG_FUNCTION_ARGS)
 		MemoryContext	ctx;
 
 		ctx = MemoryContextSwitchTo(fcinfo->flinfo->fn_mcxt);
-		wt = (Writer *) palloc(sizeof(Writer));
-		WriterOpen(wt, relid);
-		wt->loader = CreateBufferedLoader(wt->rel);
-//					 CreateDirectLoader(wt->rel);
+		wt = CreateBufferedWriter(relid, ON_DUPLICATE_ERROR);
+//			 CreateDirectWriter(relid);
 		MemoryContextSwitchTo(ctx);
 	}
-	else if (RelationGetRelid(wt->rel) != relid)
-		elog(ERROR, "relid cannot be changed");
+//	else if (RelationGetRelid(wt->rel) != relid)
+//		elog(ERROR, "relid cannot be changed");
 
 	/* Build a temporary HeapTuple control structure */
 	tuple.t_len = HeapTupleHeaderGetDatumLength(htup);
@@ -283,6 +284,7 @@ pg_bulkwrite_accum(PG_FUNCTION_ARGS)
 	tuple.t_data = htup;
 
 	WriterInsert(wt, &tuple);
+	wt->count += 1;
 
 	PG_RETURN_POINTER(wt);
 }
@@ -303,4 +305,39 @@ pg_bulkwrite_finish(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_INT64(count);
+}
+
+/*
+ * Check iff the write target is ok
+ */
+void
+VerifyTarget(Relation rel)
+{
+	AclResult	aclresult;
+	if (rel->rd_rel->relkind != RELKIND_RELATION)
+	{
+		const char *type;
+		switch (rel->rd_rel->relkind)
+		{
+			case RELKIND_VIEW:
+				type = "view";
+				break;
+			case RELKIND_SEQUENCE:
+				type = "sequence";
+				break;
+			default:
+				type = "non-table relation";
+				break;
+		}
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot load to %s \"%s\"",
+					type, RelationGetRelationName(rel))));
+	}
+
+	aclresult = pg_class_aclcheck(
+		RelationGetRelid(rel), GetUserId(), ACL_INSERT);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, ACL_KIND_CLASS,
+					   RelationGetRelationName(rel));
 }

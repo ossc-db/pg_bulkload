@@ -62,6 +62,14 @@ typedef struct BTReader
 	char			   *page;	/**< Cached page */
 } BTReader;
 
+static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo);
+static void IndexSpoolEnd(BTSpool **spools,
+			  ResultRelInfo *relinfo,
+			  bool reindex,
+			  bool use_wal,
+			  ON_DUPLICATE on_duplicate);
+static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex);
+
 static IndexTuple BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free);
 static bool BTReaderInit(BTReader *reader, Relation rel);
 static void BTReaderTerm(BTReader *reader);
@@ -78,10 +86,64 @@ static void report_unique_violation(Relation rel, IndexTuple itup);
 static void remove_duplicate(Relation heap, IndexTuple itup);
 static char *tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple);
 
+
+void
+SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal)
+{
+	memset(self, 0, sizeof(Spooler));
+
+	self->on_duplicate = on_duplicate;
+	self->use_wal = use_wal;
+
+	self->relinfo = makeNode(ResultRelInfo);
+	self->relinfo->ri_RangeTableIndex = 1;	/* dummy */
+	self->relinfo->ri_RelationDesc = rel;
+	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
+	self->relinfo->ri_TrigInstrument = NULL;
+
+	ExecOpenIndices(self->relinfo);
+
+	self->estate = CreateExecutorState();
+	self->estate->es_num_result_relations = 1;
+	self->estate->es_result_relations = self->relinfo;
+	self->estate->es_result_relation_info = self->relinfo;
+
+	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
+
+	self->spools = IndexSpoolBegin(self->relinfo);
+}
+
+void
+SpoolerClose(Spooler *self)
+{
+	/* Merge indexes */
+	if (self->spools != NULL)
+	{
+		BULKLOAD_PROFILE_PUSH();
+		IndexSpoolEnd(self->spools, self->relinfo, true, self->use_wal, self->on_duplicate);
+		BULKLOAD_PROFILE_POP();
+	}
+
+	/* Terminate spooler. */
+	ExecDropSingleTupleTableSlot(self->slot);
+	if (self->estate->es_result_relation_info)
+		ExecCloseIndices(self->estate->es_result_relation_info);
+	FreeExecutorState(self->estate);
+}
+
+void
+SpoolerInsert(Spooler *self, HeapTuple tuple)
+{
+	/* Spool keys in the tuple */
+	ExecStoreTuple(tuple, self->slot, InvalidBuffer, false);
+	IndexSpoolInsert(self->spools, self->slot, &(tuple->t_self), self->estate, true);
+	BULKLOAD_PROFILE(&prof_heap_index);
+}
+
 /*
  * IndexSpoolBegin - Initialize spools.
  */
-BTSpool **
+static BTSpool **
 IndexSpoolBegin(ResultRelInfo *relinfo)
 {
 	int				i;
@@ -158,7 +220,7 @@ IndexSpoolEnd(BTSpool **spools,
  *
  *	Copy from ExecInsertIndexTuples.
  */
-void
+static void
 IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex)
 {
 	ResultRelInfo  *relinfo;

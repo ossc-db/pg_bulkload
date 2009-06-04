@@ -1,5 +1,5 @@
 /*
- * pg_bulkload: lib/uninstall_pg_bulkload.sql
+ * pg_bulkload: uninstall_pg_bulkload.sql
  *
  *    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */

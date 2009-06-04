@@ -1,5 +1,5 @@
 /*
- * pg_bulkload: lib/pg_input_csv.c
+ * pg_bulkload: lib/parser_csv.c
  *
  *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
@@ -28,6 +28,8 @@
 typedef struct CSVParser
 {
 	Parser	base;
+
+	TupleFormer	former;
 
 	/**
 	 * @brief Record Buffer.
@@ -90,16 +92,12 @@ typedef struct CSVParser
 	bool	   *fnn;			/**< array of NOT NULL column flag */
 } CSVParser;
 
-/*
- * Prototype declaration for local functions.
- */
-
-static void	CSVParserInit(CSVParser *self, Reader *rd);
-static bool	CSVParserRead(CSVParser *self, Reader *rd);
+static void	CSVParserInit(CSVParser *self, TupleDesc desc);
+static HeapTuple	CSVParserRead(CSVParser *self, Source *source);
 static void	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
 
-static void	ExtractValuesFromCSV(CSVParser *self, Reader *rd);
+static void	ExtractValuesFromCSV(CSVParser *self);
 
 /*
  * @brief Copies specified area in the record buffer to the field buffer.
@@ -142,7 +140,7 @@ appendToField(CSVParser *self, int *dst, int *src, int len)
 Parser *
 CreateCSVParser(void)
 {
-	CSVParser* self = palloc0(sizeof(CSVParser));
+	CSVParser *self = palloc0(sizeof(CSVParser));
 	self->base.init = (ParserInitProc) CSVParserInit;
 	self->base.read = (ParserReadProc) CSVParserRead;
 	self->base.term = (ParserTermProc) CSVParserTerm;
@@ -162,7 +160,7 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser* self, Reader *rd)
+CSVParserInit(CSVParser *self, TupleDesc desc)
 {
 	/*
 	 * set default values
@@ -186,6 +184,8 @@ CSVParserInit(CSVParser* self, Reader *rd)
 				 errmsg
 				 ("QUOTE must not appear in the NULL specification")));
 
+	TupleFormerInit(&self->former, desc);
+
 	/*
 	 * set not NULL column information
 	 */
@@ -193,15 +193,13 @@ CSVParserInit(CSVParser* self, Reader *rd)
 	{
 		int			i;
 		ListCell   *name;
-		TupleDesc	tupDesc;
 
-		tupDesc = RelationGetDescr(rd->ci_rel);
-		self->fnn = palloc0(sizeof(bool) *rd->ci_attnumcnt);
+		self->fnn = palloc0(sizeof(bool) * self->former.nfields);
 		foreach(name, self->fnn_name)
 		{
-			for (i = 0; i < tupDesc->natts; i++)
+			for (i = 0; i < desc->natts; i++)
 			{
-				if (strcmp(lfirst(name), tupDesc->attrs[i]->attname.data) == 0)
+				if (strcmp(lfirst(name), desc->attrs[i]->attname.data) == 0)
 				{
 					self->fnn[i] = true;
 					break;
@@ -210,7 +208,7 @@ CSVParserInit(CSVParser* self, Reader *rd)
 			/*
 			 * if not exists, error
 			 */
-			if (i == tupDesc->natts)
+			if (i == desc->natts)
 				ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
 								errmsg("invalid column name [%s]",
 									   (char *) lfirst(name))));
@@ -230,13 +228,14 @@ CSVParserInit(CSVParser* self, Reader *rd)
 	self->used_len = 0;
 	self->field_buf = palloc(self->buf_len);
 	self->next = self->rec_buf;
-	self->fields = palloc(rd->ci_attnumcnt * sizeof(char *));
+	self->fields = palloc(self->former.nfields * sizeof(char *));
 	self->fields[0] = NULL;
 	self->null_len = strlen(self->null);
 	self->eof = false;
 
 	/* Skip first ci_offset lines in the input file */
-	if (rd->ci_offset > 0)
+#ifdef FIXME
+	if (self->former.ci_offset > 0)
 	{
 #define LINEBUFLEN		1024
 		char	buffer[LINEBUFLEN];
@@ -244,7 +243,7 @@ CSVParserInit(CSVParser* self, Reader *rd)
 		int		skipped = 0;
 		bool	inCR = false;
 
-		while ((len = SourceRead(rd, buffer, LINEBUFLEN)) > 0)
+		while ((len = SourceRead(self->former.source, buffer, LINEBUFLEN)) > 0)
 		{
 			int		i;
 
@@ -266,20 +265,21 @@ CSVParserInit(CSVParser* self, Reader *rd)
 				/* Skip the line */
 				inCR = false;
 				++skipped;
-				if (skipped >= rd->ci_offset)
+				if (skipped >= self->former.ci_offset)
 				{
 					/* Seek to head of the next line. */
-					fseek(rd->ci_infd, i - len + 1, SEEK_CUR);
+					fseek(self->former.ci_infd, i - len + 1, SEEK_CUR);
                     goto skip_done;
 				}
 			}
 		}
 		ereport(ERROR, (errcode_for_file_access(),
 			errmsg("could not skip " int64_FMT " lines in the input file: %m",
-				rd->ci_offset)));
+				self->former.ci_offset)));
 skip_done:
 		;	/* done */
 	}
+#endif
 }
 
 /**
@@ -307,7 +307,7 @@ CSVParserTerm(CSVParser *self)
 }
 
 static bool
-checkFieldIsNull(CSVParser *self, Reader *rd, int field_num, int len)
+checkFieldIsNull(CSVParser *self, int field_num, int len)
 {
 	/*
 	 * We have to determine NULL value using character string before quote mark
@@ -315,7 +315,7 @@ checkFieldIsNull(CSVParser *self, Reader *rd, int field_num, int len)
 	 * the field buffer (field buffer contains character string after these marks
 	 * are handled).
 	 */
-	if (!self->fnn[rd->ci_attnumlist[field_num]] &&
+	if (!self->fnn[self->former.attnum[field_num]] &&
 		self->null_len == len &&
 		0 == memcmp(self->null, self->fields[field_num], self->null_len))
 	{
@@ -336,15 +336,15 @@ checkFieldIsNull(CSVParser *self, Reader *rd, int field_num, int len)
  * the memory context is switched to the tuple context.
  *
  * To cordinate the memory context in releasing memory, self->rec_buf and
- * self->field_buf are allocated only within this function.	Caller must
+  *self->field_buf are allocated only within this function.	Caller must
  * release these memory by releasing whole memory context.
  *
  * @param rd [in/out] Control Info.
  * @return Returns tru when successful, false when EOF is found.
  * @note When an error is found, it returns to the caller through ereport().
  */
-static bool
-CSVParserRead(CSVParser* self, Reader *rd)
+static HeapTuple
+CSVParserRead(CSVParser *self, Source *source)
 {
 	int			i = 0;			/* Index of the scanned character */
 	int			ret;
@@ -370,7 +370,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 	 * If EOF found in the previous calls, returns zero.
 	 */
 	if (self->eof)
-		return false;
+		return NULL;
 
 	cur = self->next;
 
@@ -441,7 +441,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 				cur = self->rec_buf;
 			}
 
-			ret = SourceRead(rd, self->rec_buf + self->used_len,
+			ret = SourceRead(source, self->rec_buf + self->used_len,
 								self->buf_len - self->used_len - 1);
 			if (ret == 0)
 			{
@@ -451,7 +451,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 				 * there're no  more input to handle and return false.
 				 */
 				if (cur[0] == '\0')
-					return false;
+					return NULL;
 
 				/*
 				 * When no corresponding (closing) quote mark is found and EOF is found,
@@ -527,7 +527,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 		else if (inCR)
 		{
 			appendToField(self, &dst, &src, i - src - 1);
-			checkFieldIsNull(self, rd, field_num, i - field_head - 1);
+			checkFieldIsNull(self, field_num, i - field_head - 1);
 			self->rec_buf[i - 1] = '\0';
 
 			if (c != '\n')
@@ -545,7 +545,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 			 * of the record must not be a quote mark and we can test this here.
 			 */
 			if (i == cur - self->rec_buf)
-				rd->ci_read_cnt++;
+				self->base.count++;
 
 			if (c == quote)
 			{
@@ -565,7 +565,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 				 */
 				appendToField(self, &dst, &src, i - src);
 
-				checkFieldIsNull(self, rd, field_num, i - field_head);
+				checkFieldIsNull(self, field_num, i - field_head);
 
 				/*
 				 * Line feed other than a quote mark is the record delimiter.  Record parse
@@ -579,7 +579,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 			{
 				appendToField(self, &dst, &src, i - src);
 
-				checkFieldIsNull(self, rd, field_num, i - field_head);
+				checkFieldIsNull(self, field_num, i - field_head);
 
 				/*
 				 * If then number of columns specified in the input record exceeds the
@@ -587,7 +587,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 				 * column of the table will be overwritten by extra columns in the input
 				 * data successively.
 				 */
-				if (field_num + 1 < rd->ci_attnumcnt)
+				if (field_num + 1 < self->former.nfields)
 					field_num++;
 				fetched_num++;
 
@@ -618,7 +618,7 @@ CSVParserRead(CSVParser* self, Reader *rd)
 	/*
 	 * It's an error if the number of self->fields exceeds the number of valid column. 
 	 */
-	if (fetched_num > rd->ci_attnumcnt)
+	if (fetched_num > self->former.nfields)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("extra data after last expected column")));
@@ -626,18 +626,17 @@ CSVParserRead(CSVParser* self, Reader *rd)
 	/*
 	 * Error, if the number of self->fields is less than the number of valid columns.
 	 */
-	if (fetched_num < rd->ci_attnumcnt)
+	if (fetched_num < self->former.nfields)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("missing data for column \"%s\"",
-							   NameStr(RelationGetDescr(rd->ci_rel)->
-									   attrs[rd->ci_attnumlist[fetched_num]]->
-									   attname))));
+							   NameStr(self->former.desc->attrs[self->former.attnum[fetched_num]]->attname))));
 	}
 
-	ExtractValuesFromCSV(self, rd);
+	ExtractValuesFromCSV(self);
+	self->base.parsing_field = 0;
 
-	return true;
+	return TupleFormerForm(&self->former);
 }
 
 static bool
@@ -688,7 +687,7 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
  *	 </dl>
  *
  * This function converts each field string into corresponding internal
- * representation and stores in rd->ci_values and rd->ci_isnull.
+ * representation and stores in self->former.values and self->former.isnull.
  *
  * @param rd [in/out] Control Info.
  * @return None
@@ -698,28 +697,28 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
  * @note When error occurs, return to the caller with ereport().
  */
 static void
-ExtractValuesFromCSV(CSVParser *self, Reader *rd)
+ExtractValuesFromCSV(CSVParser *self)
 {
 	int					i;
-	Form_pg_attribute  *attrs = RelationGetDescr(rd->ci_rel)->attrs;
+	Form_pg_attribute  *attrs = self->former.desc->attrs;
 
 	/*
 	 * Converts string data in the field array into the internal representation for
 	 * a destination column.
 	 */
-	for (i = 0; i < rd->ci_attnumcnt; i++)
+	for (i = 0; i < self->former.nfields; i++)
 	{
 		int		index;
 
-		rd->ci_parsing_field = i + 1;		/* ci_parsing_field is 1 origin */
+		self->base.parsing_field = i + 1;		/* 1 origin */
 
-		index = rd->ci_attnumlist[i];	/* Physical column index */
+		index = self->former.attnum[i];	/* Physical column index */
 		if (self->fields[i] || self->fnn[index])
 		{
-			rd->ci_isnull[index] = false;
-			rd->ci_values[index] = FunctionCall3(&rd->ci_in_functions[index],
+			self->former.isnull[index] = false;
+			self->former.values[index] = FunctionCall3(&self->former.typInput[index],
 				CStringGetDatum(self->fields[i]),
-				ObjectIdGetDatum(rd->ci_typeioparams[index]),
+				ObjectIdGetDatum(self->former.typIOParam[index]),
 				Int32GetDatum(attrs[index]->atttypmod));
 		}
 		else
@@ -735,7 +734,7 @@ ExtractValuesFromCSV(CSVParser *self, Reader *rd)
 						 ("null value in column \"%s\" violates not-null constraint",
 						  NameStr(attrs[index]->attname))));
 			}
-			rd->ci_isnull[index] = true;
+			self->former.isnull[index] = true;
 		}
 	}
 }

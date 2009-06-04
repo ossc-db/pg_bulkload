@@ -37,23 +37,9 @@
 #include "storage/bufpage.h"
 #include "storage/pg_shmem.h"
 
-const char *PROGRAM_VERSION	= "2.4.0";		/**< My version string */
+const char *PROGRAM_VERSION	= "3.0.0";		/**< My version string */
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
-
-/**
- * @brief Definition of Assert() macros as done in PosgreSQL.
- */
-#undef Assert
-#undef AssertMacro
-
-#ifdef USE_ASSERT_CHECKING
-#define Assert(x)		assert(x)
-#define AssertMacro(x)	assert(x)
-#else
-#define Assert(x)		((void) 0)
-#define AssertMacro(x)	((void) 0)
-#endif
 
 /**
  * @brief length of ".loadstatus" file

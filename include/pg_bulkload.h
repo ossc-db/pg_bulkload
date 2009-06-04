@@ -14,9 +14,36 @@
  * @brief General definition in pg_bulkload.
  */
 
-typedef struct Reader	Reader;
+/*-------------------------------------------------------------------------
+ *
+ * Source -> Parser -> Writer
+ * |              |
+ * +--------------+
+ *     Reader
+ * |                        |
+ * +------------------------+
+ *           Loader
+ *
+ * Source:
+ *  - RemoteSource
+ *  - FileSource (also used as PipeSource)
+ *
+ * Parser:
+ *  - BinaryParser (known as FixedParser before)
+ *  - CSVParser
+ *  - TupleParser (almost noop)
+ *
+ * Writer:
+ *  - BufferedWriter
+ *  - DirectLoader
+ *  - ParallelWriter
+ *
+ *-------------------------------------------------------------------------
+ */
+typedef struct Source	Source;
 typedef struct Parser	Parser;
-typedef struct Loader	Loader;
+typedef struct Writer	Writer;
+typedef struct Reader	Reader;
 
 typedef enum ON_DUPLICATE
 {
@@ -24,6 +51,12 @@ typedef enum ON_DUPLICATE
 	ON_DUPLICATE_REMOVE_NEW,
 	ON_DUPLICATE_REMOVE_OLD
 } ON_DUPLICATE;
+
+extern const char *ON_DUPLICATE_NAMES[3];
+
+typedef Source *(*SourceCreate)(const char *path);
+typedef Parser *(*ParserCreate)(void);
+typedef Writer *(*WriterCreate)(Oid relid, ON_DUPLICATE on_duplicate);
 
 /*
  * 64bit integer utils

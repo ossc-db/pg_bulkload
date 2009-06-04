@@ -22,21 +22,28 @@
  * Source
  */
 
-typedef enum CopySource
-{
-	COPY_FILE,		/* to/from file */
-	COPY_OLD_FE,	/* to/from frontend (2.0 protocol) */
-	COPY_NEW_FE		/* to/from frontend (3.0 protocol) */
-} CopySource;
+typedef size_t (*SourceReadProc)(Source *self, void *buffer, size_t len);
+typedef void (*SourceCloseProc)(Source *self);
 
-size_t SourceRead(Reader *rd, void *buffer, size_t len);
+struct Source
+{
+	SourceReadProc		read;	/** read */
+	SourceCloseProc		close;	/** close */
+};
+
+extern Source *CreateRemoteSource(const char *path, TupleDesc desc);
+extern Source *CreateFileSource(const char *path, TupleDesc desc);
+extern Source *CreateMemorySource(const char *path, TupleDesc desc);
+
+#define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))
+#define SourceClose(self)				((self)->close((self)))
 
 /*
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, Reader *rd);
-typedef bool (*ParserReadProc)(Parser *self, Reader *rd);
+typedef void (*ParserInitProc)(Parser *self, TupleDesc desc);
+typedef HeapTuple (*ParserReadProc)(Parser *self, Source *source);
 typedef void (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
 
@@ -46,13 +53,17 @@ struct Parser
 	ParserReadProc		read;	/**< read one tuple */
 	ParserTermProc		term;	/**< clean up */
 	ParserParamProc		param;	/**< parse a parameter */
+
+	int			parsing_field;	/**< field number being parsed */
+	int64		count;			/**< number of records read from stream */
 };
 
-extern Parser *CreateFixedParser(void);
+extern Parser *CreateBinaryParser(void);
 extern Parser *CreateCSVParser(void);
+extern Parser *CreateTupleParser(void);
 
-#define ParserInit(self, rd)				((self)->init((self), (rd)))
-#define ParserRead(self, rd)				((self)->read((self), (rd)))
+#define ParserInit(self, desc)				((self)->init((self), (desc)))
+#define ParserRead(self, source)			((self)->read((self), (source)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
 
@@ -61,54 +72,55 @@ extern Parser *CreateCSVParser(void);
  */
 struct Reader
 {
-	RangeVar   *ci_rv;				/**< target relation name */
-	int			ci_max_err_cnt;		/**< max error admissible number */
-
-	char	   *ci_infname;			/**< input file name */
+	/*
+	 * Information from control file.
+	 *	XXX: writer and on_duplicate should be another place?
+	 */
+	Oid			relid;				/**< target relation name */
+	char	   *infile;				/**< input file name */
 	int64		ci_offset;			/**< lines to skip */
 	int64		ci_limit;			/**< max input lines */
+	int			ci_max_err_cnt;		/**< max error admissible number */
 
-	/*
-	 * General status
-	 */
-	Relation	ci_rel;				/**< target relation */
-	int			ci_err_cnt;			/**< number of errors ignored */
-	int			ci_parsing_field;	/**< field number being parsed */
-
-	/*
-	 * Source
-	 */
-
-	CopySource	source;
-	bool		source_eof;
-	FILE	   *ci_infd;			/**< input file descriptor */
-	StringInfo	fe_msgbuf;			/* used only for dest == COPY_NEW_FE */
-
-	/*
-	 * Parser parameters and status
-	 *	TODO: Move some fields to parser because they are implementation.
-	 */
-	Parser	   *ci_parser;			/**< input file parser */
-	Datum	   *ci_values;			/**< array of values of one line */
-	bool	   *ci_isnull;			/**< array of NULL marker of one line */
-	int64		ci_read_cnt;		/**< number of records read from input file */
-	Oid		   *ci_typeioparams;	/**< type information */
-	FmgrInfo   *ci_in_functions;	/**< type transformation funcdtions */
-	int		   *ci_attnumlist;		/**< index arrays for valid columns */
-	int			ci_attnumcnt;		/**< length of ci_attnumlist */
-
-	/*
-	 * Loader information from control file
-	 */
-	Loader	   *(*ci_loader)(Relation rel);	/**< loader factory */
+	WriterCreate	writer;		/**< writer factory */
 	ON_DUPLICATE	on_duplicate;
+
+	/*
+	 * Source and Parser
+	 */
+	Source	   *source;				/**< input source stream */
+	Parser	   *parser;				/**< source stream parser */
+
+	/*
+	 * Internal status
+	 */
+	int			ci_err_cnt;			/**< number of errors ignored */
 };
 
 extern void ReaderOpen(Reader *rd, const char *fname, const char *options);
 extern HeapTuple ReaderNext(Reader *rd);
 extern void ReaderClose(Reader *rd);
 
-/* Utilitiy functions */
+/* TupleFormer */
+
+typedef struct TupleFormer
+{
+	TupleDesc	desc;		/**< descriptor */
+	Datum	   *values;		/**< array[desc->natts] of values */
+	bool	   *isnull;		/**< array[desc->natts] of NULL marker */
+	Oid		   *typIOParam;	/**< array[desc->natts] of type information */
+	FmgrInfo   *typInput;	/**< array[desc->natts] of type input functions */
+	int		   *attnum;		/**< array[nfields] of attnum mapping */
+	int			nfields;	/**< number of valid fields */
+} TupleFormer;
+
+extern void TupleFormerInit(TupleFormer *former, TupleDesc desc);
+extern void TupleFormerTerm(TupleFormer *former);
+extern HeapTuple TupleFormerForm(TupleFormer *former);
+
+/*
+ * Utilitiy functions
+ */
 
 #define ASSERT_ONCE(expr) \
 	do { if (!(expr)) \

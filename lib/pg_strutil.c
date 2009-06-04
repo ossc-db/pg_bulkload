@@ -15,6 +15,8 @@
 
 #include "pg_strutil.h"
 
+#define IsSpace(c)		(isspace((unsigned char)(c)))
+
 /**
  * @brief Trim white spaces before and after input value.
  *
@@ -42,7 +44,7 @@ TrimSpace(char *input)
 	/*
 	 * Search the end of non-space character
 	 */
-	for (p = input + strlen(input) - 1; p >= input && isspace(*p); p--);
+	for (p = input + strlen(input) - 1; p >= input && IsSpace(*p); p--);
 
 	/*
 	 * Exit if all the characters are space
@@ -57,7 +59,7 @@ TrimSpace(char *input)
 	/*
 	 * Search the first non-space character and return the position
 	 */
-	for (p = input; *p && isspace(*p); p++);
+	for (p = input; *p && IsSpace(*p); p++);
 
 	return p;
 }

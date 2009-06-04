@@ -17,20 +17,17 @@
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
 #include "executor/executor.h"
-#include "libpq/libpq.h"
-#include "libpq/pqformat.h"
 #include "miscadmin.h"
-#include "storage/fd.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "storage/fd.h"
 #include "tcop/tcopprot.h"
 
 #include "pg_strutil.h"
 #include "reader.h"
 #include "writer.h"
 
-extern PGDLLIMPORT CommandDest whereToSendOutput;
-extern PGDLLIMPORT ProtocolVersion FrontendProtocol;
+extern PGDLLIMPORT CommandDest		whereToSendOutput;
 
 /**
  * @brief  length of a line in control file
@@ -50,7 +47,6 @@ typedef struct ControlFileLine
 static void	ParseControlFile(Reader *rd, const char *fname, const char *options);
 static void ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf);
 static void ParseErrorCallback(void *arg);
-static void ReaderCopyBegin(Reader *rd);
 
 /**
  * @brief Initialize Reader
@@ -69,10 +65,8 @@ static void ReaderCopyBegin(Reader *rd);
 void
 ReaderOpen(Reader *rd, const char *fname, const char *options)
 {
-	Form_pg_attribute  *attr;
-	int					attnum;
-	Oid					in_func_oid;
-	AttrNumber			natts;
+	Relation	rel;
+	TupleDesc	desc;
 
 	memset(rd, 0, sizeof(Reader));
 	rd->ci_max_err_cnt = -1;
@@ -81,69 +75,69 @@ ReaderOpen(Reader *rd, const char *fname, const char *options)
 
 	ParseControlFile(rd, fname, options);
 
-	/*
-	 * open relation and do a sanity check
-	 */
-	rd->ci_rel = heap_openrv(rd->ci_rv, AccessShareLock);
+	/* create tuple descriptor without any relation locks */
+	rel = heap_open(rd->relid, NoLock);
+	desc = RelationGetDescr(rel);
 
-	/*
-	 * allocate buffer to store columns
-	 */
-	natts = RelationGetDescr(rd->ci_rel)->natts;
-	rd->ci_values = palloc(sizeof(Datum) * natts);
-	rd->ci_isnull = palloc(sizeof(bool) * natts);
-	MemSet(rd->ci_isnull, true, sizeof(bool) * natts);
-
-	/*
-	 * get column information of the target relation
-	 */
-	attr = RelationGetDescr(rd->ci_rel)->attrs;
-	rd->ci_typeioparams = (Oid *) palloc(natts * sizeof(Oid));
-	rd->ci_in_functions = (FmgrInfo *) palloc(natts * sizeof(FmgrInfo));
-	rd->ci_attnumlist = palloc(natts * sizeof(int));
-	rd->ci_attnumcnt = 0;
-	for (attnum = 1; attnum <= natts; attnum++)
+	/* open source */
+	if (pg_strcasecmp(rd->infile, "stdin") == 0)
 	{
-		/* ignore dropped columns */
-		if (attr[attnum - 1]->attisdropped)
-			continue;
+		if (whereToSendOutput != DestRemote)
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("local stdin read is not supported")));
 
-		/* get type information and input function */
-		getTypeInputInfo(attr[attnum - 1]->atttypid,
-					 &in_func_oid, &rd->ci_typeioparams[attnum - 1]);
-		fmgr_info(in_func_oid, &rd->ci_in_functions[attnum - 1]);
-
-		/* update valid column information */
-		rd->ci_attnumlist[rd->ci_attnumcnt] = attnum - 1;
-		rd->ci_attnumcnt++;
+		rd->source = CreateRemoteSource(NULL, desc);
 	}
-
-	/*
-	 * open input data file
-	 */
-	if (pg_strcasecmp(rd->ci_infname, "stdin") == 0)
+	else if (strcmp(rd->infile, "pg_bulkload") == 0)
 	{
-		if (whereToSendOutput == DestRemote)
-			ReaderCopyBegin(rd);
-		else
-			rd->ci_infd = stdin;
+		rd->source = CreateMemorySource("pg_bulkload", desc);
 	}
 	else
 	{
+		if (!is_absolute_path(rd->infile))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("relative path not allowed for INFILE: %s", rd->infile)));
+
 		/* must be the super user if load from a file */
 		if (!superuser())
 			ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to use pg_bulkload()")));
 
-		rd->ci_infd = AllocateFile(rd->ci_infname, "r");
-		if (rd->ci_infd == NULL)
-			ereport(ERROR, (errcode_for_file_access(),
-				errmsg("could not open \"%s\" %m", rd->ci_infname)));
+		rd->source = CreateFileSource(rd->infile, desc);
 	}
 
-	ParserInit(rd->ci_parser, rd);
+	/* initialize parser */
+	ParserInit(rd->parser, desc);
+
+	heap_close(rel, NoLock);
 }
+
+const char *ON_DUPLICATE_NAMES[] =
+{
+	"ERROR",
+	"REMOVE_NEW",
+	"REMOVE_OLD"
+};
+
+static size_t
+choice(const char *name, const char *key, const char *keys[], size_t nkeys)
+{
+	size_t		i;
+
+	for (i = 0; i < nkeys; i++)
+	{
+		if (pg_strcasecmp(key, keys[i]) == 0)
+			return i;
+	}
+
+	ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			errmsg("invalid %s \"%s\"", name, key)));
+	return 0;	/* keep compiler quiet */
+}
+
 
 /**
  * @brief Parse a line in control file.
@@ -224,45 +218,55 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 	 */
 	if (pg_strcasecmp(keyword, "TABLE") == 0)
 	{
-		ASSERT_ONCE(rd->ci_rv == NULL);
+		ASSERT_ONCE(rd->relid == InvalidOid);
 
-		rd->ci_rv = makeRangeVarFromNameList(
-						stringToQualifiedNameList(target));
+		rd->relid = RangeVarGetRelid(makeRangeVarFromNameList(
+						stringToQualifiedNameList(target)), false);
 	}
 	else if (pg_strcasecmp(keyword, "INFILE") == 0)
 	{
-		ASSERT_ONCE(rd->ci_infname == NULL);
+		ASSERT_ONCE(rd->infile == NULL);
 
-		if (!is_absolute_path(target))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("relative path not allowed for INFILE: %s", target)));
-
-		rd->ci_infname = pstrdup(target);
+		rd->infile = pstrdup(target);
 	}
 	else if (pg_strcasecmp(keyword, "TYPE") == 0)
 	{
-		ASSERT_ONCE(rd->ci_parser == NULL);
+		const char *keys[] =
+		{
+			"BINARY",
+			"FIXED",	/* alias for backward compatibility. */
+			"CSV",
+			"TUPLE",
+		};
+		const ParserCreate values[] =
+		{
+			CreateBinaryParser,
+			CreateBinaryParser,
+			CreateCSVParser,
+			CreateTupleParser,
+		};
 
-		if (pg_strcasecmp(target, "FIXED") == 0)
-			rd->ci_parser = CreateFixedParser();
-		else if (pg_strcasecmp(target, "CSV") == 0)
-			rd->ci_parser = CreateCSVParser();
-		else
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg("invalid file type \"%s\"", target)));
+		ASSERT_ONCE(rd->parser == NULL);
+		rd->parser = values[choice(keyword, target, keys, lengthof(keys))]();
 	}
-	else if (pg_strcasecmp(keyword, "LOADER") == 0)
+	else if (pg_strcasecmp(keyword, "WRITER") == 0 ||
+			 pg_strcasecmp(keyword, "LOADER") == 0)
 	{
-		ASSERT_ONCE(rd->ci_loader == NULL);
-		
-		if (pg_strcasecmp(target, "DIRECT") == 0)
-			rd->ci_loader = CreateDirectLoader;
-		else if (pg_strcasecmp(target, "BUFFERED") == 0)
-			rd->ci_loader = CreateBufferedLoader;
-		else
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg("invalid loader \"%s\"", target)));
+		const char *keys[] =
+		{
+			"DIRECT",
+			"BUFFERED",
+			"PARALLEL"
+		};
+		const WriterCreate values[] =
+		{
+			CreateDirectWriter,
+			CreateBufferedWriter,
+			CreateParallelWriter
+		};
+
+		ASSERT_ONCE(rd->writer == NULL);
+		rd->writer = values[choice(keyword, target, keys, lengthof(keys))];
 	}
 	else if (pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
 	{
@@ -281,18 +285,17 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 	}
 	else if (pg_strcasecmp(keyword, "ON_DUPLICATE") == 0)
 	{
-		if (pg_strcasecmp(target, "ERROR") == 0)
-			rd->on_duplicate = ON_DUPLICATE_ERROR;
-		else if (pg_strcasecmp(target, "REMOVE_NEW") == 0)
-			rd->on_duplicate = ON_DUPLICATE_REMOVE_NEW;
-		else if (pg_strcasecmp(target, "REMOVE_OLD") == 0)
-			rd->on_duplicate = ON_DUPLICATE_REMOVE_OLD;
-		else
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg("invalid ON_DUPLICATE \"%s\"", target)));
+		const ON_DUPLICATE values[] =
+		{
+			ON_DUPLICATE_ERROR,
+			ON_DUPLICATE_REMOVE_NEW,
+			ON_DUPLICATE_REMOVE_OLD
+		};
+
+		rd->on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
 	}
-	else if (rd->ci_parser == NULL ||
-			!ParserParam(rd->ci_parser, keyword, target))
+	else if (rd->parser == NULL ||
+			!ParserParam(rd->parser, keyword, target))
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
@@ -362,21 +365,21 @@ ParseControlFile(Reader *rd, const char *fname, const char *options)
 	/*
 	 * checking necessary common setting items
 	 */
-	if (rd->ci_parser == NULL)
+	if (rd->parser == NULL)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no TYPE specified")));
-	if (rd->ci_rv == NULL)
+	if (rd->relid == InvalidOid)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no TABLE specified")));
-	if (rd->ci_infname == NULL)
+	if (rd->infile == NULL)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no INFILE specified")));
 
 	/*
 	 * Set defaults to unspecified parameters.
 	 */
-	if (rd->ci_loader == NULL)
-		rd->ci_loader = CreateDirectLoader;
+	if (rd->writer == NULL)
+		rd->writer = CreateDirectWriter;
 	if (rd->ci_max_err_cnt < 0)
 		rd->ci_max_err_cnt = 0;
 	if (rd->ci_offset < 0)
@@ -398,11 +401,18 @@ ReaderClose(Reader *rd)
 	if (rd == NULL)
 		return;
 
-	/* Terminate parser. Be sure to set ci_parser to NULL. */
-	if (rd->ci_parser)
+	/* Terminate parser. Be sure to set parser to NULL. */
+	if (rd->parser)
 	{
-		ParserTerm(rd->ci_parser);
-		rd->ci_parser = NULL;
+		ParserTerm(rd->parser);
+		rd->parser = NULL;
+	}
+
+	/* Terminate source. Be sure to set source to NULL. */
+	if (rd->source)
+	{
+		SourceClose(rd->source);
+		rd->source = NULL;
 	}
 
 	/* If an error has been found, abort. */
@@ -424,42 +434,8 @@ ReaderClose(Reader *rd)
 		}
 	}
 
-	if (rd->source == COPY_FILE &&
-		rd->ci_infd != NULL &&
-		rd->ci_infd != stdin &&
-		FreeFile(rd->ci_infd) < 0)
-	{
-		ereport(WARNING, (errcode_for_file_access(),
-			errmsg("could not close \"%s\" %m", rd->ci_infname)));
-	}
-
-	heap_close(rd->ci_rel, AccessShareLock);
-
-	/*
-	 * FIXME: We might not need to free each fields because memories
-	 * are automatically freeed at the end of query.
-	 */
-
-	if (rd->ci_rv != NULL)
-		pfree(rd->ci_rv);
-
-	if (rd->ci_infname != NULL)
-		pfree(rd->ci_infname);
-
-	if (rd->ci_typeioparams != NULL)
-		pfree(rd->ci_typeioparams);
-
-	if (rd->ci_in_functions)
-		pfree(rd->ci_in_functions);
-
-	if (rd->ci_values)
-		pfree(rd->ci_values);
-
-	if (rd->ci_isnull)
-		pfree(rd->ci_isnull);
-
-	if (rd->ci_attnumlist)
-		pfree(rd->ci_attnumlist);
+	if (rd->infile != NULL)
+		pfree(rd->infile);
 }
 
 /**
@@ -478,147 +454,6 @@ ParseErrorCallback(void *arg)
 }
 
 /**
- * @brief read some data from source
- *
- * borrowed from CopyGetData.
- */
-size_t
-SourceRead(Reader *rd, void *buffer, size_t len)
-{
-	size_t		bytesread = 0;
-
-	switch (rd->source)
-	{
-		case COPY_FILE:
-			bytesread = fread(buffer, 1, len, rd->ci_infd);
-			if (ferror(rd->ci_infd))
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not read from COPY file: %m")));
-			break;
-		case COPY_OLD_FE:
-			if (pq_getbytes((char *) buffer, 1))
-			{
-				/* Only a \. terminator is legal EOF in old protocol */
-				ereport(ERROR,
-						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("unexpected EOF on client connection")));
-			}
-			bytesread = 1;
-			break;
-		case COPY_NEW_FE:
-			while (len > 0 && bytesread < 1 && !rd->source_eof)
-			{
-				int			avail;
-
-				while (rd->fe_msgbuf->cursor >= rd->fe_msgbuf->len)
-				{
-					/* Try to receive another message */
-					int			mtype;
-
-			readmessage:
-					mtype = pq_getbyte();
-					if (mtype == EOF)
-						ereport(ERROR,
-								(errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("unexpected EOF on client connection")));
-					if (pq_getmessage(rd->fe_msgbuf, 0))
-						ereport(ERROR,
-								(errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("unexpected EOF on client connection")));
-					switch (mtype)
-					{
-						case 'd':		/* CopyData */
-							break;
-						case 'c':		/* CopyDone */
-							/* COPY IN correctly terminated by frontend */
-							rd->source_eof = true;
-							return bytesread;
-						case 'f':		/* CopyFail */
-							ereport(ERROR,
-									(errcode(ERRCODE_QUERY_CANCELED),
-									 errmsg("COPY from stdin failed: %s",
-									   pq_getmsgstring(rd->fe_msgbuf))));
-							break;
-						case 'H':		/* Flush */
-						case 'S':		/* Sync */
-
-							/*
-							 * Ignore Flush/Sync for the convenience of client
-							 * libraries (such as libpq) that may send those
-							 * without noticing that the command they just
-							 * sent was COPY.
-							 */
-							goto readmessage;
-						default:
-							ereport(ERROR,
-									(errcode(ERRCODE_PROTOCOL_VIOLATION),
-									 errmsg("unexpected message type 0x%02X during COPY from stdin",
-											mtype)));
-							break;
-					}
-				}
-				avail = rd->fe_msgbuf->len - rd->fe_msgbuf->cursor;
-				if (avail > len)
-					avail = len;
-				pq_copymsgbytes(rd->fe_msgbuf, buffer, avail);
-				buffer = (void *) ((char *) buffer + avail);
-				len -= avail;
-				bytesread += avail;
-			}
-			break;
-	}
-
-	return bytesread;
-}
-
-#define IsBinaryCopy(rd)	(false)
-
-static void
-ReaderCopyBegin(Reader *rd)
-{
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-	{
-		/* new way */
-		StringInfoData buf;
-		int			natts = rd->ci_attnumcnt;
-		int16		format = (IsBinaryCopy(rd) ? 1 : 0);
-		int			i;
-
-		pq_beginmessage(&buf, 'G');
-		pq_sendbyte(&buf, format);		/* overall format */
-		pq_sendint(&buf, natts, 2);
-		for (i = 0; i < natts; i++)
-			pq_sendint(&buf, format, 2);		/* per-column formats */
-		pq_endmessage(&buf);
-		rd->source = COPY_NEW_FE;
-		rd->fe_msgbuf = makeStringInfo();
-	}
-	else if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 2)
-	{
-		/* old way */
-		if (IsBinaryCopy(rd))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			errmsg("COPY BINARY is not supported to stdout or from stdin")));
-		pq_putemptymessage('G');
-		rd->source = COPY_OLD_FE;
-	}
-	else
-	{
-		/* very old way */
-		if (IsBinaryCopy(rd))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			errmsg("COPY BINARY is not supported to stdout or from stdin")));
-		pq_putemptymessage('D');
-		rd->source = COPY_OLD_FE;
-	}
-	/* We *must* flush here to ensure FE knows it can send. */
-	pq_flush();
-}
-
-/**
  * @brief Read the next tuple from parser.
  * @param rd  [in/out] reader
  * @return type
@@ -629,6 +464,8 @@ ReaderNext(Reader *rd)
 	HeapTuple		tuple;
 	MemoryContext	ccxt;
 	bool			eof;
+	Parser		   *parser = rd->parser;
+	Source		   *source = rd->source;
 
 	ccxt = CurrentMemoryContext;
 
@@ -636,14 +473,12 @@ ReaderNext(Reader *rd)
 	do
 	{
 		tuple = NULL;
-		rd->ci_parsing_field = 0;
+		parser->parsing_field = 0;
 
 		PG_TRY();
 		{
-			if (ParserRead(rd->ci_parser, rd))
-				tuple = heap_form_tuple(RelationGetDescr(rd->ci_rel),
-										rd->ci_values, rd->ci_isnull);
-			else
+			tuple = ParserRead(parser, source);
+			if (tuple == NULL)
 				eof = true;
 		}
 		PG_CATCH();
@@ -652,7 +487,7 @@ ReaderNext(Reader *rd)
 			MemoryContext	ecxt;
 			char		   *message;
 
-			if (rd->ci_parsing_field <= 0)
+			if (parser->parsing_field <= 0)
 				PG_RE_THROW();	/* should not ignore */
 
 			ecxt = MemoryContextSwitchTo(ccxt);
@@ -679,7 +514,7 @@ ReaderNext(Reader *rd)
 
 			ereport(WARNING,
 				(errmsg("BULK LOAD ERROR (row=" int64_FMT ", col=%d) %s",
-					rd->ci_read_cnt, rd->ci_parsing_field, message)));
+					parser->count, parser->parsing_field, message)));
 
 			/* Terminate if MAX_ERR_CNT has been reached. */
 			if (rd->ci_err_cnt > rd->ci_max_err_cnt)
@@ -692,11 +527,77 @@ ReaderNext(Reader *rd)
 	if (!tuple)
 		return NULL;	/* EOF */
 
-	if (rd->ci_rel->rd_rel->relhasoids)
-	{
-		Assert(!OidIsValid(HeapTupleGetOid(tuple)));
-		HeapTupleSetOid(tuple, GetNewOid(rd->ci_rel));
-	}
-
 	return tuple;
+}
+
+void
+TupleFormerInit(TupleFormer *former, TupleDesc desc)
+{
+	Form_pg_attribute  *attrs;
+	AttrNumber			natts;
+	int					i;
+
+	former->desc = CreateTupleDescCopy(desc);
+
+	/*
+	 * allocate buffer to store columns
+	 */
+	natts = desc->natts;
+	former->values = palloc(sizeof(Datum) * natts);
+	former->isnull = palloc(sizeof(bool) * natts);
+	MemSet(former->isnull, true, sizeof(bool) * natts);
+
+	/*
+	 * get column information of the target relation
+	 */
+	attrs = desc->attrs;
+	former->typIOParam = (Oid *) palloc(natts * sizeof(Oid));
+	former->typInput = (FmgrInfo *) palloc(natts * sizeof(FmgrInfo));
+	former->attnum = palloc(natts * sizeof(int));
+	former->nfields = 0;
+	for (i = 0; i < natts; i++)
+	{
+		Oid	in_func_oid;
+
+		/* ignore dropped columns */
+		if (attrs[i]->attisdropped)
+			continue;
+
+		/* get type information and input function */
+		getTypeInputInfo(attrs[i]->atttypid,
+					 &in_func_oid, &former->typIOParam[i]);
+		fmgr_info(in_func_oid, &former->typInput[i]);
+
+		/* update valid column information */
+		former->attnum[former->nfields] = i;
+		former->nfields++;
+	}
+}
+
+void
+TupleFormerTerm(TupleFormer *former)
+{
+	if (former->typIOParam)
+		pfree(former->typIOParam);
+
+	if (former->typInput)
+		pfree(former->typInput);
+
+	if (former->values)
+		pfree(former->values);
+
+	if (former->isnull)
+		pfree(former->isnull);
+
+	if (former->attnum)
+		pfree(former->attnum);
+
+	if (former->desc)
+		FreeTupleDesc(former->desc);
+}
+
+HeapTuple
+TupleFormerForm(TupleFormer *former)
+{
+	return heap_form_tuple(former->desc, former->values, former->isnull);
 }

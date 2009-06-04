@@ -19,44 +19,33 @@
 #include "nodes/execnodes.h"
 
 /*
- * Loader
- */
-
-typedef bool (*LoaderInsertProc)(Loader *self, Relation rel, HeapTuple tuple);
-typedef void (*LoaderCloseProc)(Loader *self);
-
-struct Loader
-{
-	LoaderInsertProc	insert;	/**< insert one tuple */
-	LoaderCloseProc		close;	/**< clean up */
-	bool				use_wal;
-};
-
-extern Loader *CreateDirectLoader(Relation rel);
-extern Loader *CreateBufferedLoader(Relation rel);
-extern void AtEOXact_DirectLoader(XactEvent event, void *arg);
-
-#define LoaderInsert(self, rel, tuple)	((self)->insert((self), (rel), (tuple)))
-#define LoaderClose(self)				((self)->close((self)))
-
-/*
  * Writer
  */
 
-typedef struct Writer
-{
-	Loader		   *loader;		/**< loader object */
-	Relation		rel;		/**< dest relation */
-	BTSpool		  **spools;		/**< index spool */
-	ResultRelInfo  *relinfo;	/**<  */
-	EState		   *estate;		/**<  */
-	TupleTableSlot *slot;		/**<  */
-	int64			count;		/**< number of inserted tuples */
-	ON_DUPLICATE	on_duplicate;
-} Writer;
+typedef bool (*WriterInsertProc)(Writer *self, HeapTuple tuple);
+typedef void (*WriterCloseProc)(Writer *self);
 
-extern void WriterOpen(Writer *wt, Oid relid);
-extern void WriterInsert(Writer *wt, HeapTuple tuple);
-extern void WriterClose(Writer *wt);
+struct Writer
+{
+	WriterInsertProc	insert;	/**< insert one tuple */
+	WriterCloseProc		close;	/**< clean up */
+
+	MemoryContext		context;
+	int64				count;
+};
+
+extern Writer *CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate);
+extern Writer *CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate);
+extern Writer *CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate);
+extern void AtEOXact_DirectLoader(XactEvent event, void *arg);
+
+#define WriterInsert(self, tuple)	((self)->insert((self), (tuple)))
+#define WriterClose(self)			((self)->close((self)))
+
+/*
+ * Utilitiy functions
+ */
+
+extern void VerifyTarget(Relation rel);
 
 #endif   /* WRITER_H_INCLUDED */

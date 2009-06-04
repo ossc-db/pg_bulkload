@@ -1,13 +1,9 @@
 /*
- * pg_heap_direct: lib/pg_heap_direct.c
+ * pg_bulkload: lib/writer_direct.c
  *
  *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-/**
- * @file
- * @brief Direct heap writer
- */
 #include "postgres.h"
 
 #include <fcntl.h>
@@ -15,7 +11,9 @@
 
 #include "access/heapam.h"
 #include "access/transam.h"
+#include "access/tuptoaster.h"
 #include "catalog/catalog.h"
+#include "executor/executor.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
 #include "storage/fd.h"
@@ -23,14 +21,13 @@
 
 #include "pg_loadstatus.h"
 #include "writer.h"
+#include "pg_btree.h"
+#include "pg_profile.h"
 
-#if PG_VERSION_NUM >= 80400
-#elif PG_VERSION_NUM >= 80300
+#if PG_VERSION_NUM < 80300
 
-#define log_newpage(rnode, forknum, blk, page) \
-	log_newpage((rnode), (blk), (page))
-
-#elif PG_VERSION_NUM < 80300
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
+	toast_insert_or_update((rel), (newtup), (oldtup))
 
 static XLogRecPtr
 log_newpage(RelFileNode *rnode, int fork, BlockNumber blkno, Page page)
@@ -65,14 +62,25 @@ log_newpage(RelFileNode *rnode, int fork, BlockNumber blkno, Page page)
 	return recptr;
 }
 
+#elif PG_VERSION_NUM < 80400
+
+#define toast_insert_or_update(rel, newtup, oldtup, options) \
+	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
+
+#define log_newpage(rnode, forknum, blk, page) \
+	log_newpage((rnode), (blk), (page))
+
 #endif
 
 /**
  * @brief Heap loader using direct path
  */
-typedef struct DirectLoader
+typedef struct DirectWriter
 {
-	Loader			base;
+	Writer			base;
+
+	Relation		rel;
+	Spooler			spooler;
 
 	LoadStatus		ls;
 	int				lsf_fd;		/**< File descriptor of load status file */
@@ -85,19 +93,15 @@ typedef struct DirectLoader
 
 	char		   *blocks;		/**< Local heap block buffer */
 	int				curblk;		/**< Index of the current block buffer */
-} DirectLoader;
+} DirectWriter;
 
 /**
  * @brief Number of the block buffer
  */
 #define BLOCK_BUF_NUM		1024
 
-/*
- * Prototype declaration for local functions.
- */
-
-static void	DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple);
-static void	DirectLoaderClose(DirectLoader *self);
+static void	DirectWriterInsert(DirectWriter *self, HeapTuple tuple);
+static void	DirectWriterClose(DirectWriter *self);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
 
@@ -108,23 +112,25 @@ static void	DirectLoaderClose(DirectLoader *self);
 
 /* Signature of static functions */
 static int	open_data_file(RelFileNode rnode, BlockNumber blknum);
-static void	flush_pages(DirectLoader *loader);
-static void	close_data_file(DirectLoader *loader);
-static void	UpdateLSF(DirectLoader *loader, BlockNumber num);
-static void UnlinkLSF(DirectLoader *loader);
+static void	flush_pages(DirectWriter *loader);
+static void	close_data_file(DirectWriter *loader);
+static void	UpdateLSF(DirectWriter *loader, BlockNumber num);
+static void UnlinkLSF(DirectWriter *loader);
 static void ValidateLSFDirectory(const char *path);
 
 /*
  * TODO: If we need more loaders oncurrently, modify this variable
  * to something like a linked list.
  */
-static DirectLoader ActiveLoader =
+static DirectWriter ActiveLoader =
 {
 	{
-		(LoaderInsertProc) DirectLoaderInsert,
-		(LoaderCloseProc) DirectLoaderClose,
+		(WriterInsertProc) DirectWriterInsert,
+		(WriterCloseProc) DirectWriterClose,
 		false
 	},
+	NULL,
+	{},
 	{},
 	-1,
 	"",
@@ -140,14 +146,14 @@ static DirectLoader ActiveLoader =
  * ========================================================================*/
 
 /**
- * @brief Initialize a new DirectLoader
+ * @brief Initialize a new DirectWriter
  * Create load status file
  * @param rel [in] Relation for loading
  */
-Loader *
-CreateDirectLoader(Relation rel)
+Writer *
+CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate)
 {
-	DirectLoader	   *self;
+	DirectWriter	   *self;
 	LoadStatus		   *ls;
 
 	if (ActiveLoader.lsf_fd != -1)
@@ -157,6 +163,12 @@ CreateDirectLoader(Relation rel)
 	self->lsf_fd = -1;
 	self->datafd = -1;
 	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
+
+	self->rel = heap_open(relid, AccessExclusiveLock);
+	VerifyTarget(self->rel);
+
+	SpoolerOpen(&self->spooler, self->rel, on_duplicate, false);
+	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	/* Verify DataDir/pg_bulkload directory */
 	ValidateLSFDirectory(BULKLOAD_LSF_DIR);
@@ -173,9 +185,9 @@ CreateDirectLoader(Relation rel)
 	 * Initialize load status information
 	 */
 	ls = &self->ls;
-	ls->ls.relid = RelationGetRelid(rel);
-	ls->ls.rnode = rel->rd_node;
-	ls->ls.exist_cnt = RelationGetNumberOfBlocks(rel);
+	ls->ls.relid = relid;
+	ls->ls.rnode = self->rel->rd_node;
+	ls->ls.exist_cnt = RelationGetNumberOfBlocks(self->rel);
 	ls->ls.create_cnt = 0;
 
 	/*
@@ -199,7 +211,7 @@ CreateDirectLoader(Relation rel)
 			errmsg("could not write loadstatus file \"%s\": %m", self->lsf_path)));
 	}
 
-	return (Loader *) self;
+	return (Writer *) self;
 }
 
 /**
@@ -207,13 +219,25 @@ CreateDirectLoader(Relation rel)
  * @return void
  */
 static void
-DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
+DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 {
 	Page			page;
 	OffsetNumber	offnum;
 	ItemId			itemId;
 	Item			item;
 	LoadStatus	   *ls = &self->ls;
+
+	/* Compress the tuple data if needed. */
+	if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
+		tuple = toast_insert_or_update(self->rel, tuple, NULL, 0);
+	BULKLOAD_PROFILE(&prof_heap_toast);
+
+	/* Assign oids if needed. */
+	if (self->rel->rd_rel->relhasoids)
+	{
+		Assert(!OidIsValid(HeapTupleGetOid(tuple)));
+		HeapTupleSetOid(tuple, GetNewOid(self->rel));
+	}
 
 	/* Assume the tuple has been toasted already. */
 	if (MAXALIGN(tuple->t_len) > MaxHeapTupleSize)
@@ -226,7 +250,7 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 	/* Fill current page, or go to next page if the page is full. */
 	page = GetCurrentPage(self);
 	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
-		RelationGetTargetPageFreeSpace(rel, HEAP_DEFAULT_FILLFACTOR))
+		RelationGetTargetPageFreeSpace(self->rel, HEAP_DEFAULT_FILLFACTOR))
 	{
 		if (self->curblk < BLOCK_BUF_NUM - 1)
 			self->curblk++;
@@ -263,6 +287,8 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
 	itemId = PageGetItemId(page, offnum);
 	item = PageGetItem(page, itemId);
 	((HeapTupleHeader) item)->t_ctid = tuple->t_self;
+
+	SpoolerInsert(&self->spooler, tuple);
 }
 
 /**
@@ -272,7 +298,7 @@ DirectLoaderInsert(DirectLoader *self, Relation rel, HeapTuple tuple)
  * @return void
  */
 static void
-DirectLoaderClose(DirectLoader *self)
+DirectWriterClose(DirectWriter *self)
 {
 	/* Flush unflushed block buffer and close the heap file. */
 	flush_pages(self);
@@ -282,6 +308,14 @@ DirectLoaderClose(DirectLoader *self)
 	{
 		pfree(self->blocks);
 		self->blocks = NULL;
+	}
+
+	SpoolerClose(&self->spooler);
+
+	if (self->rel)
+	{
+		heap_close(self->rel, AccessExclusiveLock);
+		self->rel = NULL;
 	}
 }
 
@@ -310,11 +344,11 @@ AtEOXact_DirectLoader(XactEvent event, void *arg)
  *	 <li>If there are other data, write them too.</li>
  * </ol>
  *
- * @param loader [in] Direct Loader.
+ * @param loader [in] Direct Writer.
  * @return File descriptor for the current data file.
  */
 static void
-flush_pages(DirectLoader *loader)
+flush_pages(DirectWriter *loader)
 {
 	int			i;
 	int			num;
@@ -462,11 +496,11 @@ open_data_file(RelFileNode rnode, BlockNumber blknum)
 
 /**
  * @brief Flush and close the data file.
- * @param loader [in] Direct Loader.
+ * @param loader [in] Direct Writer.
  * @return void
  */
 static void
-close_data_file(DirectLoader *loader)
+close_data_file(DirectWriter *loader)
 {
 	if (loader->datafd != -1)
 	{
@@ -487,7 +521,7 @@ close_data_file(DirectLoader *loader)
  * @return void
  */
 static void
-UpdateLSF(DirectLoader *loader, BlockNumber num)
+UpdateLSF(DirectWriter *loader, BlockNumber num)
 {
 	int			ret;
 	LoadStatus *ls = &loader->ls;
@@ -507,7 +541,7 @@ UpdateLSF(DirectLoader *loader, BlockNumber num)
 }
 
 static void
-UnlinkLSF(DirectLoader *loader)
+UnlinkLSF(DirectWriter *loader)
 {
 	if (loader->lsf_fd != -1)
 	{

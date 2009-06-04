@@ -4,21 +4,25 @@
 #    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
+	parser_binary.c \
+	parser_csv.c \
+	parser_tuple.c \
 	pg_btree.c \
 	pg_bulkload.c \
-	pg_heap_buffered.c \
-	pg_heap_direct.c \
-	pg_input_csv.c \
-	pg_input_fixed.c \
 	pg_strutil.c \
 	reader.c \
-	writer.c \
-	pgut/pgut-be.c
+	source.c \
+	writer_buffered.c \
+	writer_direct.c \
+	writer_parallel.c \
+	pgut/pgut-be.c \
+	pgut/pgut-ipc.c
 OBJS = $(SRCS:.c=.o)
 MODULE_big = pg_bulkload
 DATA_built = pg_bulkload.sql
 DATA = uninstall_pg_bulkload.sql 
-PG_CPPFLAGS = -I../include
+PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
+SHLIB_LINK = $(libpq)
 
 ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))

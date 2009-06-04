@@ -1,5 +1,5 @@
 /*
- * pg_bulkload: lib/pg_input_fixed.c
+ * pg_bulkload: lib/parser_binary.c
  *
  *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
@@ -21,17 +21,17 @@
 #include "reader.h"
 
 typedef struct Field	Field;
-typedef Datum (*Read)(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+typedef Datum (*Read)(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
 
-static Datum Read_char(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_varchar(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int16(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int32(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int64(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint16(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint32(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float4(Reader *rd, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float8(Reader *rd, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_char(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_varchar(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int16(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int32(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_int64(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_uint16(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_uint32(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_float4(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
+static Datum Read_float8(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
 
 /**
  * @brief  The number of records read at one time
@@ -95,16 +95,18 @@ ALIASES[] =
 
 struct Field
 {
-	Read	read;		/**< reader of the field */
+	Read	read;		/**< parse function of the field */
 	int		offset;		/**< offset from head */
 	int		len;		/**< byte length of the field */
 	char   *nullif;		/**< null pattern, if any */
 	int		nulllen;	/**< length of nullif */
 };
 
-typedef struct FixedParser
+typedef struct BinaryParser
 {
 	Parser	base;
+
+	TupleFormer	former;
 
 	int		rec_len;			/**< One record length */
 	char   *record_buf;			/**< Record buffer to keep input data */
@@ -115,29 +117,29 @@ typedef struct FixedParser
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
 	int		nfield;				/**< number of fields */
 	Field  *fields;				/**< array of field descriptor */
-} FixedParser;
+} BinaryParser;
 
 /*
  * Prototype declaration for local functions
  */
-static void	FixedParserInit(FixedParser *self, Reader *rd);
-static bool	FixedParserRead(FixedParser *self, Reader *rd);
-static void	FixedParserTerm(FixedParser *self);
-static bool FixedParserParam(FixedParser *self, const char *keyword, char *value);
+static void	BinaryParserInit(BinaryParser *self, TupleDesc desc);
+static HeapTuple BinaryParserRead(BinaryParser *self, Source *source);
+static void	BinaryParserTerm(BinaryParser *self);
+static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
 
-static void ExtractValuesFromFixed(FixedParser *self, Reader *rd, char *record);
+static void ExtractValuesFromFixed(BinaryParser *self, char *record);
 
 /**
  * @brief Create a new CSV parser.
  */
 Parser *
-CreateFixedParser(void)
+CreateBinaryParser(void)
 {
-	FixedParser* self = palloc0(sizeof(FixedParser));
-	self->base.init = (ParserInitProc) FixedParserInit;
-	self->base.read = (ParserReadProc) FixedParserRead;
-	self->base.term = (ParserTermProc) FixedParserTerm;
-	self->base.param = (ParserParamProc) FixedParserParam;
+	BinaryParser *self = palloc0(sizeof(BinaryParser));
+	self->base.init = (ParserInitProc) BinaryParserInit;
+	self->base.read = (ParserReadProc) BinaryParserRead;
+	self->base.term = (ParserTermProc) BinaryParserTerm;
+	self->base.param = (ParserParamProc) BinaryParserParam;
 	return (Parser *)self;
 }
 
@@ -152,11 +154,11 @@ CreateFixedParser(void)
  * @return void
  * @note Return to caller by ereport() if the number of fields in the table
  * definition is not correspond to the number of fields in input file.
- * @note Caller must release the resource by calling FixedParserTerm() after calling this
+ * @note Caller must release the resource by calling BinaryParserTerm() after calling this
  * function.
  */
 static void
-FixedParserInit(FixedParser *self, Reader *rd)
+BinaryParserInit(BinaryParser *self, TupleDesc desc)
 {
 	int		i;
 	int		maxlen;
@@ -172,7 +174,8 @@ FixedParserInit(FixedParser *self, Reader *rd)
 	 * Error if the number of valid fields is not equal to the number of
 	 * fields
 	 */
-	if (rd->ci_attnumcnt != self->nfield)
+	TupleFormerInit(&self->former, desc);
+	if (self->former.nfields != self->nfield)
 		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
 						errmsg("invalid field count (%d)", self->nfield)));
 
@@ -192,23 +195,25 @@ FixedParserInit(FixedParser *self, Reader *rd)
 			errmsg("STRIDE should be %d or greater (%d given)", maxlen, self->rec_len)));
 	self->record_buf = palloc(self->rec_len * READ_LINE_NUM + 1);
 
+#ifdef FIXME
 	/* Skip first ci_offset lines in the input file */
-	if (rd->ci_offset > 0)
+	if (self->former.ci_offset > 0)
 	{
 		long	skipbytes;
 
-		skipbytes = rd->ci_offset * self->rec_len;
+		skipbytes = self->former.ci_offset  *self->rec_len;
 
-		if (skipbytes > fseek(rd->ci_infd, 0, SEEK_END) ||
-			skipbytes != fseek(rd->ci_infd, skipbytes, SEEK_SET))
+		if (skipbytes > fseek(self->former.ci_infd, 0, SEEK_END) ||
+			skipbytes != fseek(self->former.ci_infd, skipbytes, SEEK_SET))
 		{
 			if (errno == 0)
 				errno = EINVAL;
 			ereport(ERROR, (errcode_for_file_access(),
 							errmsg("could not skip " int64_FMT " lines (%ld bytes) in the input file: %m",
-							rd->ci_offset, skipbytes)));
+							self->former.ci_offset, skipbytes)));
 		}
 	}
+#endif
 }
 
 /**
@@ -221,12 +226,13 @@ FixedParserInit(FixedParser *self, Reader *rd)
  * @return void
  */
 static void
-FixedParserTerm(FixedParser *self)
+BinaryParserTerm(BinaryParser *self)
 {
 	if (self->record_buf)
 		pfree(self->record_buf);
 	if (self->fields)
 		pfree(self->fields);
+	TupleFormerTerm(&self->former);
 	pfree(self);
 }
 
@@ -249,8 +255,8 @@ FixedParserTerm(FixedParser *self)
  * @param rd [in/out] Control information
  * @return	Return true if there is a next record, or false if EOF.
  */
-static bool
-FixedParserRead(FixedParser *self, Reader *rd)
+static HeapTuple
+BinaryParserRead(BinaryParser *self, Source *source)
 {
 	char	   *record;
 
@@ -263,7 +269,7 @@ FixedParserRead(FixedParser *self, Reader *rd)
 		int		len;
 		div_t	v;
 
-		while ((len = SourceRead(rd, self->record_buf,
+		while ((len = SourceRead(source, self->record_buf,
 						self->rec_len * READ_LINE_NUM)) < 0)
 		{
 			if (errno != EAGAIN && errno != EINTR)
@@ -283,13 +289,13 @@ FixedParserRead(FixedParser *self, Reader *rd)
 		self->used_rec_cnt = 0;
 
 		if (self->total_rec_cnt <= 0)
-			return false;	/* eof */
+			return NULL;	/* eof */
 
 		record = self->record_buf;
 	}
 	else
 	{
-		record = self->record_buf + (self->rec_len * self->used_rec_cnt);
+		record = self->record_buf + (self->rec_len  *self->used_rec_cnt);
 		record[0] = self->next_head;	/* restore the head */
 	}
 
@@ -299,11 +305,12 @@ FixedParserRead(FixedParser *self, Reader *rd)
 	 */
 	self->next_head = record[self->rec_len];
 	self->used_rec_cnt++;
-	rd->ci_read_cnt++;
+	self->base.count++;
 
-	ExtractValuesFromFixed(self, rd, record);
+	ExtractValuesFromFixed(self, record);
+	self->base.parsing_field = 0;
 
-	return true;
+	return TupleFormerForm(&self->former);
 }
 
 /*
@@ -576,7 +583,7 @@ ParseFormat(const char *value, Field *field)
 }
 
 static bool
-FixedParserParam(FixedParser *self, const char *keyword, char *value)
+BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 {
 	if (pg_strcasecmp(keyword, "COL") == 0)
 	{
@@ -626,20 +633,18 @@ FixedParserParam(FixedParser *self, const char *keyword, char *value)
 
 /* Read null-terminated string and convert to internal format */
 static Datum
-ReadCString(Reader *rd, const char *in, int idx)
+ReadCString(TupleFormer *former, const char *in, int idx)
 {
-	Form_pg_attribute *attrs = RelationGetDescr(rd->ci_rel)->attrs;
-
-	return FunctionCall3(&rd->ci_in_functions[idx],
+	return FunctionCall3(&former->typInput[idx],
         CStringGetDatum(in),
-        ObjectIdGetDatum(rd->ci_typeioparams[idx]),
-        Int32GetDatum(attrs[idx]->atttypmod));
+        ObjectIdGetDatum(former->typIOParam[idx]),
+        Int32GetDatum(former->desc->attrs[idx]->atttypmod));
 }
 
 #define IsWhiteSpace(c)	((c) == ' ' || (c) == '\0')
 
 static Datum
-Read_char(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
+Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
 	const int	len = field->len;
@@ -661,7 +666,7 @@ Read_char(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
 		in[k + 1] = '\0';
 
 		*isnull = false;
-		value = ReadCString(rd, in, idx);
+		value = ReadCString(former, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -669,7 +674,7 @@ Read_char(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
 }
 
 static Datum
-Read_varchar(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
+Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
 	const int	len = field->len;
@@ -685,7 +690,7 @@ Read_varchar(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
 	else
 	{
 		*isnull = false;
-		value = ReadCString(rd, in, idx);
+		value = ReadCString(former, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -720,7 +725,7 @@ Read_varchar(Reader *rd, char *in, const Field* field, int idx, bool *isnull)
  */
 #define DefineRead(T) \
 static Datum \
-Read_##T(Reader *rd, char *in, const Field* field, int idx, bool *isnull) \
+Read_##T(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull) \
 { \
 	char	str[32]; \
 	T		v; \
@@ -732,7 +737,7 @@ Read_##T(Reader *rd, char *in, const Field* field, int idx, bool *isnull) \
 	} \
 	memcpy(&v, in, sizeof(v)); \
 	*isnull = false; \
-	switch (RelationGetDescr(rd->ci_rel)->attrs[idx]->atttypid) \
+	switch (former->desc->attrs[idx]->atttypid) \
 	{ \
 	case INT2OID: \
 		return Int16GetDatum((int16)v); \
@@ -748,7 +753,7 @@ Read_##T(Reader *rd, char *in, const Field* field, int idx, bool *isnull) \
 		return DirectFunctionCall1(T##_numeric, T##_GetDatum(v)); \
 	default: \
 		snprintf(str, lengthof(str), T##_FMT, v); \
-		return ReadCString(rd, str, idx); \
+		return ReadCString(former, str, idx); \
 	} \
 }
 
@@ -786,22 +791,22 @@ DefineRead(float8)
  * @note If error occurs, return to the caller by ereport().
  */
 static void
-ExtractValuesFromFixed(FixedParser *self, Reader *rd, char *record)
+ExtractValuesFromFixed(BinaryParser *self, char *record)
 {
 	int			i;
-	Form_pg_attribute *attrs = RelationGetDescr(rd->ci_rel)->attrs;
+	Form_pg_attribute *attrs = self->former.desc->attrs;
 
 	/*
 	 * Loop for fields in the input file
 	 */
 	for (i = 0; i < self->nfield; i++)
 	{
-		int			j = rd->ci_attnumlist[i];	/* Index of physical fields */
+		int			j = self->former.attnum[i];	/* Index of physical fields */
 		bool		isnull;
 		Datum		value;
 
-		rd->ci_parsing_field = i + 1;	/* ci_parsing_field is 1 origin */
-		value = self->fields[i].read(rd,
+		self->base.parsing_field = i + 1;	/* 1 origin */
+		value = self->fields[i].read(&self->former,
 			record + self->fields[i].offset, &self->fields[i], j, &isnull);
 
 		/* Check NOT NULL constraint. */
@@ -811,7 +816,7 @@ ExtractValuesFromFixed(FixedParser *self, Reader *rd, char *record)
 				 errmsg("null value in column \"%s\" violates not-null constraint",
 					  NameStr(attrs[j]->attname))));
 
-		rd->ci_isnull[j] = isnull;
-		rd->ci_values[j] = value;
+		self->former.isnull[j] = isnull;
+		self->former.values[j] = value;
 	}
 }

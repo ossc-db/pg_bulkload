@@ -16,9 +16,19 @@
 #include "access/nbtree.h"
 #include "nodes/execnodes.h"
 
+typedef struct Spooler
+{
+	BTSpool		  **spools;		/**< index spool */
+	ResultRelInfo  *relinfo;	/**<  */
+	EState		   *estate;		/**<  */
+	TupleTableSlot *slot;		/**<  */
+	ON_DUPLICATE	on_duplicate;
+	bool			use_wal;
+} Spooler;
+
 /* External declarations */
-extern BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo);
-extern void	IndexSpoolEnd(BTSpool **spools, ResultRelInfo *relinfo, bool reindex, bool use_wal, ON_DUPLICATE on_duplicate);
-extern void	IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex);
+extern void SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal);
+extern void SpoolerClose(Spooler *self);
+extern void SpoolerInsert(Spooler *self, HeapTuple tuple);
 
 #endif   /* BTREE_H */
