@@ -33,9 +33,13 @@
 
 #ifdef WIN32
 typedef HANDLE	ShmemHandle;
+
+static void win32_shmemName(char *name, size_t len, unsigned key)
+{
+	snprintf(name, len, "pg_bulkload_%u", key);
+}
 #else
 typedef int		ShmemHandle;
-#define DEFAULT_SHMEM_KEY			0xBEEF	/* FIXME */
 #endif
 
 typedef struct QueueHeader
@@ -55,56 +59,99 @@ struct Queue
 };
 
 Queue *
-QueueCreate(const char *path, uint32 size)
+QueueCreate(unsigned *key, uint32 size)
+{
+	Queue		   *self;
+	ShmemHandle		handle;
+	QueueHeader	   *header;
+	unsigned		shmemKey;
+#ifdef WIN32
+	char	shmemName[MAX_PATH];
+#endif
+
+retry:
+	shmemKey = (getpid() << 16 | (unsigned) rand());
+
+#ifdef WIN32
+	win32_shmemName(shmemName, lengthof(shmemName), shmemKey);
+
+	handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, size, shmemName);
+	if (handle == NULL)
+	{
+		if (GetLastError() == ERROR_ALREADY_EXISTS)
+		{
+			/* conflicted. retry. */
+			goto retry;
+		}
+		elog(ERROR, "CreateFileMapping(%s) failed: errcode=%lu", shmemName, GetLastError());
+	}
+
+	header = MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	if (header == NULL)
+		elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
+#else
+	handle = shmget(shmemKey, size, IPC_CREAT | IPC_EXCL | 0600);
+	if (handle < 0)
+	{
+		if (errno == EEXIST || errno == EACCES
+#ifdef EIDRM
+			|| errno == EIDRM
+#endif
+		)
+		{
+			/* conflicted. retry. */
+			goto retry;
+		}
+		elog(ERROR, "shmget(id=%d) failed: %m", shmemKey);
+	}
+
+	header = shmat(handle, NULL, PG_SHMAT_FLAGS);
+	if (header == (void *) -1)
+		elog(ERROR, "shmat(id=%d) failed: %m", shmemKey);
+#endif
+
+	*key = shmemKey;
+	header->size = size;
+	header->begin = header->end = 0;
+	SpinLockInit(&header->mutex);
+
+	self = palloc(sizeof(Queue));
+	self->handle = handle;
+	self->header = header;
+	self->size = header->size;
+	return self;
+}
+
+Queue *
+QueueOpen(unsigned key)
 {
 	Queue		   *self;
 	ShmemHandle		handle;
 	QueueHeader	   *header;
 
-	if (size > 0)
-	{
 #ifdef WIN32
-		handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, size, path);
-		if (handle == NULL)
-			elog(ERROR, "CreateFileMapping(%s) failed: errcode=%lu", path, GetLastError());
+	char	shmemName[MAX_PATH];
 
-		header = MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-		if (header == NULL)
-			elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
+	win32_shmemName(shmemName, lengthof(shmemName), key);
+
+	handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, shmemName);
+	if (handle == NULL)
+		elog(ERROR, "OpenFileMapping(%s) failed: errcode=%lu", shmemName, GetLastError());
+
+	header = MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	if (header == NULL)
+		elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
 #else
-		handle = shmget(DEFAULT_SHMEM_KEY, size, IPC_CREAT | IPC_EXCL | 0600);
-		if (handle < 0)
-			elog(ERROR, "shmget(id=%d) failed: %m", DEFAULT_SHMEM_KEY);
+	handle = shmget(shmemKey, sizeof(QueueHeader), 0);
+	if (handle < 0)
+		elog(ERROR, "shmget(id=%d) failed: %m", shmemKey);
 
-		header = shmat(handle, NULL, PG_SHMAT_FLAGS);
-		if (header == (void *) -1)
-			elog(ERROR, "shmat(id=%d) failed: %m", DEFAULT_SHMEM_KEY);
+	header = shmat(handle, NULL, PG_SHMAT_FLAGS);
+	if (header == NULL)
+		elog(ERROR, "shmat(id=%d) failed: %m", shmemKey);
 #endif
 
-		header->size = size;
-		header->begin = header->end = 0;
-		SpinLockInit(&header->mutex);
-	}
-	else
-	{
-#ifdef WIN32
-		handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, path);
-		if (handle == NULL)
-			elog(ERROR, "OpenFileMapping(%s) failed: errcode=%lu", path, GetLastError());
-
-		header = MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-		if (header == NULL)
-			elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
-#else
-		handle = shmget(DEFAULT_SHMEM_KEY, sizeof(QueueHeader), 0);
-		if (handle < 0)
-			elog(ERROR, "shmget(id=%d) failed: %m", DEFAULT_SHMEM_KEY);
-
-		header = shmat(handle, NULL, PG_SHMAT_FLAGS);
-		if (header == NULL)
-			elog(ERROR, "shmat(id=%d) failed: %m", DEFAULT_SHMEM_KEY);
-#endif
-	}
+	/* TODO: check magic number in header here */
 
 	self = palloc(sizeof(Queue));
 	self->handle = handle;
@@ -188,19 +235,24 @@ retry:
 }
 
 /*
- * Write length and buffer. (sizeof(len) + len) bytes are written.
  * TODO: do memcpy out of spinlock.
  */
 bool
-QueueWrite(Queue *self, const void *buffer, uint32 len, uint32 timeout_msec)
+QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec)
 {
 	volatile QueueHeader *header = self->header;
 	char   *data = (char *) header->data;
+	char   *dst;
 	uint32	size = self->size;
 	uint32	begin;
 	uint32	end;
-	uint32	total = sizeof(len) + len;
+	uint32	total;
 	uint32	sleep_msec = 0;
+	int		i;
+
+	total = 0;
+	for (i = 0; i < count; i++)
+		total += iov[i].iov_len;
 
 	if (total > size)
 		elog(ERROR, "write length is too large");
@@ -209,13 +261,17 @@ retry:
 	SpinLockAcquire(&header->mutex);
 	begin = header->begin;
 	end = header->end;
+	dst = data + end;
 
 	if (begin > end)
 	{
 		if (end + total <= begin)
 		{
-			memcpy(data + end, &len, sizeof(len));
-			memcpy(data + end + sizeof(len), buffer, len);
+			for (i = 0; i < count; i++)
+			{
+				memcpy(dst, iov[i].iov_base, iov[i].iov_len);
+				dst += iov[i].iov_len;
+			}
 			header->end += total;
 			SpinLockRelease(&header->mutex);
 			return true;
@@ -226,30 +282,43 @@ retry:
 		if (end + total <= size)
 		{
 			/* both continuous */
-			memcpy(data + end, &len, sizeof(len));
-			memcpy(data + end + sizeof(len), buffer, len);
-			header->end += total;
-		}
-		else if (end + sizeof(len) <= size)
-		{
-			/* len is continuous & buffer is split */
-			uint32	first = size - sizeof(len) - end;
-			uint32	second = len - first;
-			memcpy(data + end, &len, sizeof(len));
-			memcpy(data + end + sizeof(len), buffer, first);
-			memcpy(data, ((const char *) buffer) + first, second);
-			header->end = second;
+			for (i = 0; i < count; i++)
+			{
+				memcpy(dst, iov[i].iov_base, iov[i].iov_len);
+				dst += iov[i].iov_len;
+			}
 		}
 		else
 		{
-			/* len is split & buffer is coninuous */
-			uint32	first = size - end;
-			uint32	second = sizeof(len) - first;
-			memcpy(data + end, &len, first);
-			memcpy(data, ((const char *) &len) + first, second);
-			memcpy(data + second, buffer, len);
-			header->end = second + len;
+			uint32	head;
+			uint32	tail = size - end;
+
+			/* first half */
+			for (i = 0; i < count && iov[i].iov_len <= tail; i++)
+			{
+				memcpy(dst, iov[i].iov_base, iov[i].iov_len);
+				dst += iov[i].iov_len;
+				tail -= iov[i].iov_len;
+			}
+
+			/* split element */
+			if (i < count)
+			{
+				head = iov[i].iov_len - tail;
+				memcpy(dst, iov[i].iov_base, tail);
+				memcpy(data, ((const char *) iov[i].iov_base) + tail, head);
+				dst = data + head;
+				i++;
+			}
+
+			/* second half */
+			for (; i < count; i++)
+			{
+				memcpy(dst, iov[i].iov_base, iov[i].iov_len);
+				dst += iov[i].iov_len;
+			}
 		}
+		header->end = dst - data;
 		SpinLockRelease(&header->mutex);
 		return true;
 	}

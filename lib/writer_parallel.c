@@ -46,7 +46,8 @@ static void write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 l
 Writer *
 CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 {
-	char		pipename[MAXPGPATH] = "pg_bulkload";
+	unsigned	queryKey;
+	char		queueName[MAXPGPATH];
 	char		port[32];
 	char	   *relname;
 	const char *params[3];
@@ -65,7 +66,8 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 	relname = get_relation_name(relid);
 
 	/* create self */
-	self->queue = QueueCreate(pipename, DEFAULT_BUFFER_SIZE);
+	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
+	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
 	/* connect to localhost */
 	self->conn = PQsetdbLogin(
@@ -84,7 +86,7 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 	}
 
 	/* async query send */
-	params[0] = pipename;
+	params[0] = queueName;
 	params[1] = relname;
 	params[2] = ON_DUPLICATE_NAMES[on_duplicate];
 	if (1 != PQsendQueryParams(self->conn,
@@ -116,7 +118,6 @@ ParallelWriterClose(ParallelWriter *self)
 		if (self->queue)
 		{
 			PGresult *rs;
-			elog(LOG, "ParallelWriterClose");
 			write_queue(self->conn, self->queue, NULL, 0);
 
 			while ((rs = PQgetResult(self->conn)) == NULL)
@@ -173,15 +174,22 @@ get_relation_name(Oid relid)
 static void
 write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
 {
+	struct iovec	iov[2];
+
 	AssertArg(conn != NULL);
 	AssertArg(queue != NULL);
 	AssertArg(len == 0 || buffer != NULL);
+
+	iov[0].iov_base = &len;
+	iov[0].iov_len = sizeof(len);
+	iov[1].iov_base = (void *) buffer;
+	iov[1].iov_len = len;
 
 	for (;;)
 	{
 		PGresult *rs;
 
-		if (QueueWrite(queue, buffer, len, DEFAULT_TIMEOUT_MSEC))
+		if (QueueWrite(queue, iov, 2, DEFAULT_TIMEOUT_MSEC))
 			return;
 
 		if ((rs = PQgetResult(conn)) != NULL)

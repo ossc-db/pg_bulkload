@@ -79,7 +79,10 @@ ReaderOpen(Reader *rd, const char *fname, const char *options)
 	rel = heap_open(rd->relid, NoLock);
 	desc = RelationGetDescr(rel);
 
-	/* open source */
+	/*
+	 * open source
+	 */
+
 	if (pg_strcasecmp(rd->infile, "stdin") == 0)
 	{
 		if (whereToSendOutput != DestRemote)
@@ -89,9 +92,10 @@ ReaderOpen(Reader *rd, const char *fname, const char *options)
 
 		rd->source = CreateRemoteSource(NULL, desc);
 	}
-	else if (strcmp(rd->infile, "pg_bulkload") == 0)
+	else if (rd->infile[0] == ':')
 	{
-		rd->source = CreateMemorySource("pg_bulkload", desc);
+		/* shmem id in ":NNNN" form */
+		rd->source = CreateQueueSource(rd->infile, desc);
 	}
 	else
 	{

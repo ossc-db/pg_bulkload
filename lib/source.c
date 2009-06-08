@@ -49,43 +49,49 @@ static size_t RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len);
 static void RemoteSourceClose(RemoteSource *self);
 
 /* ========================================================================
- * MemorySource
+ * QueueSource
  * ========================================================================*/
 
-typedef struct MemorySource
+typedef struct QueueSource
 {
 	Source	base;
 
-	Queue *self;
-} MemorySource;
+	Queue  *queue;
+} QueueSource;
 
-static size_t MemorySourceRead(MemorySource *self, void *buffer, size_t len);
-static void MemorySourceClose(MemorySource *self);
+static size_t QueueSourceRead(QueueSource *self, void *buffer, size_t len);
+static void QueueSourceClose(QueueSource *self);
 
 Source *
-CreateMemorySource(const char *path, TupleDesc desc)
+CreateQueueSource(const char *path, TupleDesc desc)
 {
-	MemorySource *self = palloc0(sizeof(MemorySource));
-	self->base.read = (SourceReadProc) MemorySourceRead;
-	self->base.close = (SourceCloseProc) MemorySourceClose;
+	unsigned	key;
+	char		junk[2];
 
-	self->self = QueueCreate(path, 0);
-	if (self->self == NULL)
-		elog(ERROR, "MemorySource: %s not found", path);
+	QueueSource *self = palloc0(sizeof(QueueSource));
+	self->base.read = (SourceReadProc) QueueSourceRead;
+	self->base.close = (SourceCloseProc) QueueSourceClose;
+
+	if (sscanf(path, ":%u%1s", &key, junk) != 1)
+		elog(ERROR, "invalid shmem key format: %s", path);
+
+	self->queue = QueueOpen(key);
+	if (self->queue == NULL)
+		elog(ERROR, "QueueSource: %s not found", path);
 
 	return (Source *) self;
 }
 
 static size_t
-MemorySourceRead(MemorySource *self, void *buffer, size_t len)
+QueueSourceRead(QueueSource *self, void *buffer, size_t len)
 {
-	return QueueRead(self->self, buffer, len);
+	return QueueRead(self->queue, buffer, len);
 }
 
 static void
-MemorySourceClose(MemorySource *self)
+QueueSourceClose(QueueSource *self)
 {
-	QueueClose(self->self);
+	QueueClose(self->queue);
 	pfree(self);
 }
 
@@ -104,6 +110,10 @@ CreateFileSource(const char *path, TupleDesc desc)
 	if (self->fd == NULL)
 		ereport(ERROR, (errcode_for_file_access(),
 			errmsg("could not open \"%s\" %m", path)));
+
+#if defined(USE_POSIX_FADVISE)
+	posix_fadvise(fileno(self->fd), 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE | POSIX_FADV_WILLNEED);
+#endif
 
 	return (Source *) self;
 }
@@ -137,7 +147,7 @@ FileSourceClose(FileSource *self)
  * RemoteSource
  * ========================================================================*/
 
-#define IsBinaryCopy(rd)	(false)
+#define IsBinaryCopy()	(false)
 
 Source *
 CreateRemoteSource(const char *path, TupleDesc desc)
@@ -163,7 +173,7 @@ CreateRemoteSource(const char *path, TupleDesc desc)
 			nattrs++;
 		}
 
-		format = (IsBinaryCopy(rd) ? 1 : 0);
+		format = (IsBinaryCopy() ? 1 : 0);
 		pq_beginmessage(&buf, 'G');
 		pq_sendbyte(&buf, format);		/* overall format */
 		pq_sendint(&buf, nattrs, 2);
@@ -177,7 +187,7 @@ CreateRemoteSource(const char *path, TupleDesc desc)
 		self->base.read = (SourceReadProc) RemoteSourceReadOld;
 
 		/* old way */
-		if (IsBinaryCopy(rd))
+		if (IsBinaryCopy())
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			errmsg("COPY BINARY is not supported to stdout or from stdin")));
@@ -188,7 +198,7 @@ CreateRemoteSource(const char *path, TupleDesc desc)
 		self->base.read = (SourceReadProc) RemoteSourceReadOld;
 
 		/* very old way */
-		if (IsBinaryCopy(rd))
+		if (IsBinaryCopy())
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			errmsg("COPY BINARY is not supported to stdout or from stdin")));

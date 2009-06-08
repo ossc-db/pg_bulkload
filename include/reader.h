@@ -33,7 +33,7 @@ struct Source
 
 extern Source *CreateRemoteSource(const char *path, TupleDesc desc);
 extern Source *CreateFileSource(const char *path, TupleDesc desc);
-extern Source *CreateMemorySource(const char *path, TupleDesc desc);
+extern Source *CreateQueueSource(const char *path, TupleDesc desc);
 
 #define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))
 #define SourceClose(self)				((self)->close((self)))
@@ -82,7 +82,7 @@ struct Reader
 	int64		ci_limit;			/**< max input lines */
 	int			ci_max_err_cnt;		/**< max error admissible number */
 
-	WriterCreate	writer;		/**< writer factory */
+	WriterCreate	writer;			/**< writer factory */
 	ON_DUPLICATE	on_duplicate;
 
 	/*
