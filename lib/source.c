@@ -11,6 +11,7 @@
 
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
+#include "catalog/pg_type.h"
 #include "storage/fd.h"
 
 #include "reader.h"
@@ -74,10 +75,7 @@ CreateQueueSource(const char *path, TupleDesc desc)
 
 	if (sscanf(path, ":%u%1s", &key, junk) != 1)
 		elog(ERROR, "invalid shmem key format: %s", path);
-
 	self->queue = QueueOpen(key);
-	if (self->queue == NULL)
-		elog(ERROR, "QueueSource: %s not found", path);
 
 	return (Source *) self;
 }
@@ -294,7 +292,37 @@ RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len)
 }
 
 static void
+SendResultDescriptionMessage(Oid typid, int16 typlen, int32 typmod)
+{
+	int			proto = PG_PROTOCOL_MAJOR(FrontendProtocol);
+	StringInfoData buf;
+
+	pq_beginmessage(&buf, 'T'); /* tuple descriptor message type */
+	pq_sendint(&buf, 1, 2); /* # of attrs in tuples */
+
+	pq_sendstring(&buf, "pg_bulkload");
+	/* column ID info appears in protocol 3.0 and up */
+	if (proto >= 3)
+	{
+		pq_sendint(&buf, 0, 4);
+		pq_sendint(&buf, 0, 2);
+	}
+	/* If column is a domain, send the base type and typmod instead */
+	pq_sendint(&buf, typid, sizeof(Oid));
+	pq_sendint(&buf, typlen, sizeof(int16));
+	/* typmod appears in protocol 2.0 and up */
+	if (proto >= 2)
+		pq_sendint(&buf, typmod, sizeof(int32));
+	/* format info appears in protocol 3.0 and up */
+	if (proto >= 3)
+		pq_sendint(&buf, 0, 2);
+
+	pq_endmessage(&buf);
+}
+
+static void
 RemoteSourceClose(RemoteSource *self)
 {
+	SendResultDescriptionMessage(INT8OID, 8, -1);
 	pfree(self);
 }

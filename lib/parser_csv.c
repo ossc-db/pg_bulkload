@@ -443,6 +443,7 @@ CSVParserRead(CSVParser *self, Source *source)
 
 			ret = SourceRead(source, self->rec_buf + self->used_len,
 								self->buf_len - self->used_len - 1);
+			elog(LOG, "SourceRead(%u bytes)", ret);
 			if (ret == 0)
 			{
 				self->eof = true;
@@ -630,7 +631,8 @@ CSVParserRead(CSVParser *self, Source *source)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("missing data for column \"%s\"",
-							   NameStr(self->former.desc->attrs[self->former.attnum[fetched_num]]->attname))));
+							   NameStr(self->former.desc->attrs[self->former.attnum[fetched_num]]->attname)),
+						errdetail("only %d columns, required %d", fetched_num, self->former.nfields)));
 	}
 
 	ExtractValuesFromCSV(self);

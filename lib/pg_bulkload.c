@@ -148,9 +148,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	/* open writer - TODO: pass wt and on_duplicate from parser is ugly. */
 	wt = rd.writer(rd.relid, rd.on_duplicate);
 
-	/* no contfile errors. start bulkloading */
-	elog(NOTICE, "BULK LOAD START");
-
 	BULKLOAD_PROFILE(&prof_init);
 
 	/*
@@ -197,9 +194,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	/*
 	 * STEP 4: Postprocessing
 	 */
-
-	/* Write end log. */
-	elog(NOTICE, "BULK LOAD END (" int64_FMT " records)", count);
 
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();

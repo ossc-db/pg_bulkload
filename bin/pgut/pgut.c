@@ -290,6 +290,7 @@ execute_elevel(const char *query, int nParams, const char **params, int elevel)
 	{
 		case PGRES_TUPLES_OK:
 		case PGRES_COMMAND_OK:
+		case PGRES_COPY_IN:
 			break;
 		default:
 			elog(elevel, "query failed: %squery was: %s",

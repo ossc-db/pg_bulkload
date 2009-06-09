@@ -13,6 +13,7 @@
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
 
+#include <assert.h>
 #include <getopt.h>
 
 #if !defined(C_H) && !defined(__cplusplus)
