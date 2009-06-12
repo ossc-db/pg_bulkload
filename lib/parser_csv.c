@@ -15,8 +15,9 @@
 #include "access/htup.h"
 #include "utils/rel.h"
 
-#include "pg_strutil.h"
 #include "reader.h"
+#include "pg_strutil.h"
+#include "pg_profile.h"
 
 /**
  * @brief Initial size of the record buffer and the field buffer.
@@ -402,9 +403,9 @@ CSVParserRead(CSVParser *self, Source *source)
 			 * record delimiter is found in the record buffer, we extend the record
 			 * buffer.
 			 * - When the current line starts at the beginning of the record buffer,
-			 *	 ->Buffer size is doubled and more data is read.
+			 *	 -> Buffer size is doubled and more data is read.
 			 * - The current line is not at the begenning of the record buffer,
-			 *	 ->Move the current line to the beginning of the record buffer and continue to read.
+			 *	 -> Move the current line to the beginning of the record buffer and continue to read.
 			 */
 			if (cur != self->rec_buf)
 			{
@@ -441,9 +442,10 @@ CSVParserRead(CSVParser *self, Source *source)
 				cur = self->rec_buf;
 			}
 
+			BULKLOAD_PROFILE(&prof_reader_parser);
 			ret = SourceRead(source, self->rec_buf + self->used_len,
 								self->buf_len - self->used_len - 1);
-			elog(LOG, "SourceRead(%u bytes)", ret);
+			BULKLOAD_PROFILE(&prof_reader_source);
 			if (ret == 0)
 			{
 				self->eof = true;
@@ -541,9 +543,10 @@ CSVParserRead(CSVParser *self, Source *source)
 		else
 		{
 			/*
-			 * If a valid character is found at the begenning of the current line, the self->next
-			 * record exists and increment the number of records to read.  The beginning
-			 * of the record must not be a quote mark and we can test this here.
+			 * If a valid character is found at the begenning of the current
+			 * line, the self->next record exists and increment the number of
+			 * records to read.  The beginning of the record must not be a
+			 * quote mark and we can test this here.
 			 */
 			if (i == cur - self->rec_buf)
 				self->base.count++;

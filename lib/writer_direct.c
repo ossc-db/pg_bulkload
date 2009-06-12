@@ -230,7 +230,7 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	/* Compress the tuple data if needed. */
 	if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
 		tuple = toast_insert_or_update(self->rel, tuple, NULL, 0);
-	BULKLOAD_PROFILE(&prof_heap_toast);
+	BULKLOAD_PROFILE(&prof_writer_toast);
 
 	/* Assign oids if needed. */
 	if (self->rel->rd_rel->relhasoids)

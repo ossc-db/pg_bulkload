@@ -16,6 +16,7 @@
 #include "utils/rel.h"
 
 #include "reader.h"
+#include "pg_profile.h"
 
 typedef struct TupleParser
 {
@@ -73,6 +74,7 @@ TupleParserRead(TupleParser *self, Source *source)
 {
 	uint32		len;
 
+	BULKLOAD_PROFILE(&prof_reader_parser);
 	if (SourceRead(source, &len, sizeof(uint32)) == sizeof(uint32) && len > 0)
 	{
 		if (self->buflen < len)
@@ -82,6 +84,7 @@ TupleParserRead(TupleParser *self, Source *source)
 		}
 		if (SourceRead(source, self->buffer, len) == len)
 		{
+			BULKLOAD_PROFILE(&prof_reader_source);
 			self->tuple.t_len = len;
 			self->tuple.t_data = (HeapTupleHeader) self->buffer;
 			return &self->tuple;

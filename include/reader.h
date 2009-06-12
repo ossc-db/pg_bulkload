@@ -7,7 +7,6 @@
 /**
  * @file
  * @brief Declaration of reader module
- *
  */
 #ifndef READER_H_INCLUDED
 #define READER_H_INCLUDED
@@ -31,8 +30,8 @@ struct Source
 	SourceCloseProc		close;	/** close */
 };
 
-extern Source *CreateRemoteSource(const char *path, TupleDesc desc);
 extern Source *CreateFileSource(const char *path, TupleDesc desc);
+extern Source *CreateRemoteSource(const char *path, TupleDesc desc);
 extern Source *CreateQueueSource(const char *path, TupleDesc desc);
 
 #define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))

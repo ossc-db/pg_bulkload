@@ -7,48 +7,41 @@
 /**
  * @file
  * @brief Macro definition for profiling
+ * Usage: make USE_PROFILE=1
  */
 #ifndef PROFILE_H_INCLUDED
 #define PROFILE_H_INCLUDED
-
-/*
-#define ENABLE_BULKLOAD_PROFILE
-*/
 
 /* Profiling routine */
 #ifdef ENABLE_BULKLOAD_PROFILE
 #include "portability/instr_time.h"
 
-/**
- * @brief Keep timestamp at the last BULKLOAD_PROFILE() finishing point
- */
 extern instr_time *prof_top;
 
-extern instr_time prof_heap_read;
-extern instr_time prof_heap_toast;
-extern instr_time prof_heap_table;
-extern instr_time prof_heap_index;
+extern instr_time prof_merge;
+extern instr_time prof_index;
+extern instr_time prof_reindex;
 
-extern instr_time prof_index_merge;
-extern instr_time prof_index_reindex;
+extern instr_time prof_reader_source;
+extern instr_time prof_reader_parser;
 
-extern instr_time prof_index_merge_flush;
-extern instr_time prof_index_merge_build;
+extern instr_time prof_writer_toast;
+extern instr_time prof_writer_table;
+extern instr_time prof_writer_index;
 
-extern instr_time prof_index_merge_build_init;
-extern instr_time prof_index_merge_build_unique;
-extern instr_time prof_index_merge_build_insert;
-extern instr_time prof_index_merge_build_term;
-extern instr_time prof_index_merge_build_flush;
+extern instr_time prof_flush;
+extern instr_time prof_merge_unique;
+extern instr_time prof_merge_insert;
+extern instr_time prof_merge_term;
 
 /**
  * @brief Record profile information
  */
-#define BULKLOAD_PROFILE(total) \
+#define BULKLOAD_PROFILE(name) \
 	do { \
 		instr_time now; \
 		INSTR_TIME_SET_CURRENT(now); \
-		INSTR_TIME_ACCUM_DIFF(*(total), now, *prof_top); \
+		INSTR_TIME_ACCUM_DIFF(*(name), now, *prof_top); \
 		*prof_top = now; \
 	} while (0);
 #define BULKLOAD_PROFILE_PUSH() \

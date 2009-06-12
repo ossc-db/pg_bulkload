@@ -118,11 +118,7 @@ SpoolerClose(Spooler *self)
 {
 	/* Merge indexes */
 	if (self->spools != NULL)
-	{
-		BULKLOAD_PROFILE_PUSH();
 		IndexSpoolEnd(self->spools, self->relinfo, true, self->use_wal, self->on_duplicate);
-		BULKLOAD_PROFILE_POP();
-	}
 
 	/* Terminate spooler. */
 	ExecDropSingleTupleTableSlot(self->slot);
@@ -137,7 +133,7 @@ SpoolerInsert(Spooler *self, HeapTuple tuple)
 	/* Spool keys in the tuple */
 	ExecStoreTuple(tuple, self->slot, InvalidBuffer, false);
 	IndexSpoolInsert(self->spools, self->slot, &(tuple->t_self), self->estate, true);
-	BULKLOAD_PROFILE(&prof_heap_index);
+	BULKLOAD_PROFILE(&prof_writer_index);
 }
 
 /*
@@ -189,11 +185,8 @@ IndexSpoolEnd(BTSpool **spools,
 	{
 		if (spools[i] != NULL)
 		{
-			BULKLOAD_PROFILE_PUSH();
 			_bt_mergebuild(spools[i], relinfo->ri_RelationDesc, use_wal, on_duplicate);
-			BULKLOAD_PROFILE_POP();
 			_bt_spooldestroy(spools[i]);
-			BULKLOAD_PROFILE(&prof_index_merge);
 		}
 		else if (reindex)
 		{
@@ -204,7 +197,7 @@ IndexSpoolEnd(BTSpool **spools,
 			indices[i] = NULL;
 			reindex_index(indexOid);
 			CommandCounterIncrement();
-			BULKLOAD_PROFILE(&prof_index_reindex);
+			BULKLOAD_PROFILE(&prof_reindex);
 		}
 		else
 		{
@@ -344,7 +337,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on
 	 */
 	LockRelation(wstate.index, AccessExclusiveLock);
 	FlushRelationBuffers(wstate.index);
-	BULKLOAD_PROFILE(&prof_index_merge_flush);
+	BULKLOAD_PROFILE(&prof_flush);
 
 	merge = BTReaderInit(&reader, wstate.index);
 
@@ -360,16 +353,16 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on
 		BULKLOAD_PROFILE_PUSH();
 		_bt_mergeload(&wstate, btspool, &reader, heapRel, on_duplicate);
 		BULKLOAD_PROFILE_POP();
+		BULKLOAD_PROFILE(&prof_merge);
 	}
 	else
 	{
 		/* Fast path for newly created index. */
 		_bt_load(&wstate, btspool, NULL);
+		BULKLOAD_PROFILE(&prof_index);
 	}
 
 	BTReaderTerm(&reader);
-
-	BULKLOAD_PROFILE(&prof_index_merge_build);
 }
 
 /*
@@ -394,8 +387,6 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
 	indexScanKey = _bt_mkscankey_nodata(wstate->index);
-
-	BULKLOAD_PROFILE(&prof_index_merge_build_init);
 
 	for (;;)
 	{
@@ -496,7 +487,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 				itup2 = BTReaderGetNextItem(btspool2);
 			}
 		}
-		BULKLOAD_PROFILE(&prof_index_merge_build_unique);
+		BULKLOAD_PROFILE(&prof_merge_unique);
 
 		/* When we see first tuple, create first index page */
 		if (state == NULL)
@@ -512,13 +503,12 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 			_bt_buildadd(wstate, state, itup2);
 			itup2 = BTReaderGetNextItem(btspool2);
 		}
-		BULKLOAD_PROFILE(&prof_index_merge_build_insert);
+		BULKLOAD_PROFILE(&prof_merge_insert);
 	}
 	_bt_freeskey(indexScanKey);
 
 	/* Close down final pages and write the metapage */
 	_bt_uppershutdown(wstate, state);
-	BULKLOAD_PROFILE(&prof_index_merge_build_term);
 
 	/*
 	 * If the index isn't temp, we must fsync it down to disk before it's safe
@@ -540,7 +530,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 		RelationOpenSmgr(wstate->index);
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
-	BULKLOAD_PROFILE(&prof_index_merge_build_flush);
+	BULKLOAD_PROFILE(&prof_merge_term);
 }
 
 static IndexTuple

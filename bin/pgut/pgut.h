@@ -52,6 +52,7 @@ extern const char  *port;
 extern const char  *username;
 extern bool			password;
 extern bool			debug;
+extern bool			quiet;
 
 extern PGconn	   *connection;
 extern bool			interrupted;

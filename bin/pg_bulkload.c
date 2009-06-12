@@ -27,9 +27,6 @@ const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 /** @brief Database cluster directory. */
 const char *DataDir = NULL;
 
-/** @Flag in quiet mode? */
-bool		quiet = false;
-
 /** @Flag do recovery, or bulkload */
 static bool		recovery = false;
 
@@ -112,7 +109,6 @@ const struct option pgut_options[] =
 	{"pgdata", required_argument, NULL, 'D'},
 	{"infile", required_argument, NULL, 'i'},
 	{"recovery", no_argument, NULL, 'r'},
-	{"quiet", no_argument, NULL, 'q'},
 	{"silent", no_argument, NULL, 's'},	/* same as 'q'.*/
 	{"option", required_argument, NULL, 'o'},
 	{NULL, 0, NULL, 0}
@@ -133,8 +129,7 @@ pgut_argument(int c, const char *arg)
 			break;
 		case 'D':
 			return assign_option(&DataDir, c, arg);
-		case 'q':
-		case 's':
+		case 's':	/* for backward compatibility; use quiet instead */
 			quiet = true;
 			break;
 		case 'i':
@@ -173,10 +168,7 @@ pgut_help(void)
 		"\n"
 		"Recovery options:\n"
 		"  -r, --recovery            execute recovery\n"
-		"  -D, --pgdata=DATADIR      database directory\n"
-		"\n"
-		"Common options:\n"
-		"  -q, --quiet               don't write any messages\n",
+		"  -D, --pgdata=DATADIR      database directory\n",
 		PROGRAM_NAME, PROGRAM_NAME, PROGRAM_NAME);
 }
 
@@ -204,8 +196,7 @@ LoaderLoadMain(void)
 
 	reconnect();
 
-	if (!quiet)
-		elog(NOTICE, "BULK LOAD START");
+	elog(NOTICE, "BULK LOAD START");
 
 	command("BEGIN", 0, NULL);
 	res = execute("SELECT pg_bulkload($1, $2)", 2, params);
@@ -218,8 +209,7 @@ LoaderLoadMain(void)
 	}
 	command("COMMIT", 0, NULL);
 
-	if (!quiet)
-		elog(NOTICE, "BULK LOAD END (%s records)", PQgetvalue(res, 0, 0));
+	elog(NOTICE, "BULK LOAD END (%s records)", PQgetvalue(res, 0, 0));
 	PQclear(res);
 
 	disconnect();

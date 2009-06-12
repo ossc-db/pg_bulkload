@@ -40,7 +40,6 @@
  */
 
 extern const char  *DataDir;
-extern bool			quiet;
 
 /*
  * Prototypes
@@ -180,10 +179,9 @@ StartLoaderRecovery(void)
 			/*
 			 * XXX :need to store relaion name?
 			 */
-			if (!quiet)
-				elog(NOTICE,
-					 "Starting pg_bulkload recovery for file \"%s\"",
-					 lsfname);
+			elog(NOTICE,
+				 "Starting pg_bulkload recovery for file \"%s\"",
+				 lsfname);
 
 			/*
 			 * overwrite pages created by the loader by blank pages
@@ -192,10 +190,9 @@ StartLoaderRecovery(void)
 							ls.ls.exist_cnt,
 							ls.ls.exist_cnt + ls.ls.create_cnt);
 
-			if (!quiet)
-				elog(NOTICE,
-					 "Ended pg_bulkload recovery for file \"%s\"",
-					 lsfname);
+			elog(NOTICE,
+				 "Ended pg_bulkload recovery for file \"%s\"",
+				 lsfname);
 		}
 
 		/*
@@ -206,15 +203,13 @@ StartLoaderRecovery(void)
 				 "could not delete loadstatus file \"%s\" : %s",
 				 lsfpath, strerror(errno));
 
-		if (!quiet)
-			elog(NOTICE, "delete loadstatus file \"%s\"", lsfname);
+		elog(NOTICE, "delete loadstatus file \"%s\"", lsfname);
 	}
 
 	list_free_deep(lsflist);
 
-	if (!quiet)
-		elog(NOTICE, "recovered all relations");
-	return;						/* revocery process successfully terminated, */
+	/* revocery process succeeded */
+	elog(NOTICE, "recovered all relations");
 }
 
 

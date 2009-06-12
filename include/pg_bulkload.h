@@ -19,24 +19,25 @@
  * Source -> Parser -> Writer
  * |              |
  * +--------------+
- *     Reader
+ *      Reader
  * |                        |
  * +------------------------+
  *           Loader
  *
  * Source:
- *  - RemoteSource
- *  - FileSource (also used as PipeSource)
+ *  - FileSource   : from local file
+ *  - RemoteSource : from remote client using copy protocol
+ *  - QueueSource  : from another process
  *
  * Parser:
- *  - BinaryParser (known as FixedParser before)
- *  - CSVParser
- *  - TupleParser (almost noop)
+ *  - BinaryParser : known as FixedParser before
+ *  - CSVParser    : csv file
+ *  - TupleParser  : almost noop
  *
  * Writer:
- *  - BufferedWriter
- *  - DirectLoader
- *  - ParallelWriter
+ *  - BufferedWriter : to file using shared buffers
+ *  - DirectLoader   : to file using local buffers
+ *  - ParallelWriter : to another process
  *
  *-------------------------------------------------------------------------
  */
@@ -54,7 +55,7 @@ typedef enum ON_DUPLICATE
 
 extern const char *ON_DUPLICATE_NAMES[3];
 
-typedef Source *(*SourceCreate)(const char *path);
+typedef Source *(*SourceCreate)(const char *path, TupleDesc desc);
 typedef Parser *(*ParserCreate)(void);
 typedef Writer *(*WriterCreate)(Oid relid, ON_DUPLICATE on_duplicate);
 

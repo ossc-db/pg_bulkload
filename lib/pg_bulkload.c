@@ -40,29 +40,39 @@ extern void _PG_fini(void);
 static instr_time prof_init;
 static instr_time prof_reader;
 static instr_time prof_writer;
-static instr_time prof_reader_close;
-static instr_time prof_writer_close;
+instr_time prof_flush;
+instr_time prof_merge;
+instr_time prof_index;
+instr_time prof_reindex;
 
-instr_time prof_reader_read;
-instr_time prof_reader_parse;
+instr_time prof_reader_source;
+instr_time prof_reader_parser;
 
 instr_time prof_writer_toast;
 instr_time prof_writer_table;
 instr_time prof_writer_index;
 
-instr_time prof_index_merge;
-instr_time prof_index_reindex;
-
-instr_time prof_index_merge_flush;
-instr_time prof_index_merge_build;
-
-instr_time prof_index_merge_build_init;
-instr_time prof_index_merge_build_unique;
-instr_time prof_index_merge_build_insert;
-instr_time prof_index_merge_build_term;
-instr_time prof_index_merge_build_flush;
+instr_time prof_merge_unique;
+instr_time prof_merge_insert;
+instr_time prof_merge_term;
 
 instr_time *prof_top;
+
+static void
+print_profiles(const char *title, int n, const char *names[], const double seconds[])
+{
+	int		i;
+	double	sum;
+
+	for (sum = 0, i = 0; i < n; i++)
+		sum += seconds[i];
+	if (sum == 0)
+		sum = 1;	/* avoid division by zero */
+
+	elog(INFO, "<%s>", title);
+	for (i = 0; i < n; i++)
+		elog(INFO, "  %-8s: %.7f (%6.2f%%)", names[i], seconds[i], seconds[i] / sum * 100.0);
+}
 
 /**
  * @brief Output the result of profile check.
@@ -70,28 +80,43 @@ instr_time *prof_top;
 static void
 BULKLOAD_PROFILE_PRINT()
 {
-	elog(INFO, "<GLOBAL>");
-	elog(INFO, "  INIT   : %.7f", INSTR_TIME_GET_DOUBLE(prof_init));
-	elog(INFO, "  READER : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader));
-	elog(INFO, "  WRITER : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer));
-	elog(INFO, "  MERGE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_close));
-	elog(INFO, "<READER>");
-	elog(INFO, "  READ   : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader_read));
-	elog(INFO, "  PARSE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_reader_parse));
-	elog(INFO, "<WRITER>");
-	elog(INFO, "  TOAST  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_toast));
-	elog(INFO, "  TABLE  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_table));
-	elog(INFO, "  INDEX  : %.7f", INSTR_TIME_GET_DOUBLE(prof_writer_index));
-	elog(INFO, "<MERGE>");
-	elog(INFO, "  MERGE      : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge));
-	elog(INFO, "    FLUSH    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_flush));
-	elog(INFO, "    BUILD    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build));
-	elog(INFO, "      INIT   : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_init));
-	elog(INFO, "      UNIQUE : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_unique));
-	elog(INFO, "      INSERT : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_insert));
-	elog(INFO, "      TERM   : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_term));
-	elog(INFO, "      FLUSH  : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_merge_build_flush));
-	elog(INFO, "  REINDEX    : %.7f", INSTR_TIME_GET_DOUBLE(prof_index_reindex));
+	int		i;
+	double	seconds[10];
+	const char *GLOBALs[] = { "INIT", "READER", "WRITER", "FLUSH", "MERGE", "INDEX", "REINDEX" };
+	const char *READERs[] = { "SOURCE", "PARSER" };
+	const char *WRITERs[] = { "TOAST", "TABLE", "INDEX" };
+	const char *MERGEs[] = { "UNIQUE", "INSERT", "TERM" };
+
+	/* GLOBAL */
+	i = 0;
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_init);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reader);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_writer);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_flush);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_merge);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_index);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reindex);
+	print_profiles("GLOBAL", i, GLOBALs, seconds);
+
+	/* READER */
+	i = 0;
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reader_source);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reader_parser);
+	print_profiles("READER", i, READERs, seconds);
+
+	/* WRITER */
+	i = 0;
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_writer_toast);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_writer_table);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_writer_index);
+	print_profiles("WRITER", i, WRITERs, seconds);
+
+	/* MERGE */
+	i = 0;
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_merge_unique);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_merge_insert);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_merge_term);
+	print_profiles("MERGE", i, MERGEs, seconds);
 }
 #else
 #define BULKLOAD_PROFILE_PRINT()	((void) 0)
@@ -145,7 +170,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	/* open reader - TODO: split reader and controlfile parser. */
 	ReaderOpen(&rd, path, options);
 
-	/* open writer - TODO: pass wt and on_duplicate from parser is ugly. */
+	/* open writer - TODO: pass relid and on_duplicate from parser is ugly. */
 	wt = rd.writer(rd.relid, rd.on_duplicate);
 
 	BULKLOAD_PROFILE(&prof_init);
@@ -165,14 +190,19 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		CHECK_FOR_INTERRUPTS();
 
-		if ((tuple = ReaderNext(&rd)) == NULL)
-			break;
+		/* read tuple */
+		BULKLOAD_PROFILE_PUSH();
+		tuple = ReaderNext(&rd);
+		BULKLOAD_PROFILE_POP();
 		BULKLOAD_PROFILE(&prof_reader);
+		if (tuple == NULL)
+			break;
 
-		/* Insert the heap tuple and index entries. */
+		/* write tuple */
+		BULKLOAD_PROFILE_PUSH();
 		WriterInsert(wt, tuple);
 		wt->count += 1;
-
+		BULKLOAD_PROFILE_POP();
 		BULKLOAD_PROFILE(&prof_writer);
 
 		MemoryContextReset(wt->context);
@@ -180,20 +210,13 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(ctx);
 
-	ReaderClose(&rd);
-	BULKLOAD_PROFILE(&prof_reader_close);
-
 	/*
 	 * STEP 3: Finalize heap and merge indexes
 	 */
 
+	ReaderClose(&rd);
 	count = wt->count;
 	WriterClose(wt);
-	BULKLOAD_PROFILE(&prof_writer_close);
-
-	/*
-	 * STEP 4: Postprocessing
-	 */
 
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();

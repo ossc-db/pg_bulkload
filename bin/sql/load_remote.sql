@@ -1,6 +1,6 @@
 TRUNCATE customer;
 
-\! pg_bulkload -d contrib_regression data/csv.ctl -i stdin < data/data1.csv
+\! pg_bulkload -d contrib_regression data/csv.ctl -o"delimiter=|" -i stdin < data/data1.csv
 
 SET enable_seqscan = on;
 SET enable_indexscan = off;

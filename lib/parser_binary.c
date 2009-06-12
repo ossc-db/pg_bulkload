@@ -17,8 +17,9 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
-#include "pg_strutil.h"
 #include "reader.h"
+#include "pg_strutil.h"
+#include "pg_profile.h"
 
 typedef struct Field	Field;
 typedef Datum (*Read)(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
@@ -269,6 +270,7 @@ BinaryParserRead(BinaryParser *self, Source *source)
 		int		len;
 		div_t	v;
 
+		BULKLOAD_PROFILE(&prof_reader_parser);
 		while ((len = SourceRead(source, self->record_buf,
 						self->rec_len * READ_LINE_NUM)) < 0)
 		{
@@ -276,6 +278,7 @@ BinaryParserRead(BinaryParser *self, Source *source)
 				ereport(ERROR, (errcode_for_file_access(),
 								errmsg("could not read input file: %m")));
 		}
+		BULKLOAD_PROFILE(&prof_reader_source);
 
 		/*
 		 * Calculate the actual number of rows. Trailing remainder bytes

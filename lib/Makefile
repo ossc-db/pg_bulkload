@@ -28,6 +28,10 @@ ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
 
+ifdef USE_PROFILE
+PG_CPPFLAGS += -DENABLE_BULKLOAD_PROFILE
+endif
+
 ifdef USE_PGXS
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)

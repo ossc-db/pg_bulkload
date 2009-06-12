@@ -22,6 +22,7 @@ const char *port = NULL;
 const char *username = NULL;
 bool		password = false;
 bool		debug = false;
+bool		quiet = false;
 
 /* Database connections */
 PGconn	   *connection = NULL;
@@ -45,6 +46,7 @@ const struct option default_options[] =
 	{"dbname", required_argument, NULL, 'd'},
 	{"host", required_argument, NULL, 'h'},
 	{"port", required_argument, NULL, 'p'},
+	{"quiet", no_argument, NULL, 'q'},
 	{"username", required_argument, NULL, 'U'},
 	{"password", no_argument, NULL, 'W'},
 	{"debug", no_argument, NULL, '!'},
@@ -135,6 +137,9 @@ parse_options(int argc, char **argv)
 			break;
 		case 'p':
 			assign_option(&port, c, optarg);
+			break;
+		case 'q':
+			quiet = true;
 			break;
 		case 'U':
 			assign_option(&username, c, optarg);
@@ -330,6 +335,8 @@ elog(int elevel, const char *fmt, ...)
 
 	if (!debug && elevel <= LOG)
 		return;
+	if (quiet && elevel <= WARNING)
+		return;
 
 	switch (elevel)
 	{
@@ -482,6 +489,7 @@ static void help(void)
 	fprintf(stderr, "  -U, --username=USERNAME   user name to connect as\n");
 	fprintf(stderr, "  -W, --password            force password prompt\n");
 	fprintf(stderr, "\nGeneric options:\n");
+	fprintf(stderr, "  -q, --quiet               don't write any messages\n");
 	fprintf(stderr, "  --debug                   debug mode\n");
 	fprintf(stderr, "  --help                    show this help, then exit\n");
 	fprintf(stderr, "  --version                 output version information, then exit\n\n");
