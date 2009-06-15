@@ -40,10 +40,8 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv.ctl -i data/data2.csv -o "WRITER=PARALLEL"
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  reader failed
-DETAIL:  ERROR:  duplicate key value violates unique constraint "customer_pkey"
+ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
 DETAIL:  Key (c_w_id,c_d_id,c_id)=(0,225,16777225) already exists.
-
 query was: SELECT pg_bulkload($1, $2)
 SET enable_seqscan = on;
 SET enable_indexscan = off;
@@ -81,6 +79,7 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv.ctl -i data/data2.csv -o "WRITER=PARALLEL" -o "ON_DUPLICATE=REMOVE_OLD"
 NOTICE: BULK LOAD START
+WARNING:  duplicate tuple removed: (16777225,225,0,"DUP-1           ",AA,AAAAAAAAAAAAAAAA,"c_street_1          ","c_street_2          ",AAAAAAAAAAAAAAAAAAAA,AA,AAAAAAAAA,AAAAAAAAAAAAAAAA,"Sun Jan 01 12:34:56 2006",AA,12345.6789,12345.6789,12345.6789,12345.6789,12345.7,12345.6789,123456789012345678)
 NOTICE: BULK LOAD END (10 records)
 SET enable_seqscan = on;
 SET enable_indexscan = off;

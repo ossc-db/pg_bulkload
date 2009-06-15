@@ -192,6 +192,7 @@ ParseBoolean(const char *value, bool defaultValue)
 {
 	if (value == NULL || value[0] == '\0')
 		return defaultValue;
+	/* XXX: use parse_bool() instead? */
 	return DatumGetBool(DirectFunctionCall1(boolin, CStringGetDatum(value)));
 }
 
@@ -203,8 +204,8 @@ ParseSingleChar(const char *value)
 {
 	if (strlen(value) != 1)
 		ereport(ERROR,
-			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("must be a single character \"%s\"", value)));
+		(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("must be a single one-byte character: \"%s\"", value)));
 	return value[0];
 }
 

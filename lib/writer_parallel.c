@@ -11,8 +11,10 @@
 #include "access/heapam.h"
 #include "access/xact.h"
 #include "commands/dbcommands.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
@@ -38,6 +40,7 @@ static void	ParallelWriterClose(ParallelWriter *self);
 static const char *finish_and_get_message(PGconn *conn);
 static char *get_relation_name(Oid relid);
 static void write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len);
+static void transfer_message(void *arg, const PGresult *res);
 
 /* ========================================================================
  * Implementation
@@ -85,6 +88,22 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 				 errdetail("%s", finish_and_get_message(self->conn))));
 	}
 
+	/*
+	 * set configuration parameters.
+	 * FIXME: do we need more settings?
+	 */
+	do
+	{
+		char	sql[1024];
+		snprintf(sql, lengthof(sql), "SET client_encoding = '%s'", pg_encoding_to_char(GetDatabaseEncoding()));
+		PQexec(self->conn, sql);
+		snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle"));
+		PQexec(self->conn, sql);
+	} while(0);
+
+	/* set message receiver */
+	PQsetNoticeReceiver(self->conn, transfer_message, NULL);
+
 	/* async query send */
 	params[0] = queueName;
 	params[1] = relname;
@@ -117,26 +136,23 @@ ParallelWriterClose(ParallelWriter *self)
 		/* terminate with zero */
 		if (self->queue)
 		{
-			PGresult *rs;
+			PGresult *res;
 			write_queue(self->conn, self->queue, NULL, 0);
 
-			while ((rs = PQgetResult(self->conn)) == NULL)
+			while ((res = PQgetResult(self->conn)) == NULL)
 			{
 				CHECK_FOR_INTERRUPTS();
 				pg_usleep(DEFAULT_TIMEOUT_MSEC);
 			}
 
-			if (PQresultStatus(rs) != PGRES_TUPLES_OK)
+			if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			{
-				PQclear(rs);
-				ereport(ERROR,
-					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-					 errmsg("reader failed"),
-					 errdetail("%s", finish_and_get_message(self->conn))));
+				PQfinish(self->conn);
+				transfer_message(NULL, res);
 			}
 
-			self->base.count = ParseInt64(PQgetvalue(rs, 0, 0), 0);
-			PQclear(rs);
+			self->base.count = ParseInt64(PQgetvalue(res, 0, 0), 0);
+			PQclear(res);
 		}
 
 		PQfinish(self->conn);
@@ -187,14 +203,14 @@ write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
 
 	for (;;)
 	{
-		PGresult *rs;
+		PGresult *res;
 
 		if (QueueWrite(queue, iov, 2, DEFAULT_TIMEOUT_MSEC))
 			return;
 
-		if ((rs = PQgetResult(conn)) != NULL)
+		if ((res = PQgetResult(conn)) != NULL)
 		{
-			PQclear(rs);
+			PQclear(res);
 			/* TODO: free queue's mmap object. */
 			ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
@@ -204,4 +220,55 @@ write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
 
 		/* retry */
 	}
+}
+
+static void
+transfer_message(void *arg, const PGresult *res)
+{
+	int	elevel;
+	int	code;
+	const char *severity = PQresultErrorField(res, PG_DIAG_SEVERITY);
+	const char *state = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+	const char *message = PQresultErrorField(res, PG_DIAG_MESSAGE_PRIMARY);
+	const char *detail = PQresultErrorField(res, PG_DIAG_MESSAGE_DETAIL);
+	if (detail && !detail[0])
+		detail = NULL;
+
+	switch (severity[0])
+	{
+		case 'D':
+			elevel = DEBUG2;
+			break;
+		case 'L':
+			elevel = LOG;
+			break;
+		case 'I':
+			elevel = INFO;
+			break;
+		case 'N':
+			elevel = NOTICE;
+			break;
+		case 'E':
+		case 'F':
+			elevel = ERROR;
+			break;
+		default:
+			elevel = WARNING;
+			break;
+	}
+	code = MAKE_SQLSTATE(state[0], state[1], state[2], state[3], state[4]);
+
+	if (elevel >= ERROR)
+	{
+		if (message)
+			message = pstrdup(message);
+		if (detail)
+			detail = pstrdup(detail);
+		PQclear((PGresult *) res);
+	}
+
+	ereport(elevel,
+			(errcode(code),
+			 errmsg("%s", message),
+			 (detail ? errdetail("%s", detail) : 0)));
 }
