@@ -428,10 +428,6 @@ flush_pages(DirectWriter *loader)
 			int	len = write(loader->datafd, buffer + written, total);
 			if (len == -1)
 			{
-				/*
-				 * TODO: retry if recoverable error
-				 */
-
 				/* fatal error, do not want to write blocks anymore */
 				ereport(ERROR, (errcode_for_file_access(),
 								errmsg("could not write to data file: %m")));

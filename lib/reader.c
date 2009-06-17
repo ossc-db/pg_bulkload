@@ -69,9 +69,8 @@ ReaderOpen(Reader *rd, const char *fname, const char *options)
 	TupleDesc	desc;
 
 	memset(rd, 0, sizeof(Reader));
-	rd->ci_max_err_cnt = -1;
-	rd->ci_offset = -1;
-	rd->ci_limit = INT64_MAX;
+	rd->max_err_cnt = -1;
+	rd->limit = INT64_MAX;
 
 	ParseControlFile(rd, fname, options);
 
@@ -275,18 +274,13 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 	}
 	else if (pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
 	{
-		ASSERT_ONCE(rd->ci_max_err_cnt < 0);
-		rd->ci_max_err_cnt = ParseInt32(target, 0);
-	}
-	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
-	{
-		ASSERT_ONCE(rd->ci_offset < 0);
-		rd->ci_offset = ParseInt64(target, 0);
+		ASSERT_ONCE(rd->max_err_cnt < 0);
+		rd->max_err_cnt = ParseInt32(target, 0);
 	}
 	else if (pg_strcasecmp(keyword, "LIMIT") == 0)
 	{
-		ASSERT_ONCE(rd->ci_limit == INT64_MAX);
-		rd->ci_limit = ParseInt64(target, 0);
+		ASSERT_ONCE(rd->limit == INT64_MAX);
+		rd->limit = ParseInt64(target, 0);
 	}
 	else if (pg_strcasecmp(keyword, "ON_DUPLICATE") == 0)
 	{
@@ -385,19 +379,14 @@ ParseControlFile(Reader *rd, const char *fname, const char *options)
 	 */
 	if (rd->writer == NULL)
 		rd->writer = CreateDirectWriter;
-	if (rd->ci_max_err_cnt < 0)
-		rd->ci_max_err_cnt = 0;
-	if (rd->ci_offset < 0)
-		rd->ci_offset = 0;
+	if (rd->max_err_cnt < 0)
+		rd->max_err_cnt = 0;
 }
 
 /**
  * @brief clean up Reader structure.
  *
- * Processing flow
- * -# close relation
- * -# free Reader structure
- * @param rd [in/out] control information
+ * @param rd [in/out] reader
  * @return void
  */
 void
@@ -406,41 +395,30 @@ ReaderClose(Reader *rd)
 	if (rd == NULL)
 		return;
 
-	/* Terminate parser. Be sure to set parser to NULL. */
+	/* Close and release members. */
 	if (rd->parser)
-	{
 		ParserTerm(rd->parser);
-		rd->parser = NULL;
-	}
-
-	/* Terminate source. Be sure to set source to NULL. */
 	if (rd->source)
-	{
 		SourceClose(rd->source);
-		rd->source = NULL;
-	}
+	if (rd->infile != NULL)
+		pfree(rd->infile);
 
-	/* If an error has been found, abort. */
-	if (rd->ci_err_cnt > 0)
+	/* Report error count and abort if limit exceeded. */
+	if (rd->errors > 0)
 	{
-		if (rd->ci_err_cnt > rd->ci_max_err_cnt)
+		if (rd->errors > rd->max_err_cnt)
 		{
 			ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("%d error(s) found in input file",
-						rd->ci_err_cnt)));
+				 errmsg("%d error(s) found in input file", rd->errors)));
 		}
 		else
 		{
 			ereport(WARNING,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("skip %d error(s) in input file",
-						rd->ci_err_cnt)));
+				 errmsg("skip %d error(s) in input file", rd->errors)));
 		}
 	}
-
-	if (rd->infile != NULL)
-		pfree(rd->infile);
 }
 
 /**
@@ -509,7 +487,7 @@ ReaderNext(Reader *rd)
 			}
 
 			/* Absorb general errors. */
-			rd->ci_err_cnt++;
+			rd->errors++;
 			if (errdata->message)
 				message = pstrdup(errdata->message);
 			else
@@ -522,7 +500,7 @@ ReaderNext(Reader *rd)
 					parser->count, parser->parsing_field, message)));
 
 			/* Terminate if MAX_ERR_CNT has been reached. */
-			if (rd->ci_err_cnt > rd->ci_max_err_cnt)
+			if (rd->errors > rd->max_err_cnt)
 				eof = true;
 		}
 		PG_END_TRY();

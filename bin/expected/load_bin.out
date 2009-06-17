@@ -1,14 +1,13 @@
 TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/bin.ctl -i data/data1.bin
-NOTICE:  BULK LOAD START
-NOTICE:  BULK LOAD END (10 records)
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END (8 records)
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
    c_id   | c_d_id | c_w_id | c_first | c_middle |      c_last      | c_street_1 |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance | c_ytd_payment | c_payment_cnt | c_delivery_cnt |                 c_data                  
 ----------+--------+--------+---------+----------+------------------+------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+-----------+---------------+---------------+----------------+-----------------------------------------
- 16777216 |    216 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777217 |    217 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777218 |    218 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777219 |    219 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -17,8 +16,7 @@ SELECT * FROM customer ORDER BY c_id;
  16777222 |    222 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777223 |    223 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777224 |    224 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777225 |    225 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
-(10 rows)
+(8 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
@@ -26,7 +24,6 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
    c_id   | c_d_id | c_w_id | c_first | c_middle |      c_last      | c_street_1 |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance | c_ytd_payment | c_payment_cnt | c_delivery_cnt |                 c_data                  
 ----------+--------+--------+---------+----------+------------------+------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+-----------+---------------+---------------+----------------+-----------------------------------------
- 16777216 |    216 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777217 |    217 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777218 |    218 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777219 |    219 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -35,19 +32,17 @@ SELECT * FROM customer ORDER BY c_id;
  16777222 |    222 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777223 |    223 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777224 |    224 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777225 |    225 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
-(10 rows)
+(8 rows)
 
 \! pg_bulkload -d contrib_regression data/bin.ctl -i data/data2.bin
-NOTICE:  BULK LOAD START
-NOTICE:  BULK LOAD END (10 records)
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END (8 records)
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
    c_id   | c_d_id | c_w_id | c_first | c_middle |      c_last      | c_street_1 |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance | c_ytd_payment | c_payment_cnt | c_delivery_cnt |                 c_data                  
 ----------+--------+--------+---------+----------+------------------+------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+-----------+---------------+---------------+----------------+-----------------------------------------
- 16777216 |    216 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777217 |    217 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777218 |    218 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777219 |    219 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -56,8 +51,6 @@ SELECT * FROM customer ORDER BY c_id;
  16777222 |    222 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777223 |    223 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777224 |    224 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777225 |    225 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777226 |    226 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777227 |    227 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777228 |    228 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777229 |    229 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -66,8 +59,7 @@ SELECT * FROM customer ORDER BY c_id;
  16777232 |    232 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777233 |    233 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777234 |    234 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777235 |    235 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
-(20 rows)
+(16 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
@@ -75,7 +67,6 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
    c_id   | c_d_id | c_w_id | c_first | c_middle |      c_last      | c_street_1 |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance | c_ytd_payment | c_payment_cnt | c_delivery_cnt |                 c_data                  
 ----------+--------+--------+---------+----------+------------------+------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+-----------+---------------+---------------+----------------+-----------------------------------------
- 16777216 |    216 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777217 |    217 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777218 |    218 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777219 |    219 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -84,8 +75,6 @@ SELECT * FROM customer ORDER BY c_id;
  16777222 |    222 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777223 |    223 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777224 |    224 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777225 |    225 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777226 |    226 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777227 |    227 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777228 |    228 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777229 |    229 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
@@ -94,6 +83,5 @@ SELECT * FROM customer ORDER BY c_id;
  16777232 |    232 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777233 |    233 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
  16777234 |    234 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
- 16777235 |    235 |      0 | ABCDEFG | AA       | AAAAAAAAAAAAAAAA | c_street_2 | c_street_1           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |        32768 |      12345 |     12345 |       12345.7 |       12345.7 |     12345.6789 | 123456789012345678901234567890123456789
-(20 rows)
+(16 rows)
 

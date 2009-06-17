@@ -8,11 +8,3 @@ SET search_path = public;
 
 DROP FUNCTION pg_bulkload(text);
 DROP FUNCTION pg_bulkload(text, text);
-
-DROP FUNCTION pg_bulkread(text);
-DROP FUNCTION pg_bulkread(text, text);
-DROP FUNCTION pg_bulkread(text, text, anyelement);
-
-DROP AGGREGATE pg_bulkwrite(regclass, record);
-DROP FUNCTION pg_bulkwrite_accum(internal, regclass, record);
-DROP FUNCTION pg_bulkwrite_finish(internal);

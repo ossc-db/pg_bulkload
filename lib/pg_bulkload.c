@@ -24,14 +24,8 @@
 PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(pg_bulkload);
-PG_FUNCTION_INFO_V1(pg_bulkread);
-PG_FUNCTION_INFO_V1(pg_bulkwrite_accum);
-PG_FUNCTION_INFO_V1(pg_bulkwrite_finish);
 
 Datum	pg_bulkload(PG_FUNCTION_ARGS);
-Datum	pg_bulkread(PG_FUNCTION_ARGS);
-Datum	pg_bulkwrite_accum(PG_FUNCTION_ARGS);
-Datum	pg_bulkwrite_finish(PG_FUNCTION_ARGS);
 
 extern void _PG_init(void);
 extern void _PG_fini(void);
@@ -167,10 +161,10 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	path = GETARG_CSTRING(0);
 	options = GETARG_CSTRING(1);
 
-	/* open reader - TODO: split reader and controlfile parser. */
+	/* TODO: split reader and controlfile parser. */
 	ReaderOpen(&rd, path, options);
 
-	/* open writer - TODO: pass relid and on_duplicate from parser is ugly. */
+	/* TODO: pass relid and on_duplicate from parser is ugly. */
 	wt = rd.writer(rd.relid, rd.on_duplicate);
 
 	BULKLOAD_PROFILE(&prof_init);
@@ -184,7 +178,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	ctx = MemoryContextSwitchTo(wt->context);
 
 	/* Loop for each input file record. */
-	while (wt->count < rd.ci_limit)
+	while (wt->count < rd.limit)
 	{
 		HeapTuple	tuple;
 
@@ -220,106 +214,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();
-
-	PG_RETURN_INT64(count);
-}
-
-/*
- * bulk reader
- */
-Datum
-pg_bulkread(PG_FUNCTION_ARGS)
-{
-	FuncCallContext	   *funcctx;
-	Reader			   *rd;
-	HeapTuple			tuple;
-
-	if (SRF_IS_FIRSTCALL())
-	{
-		MemoryContext	ctx;
-		TupleDesc		tupdesc;
-		char		   *path;
-		char		   *options;
-
-		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-			elog(ERROR, "return and sql tuple descriptions are incompatible");
-
-		funcctx = SRF_FIRSTCALL_INIT();
-
-		path = GETARG_CSTRING(0);
-		options = GETARG_CSTRING(1);
-
-		ctx = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-		rd = (Reader *) palloc(sizeof(Reader));
-		ReaderOpen(rd, path, options);
-		funcctx->user_fctx = rd;
-		MemoryContextSwitchTo(ctx);
-	}
-	else
-	{
-		funcctx = SRF_PERCALL_SETUP();
-		rd = funcctx->user_fctx;
-	}
-
-	/* read the next tuple and return it, or close reader. */
-	if (funcctx->call_cntr < rd->ci_limit && (tuple = ReaderNext(rd)) != NULL)
-		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-
-	/* done */
-	ReaderClose(rd);
-
-	SRF_RETURN_DONE(funcctx);
-}
-
-/*
- * Aggregation-based bulk writer - accumulator
- */
-Datum
-pg_bulkwrite_accum(PG_FUNCTION_ARGS)
-{
-	Writer		   *wt = (Writer *) PG_GETARG_POINTER(0);
-	Oid				relid = PG_GETARG_OID(1);
-	HeapTupleHeader htup = PG_GETARG_HEAPTUPLEHEADER(2);
-	HeapTupleData	tuple;
-
-	if (wt == NULL)
-	{
-		MemoryContext	ctx;
-
-		ctx = MemoryContextSwitchTo(fcinfo->flinfo->fn_mcxt);
-		wt = CreateBufferedWriter(relid, ON_DUPLICATE_ERROR);
-//			 CreateDirectWriter(relid);
-		MemoryContextSwitchTo(ctx);
-	}
-//	else if (RelationGetRelid(wt->rel) != relid)
-//		elog(ERROR, "relid cannot be changed");
-
-	/* Build a temporary HeapTuple control structure */
-	tuple.t_len = HeapTupleHeaderGetDatumLength(htup);
-	ItemPointerSetInvalid(&(tuple.t_self));
-	tuple.t_tableOid = InvalidOid;
-	tuple.t_data = htup;
-
-	WriterInsert(wt, &tuple);
-	wt->count += 1;
-
-	PG_RETURN_POINTER(wt);
-}
-
-/*
- * Aggregation-based bulk writer - finalizer
- */
-Datum
-pg_bulkwrite_finish(PG_FUNCTION_ARGS)
-{
-	Writer *wt = (Writer *) PG_GETARG_POINTER(0);
-	int64	count = 0;
-
-	if (wt)
-	{
-		count = wt->count;
-		WriterClose(wt);
-	}
 
 	PG_RETURN_INT64(count);
 }

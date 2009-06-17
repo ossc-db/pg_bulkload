@@ -32,6 +32,8 @@ typedef struct CSVParser
 
 	TupleFormer	former;
 
+	int64	offset;				/**< lines to skip */
+
 	/**
 	 * @brief Record Buffer.
 	 *
@@ -146,6 +148,7 @@ CreateCSVParser(void)
 	self->base.read = (ParserReadProc) CSVParserRead;
 	self->base.term = (ParserTermProc) CSVParserTerm;
 	self->base.param = (ParserParamProc) CSVParserParam;
+	self->offset = -1;
 	return (Parser *)self;
 }
 
@@ -170,6 +173,7 @@ CSVParserInit(CSVParser *self, TupleDesc desc)
 	self->quote = self->quote ? self->quote : '"';
 	self->escape = self->escape ? self->escape : '"';
 	self->null = self->null ? self->null : "";
+	self->offset = self->offset > 0 ? self->offset : 0;
 
 	/*
 	 * validation check
@@ -233,54 +237,6 @@ CSVParserInit(CSVParser *self, TupleDesc desc)
 	self->fields[0] = NULL;
 	self->null_len = strlen(self->null);
 	self->eof = false;
-
-	/* Skip first ci_offset lines in the input file */
-#ifdef FIXME
-	if (self->former.ci_offset > 0)
-	{
-#define LINEBUFLEN		1024
-		char	buffer[LINEBUFLEN];
-		int		len;
-		int		skipped = 0;
-		bool	inCR = false;
-
-		while ((len = SourceRead(self->former.source, buffer, LINEBUFLEN)) > 0)
-		{
-			int		i;
-
-			for (i = 0; i < len; i++)
-			{
-				if (buffer[i] == '\r')
-				{
-					if (i == len - 1)
-					{
-						inCR = true;
-						continue;
-					}
-					else if (buffer[i + 1] == '\n')
-						i++;
-				}
-				else if (!inCR && buffer[i] != '\n')
-					continue;
-
-				/* Skip the line */
-				inCR = false;
-				++skipped;
-				if (skipped >= self->former.ci_offset)
-				{
-					/* Seek to head of the next line. */
-					fseek(self->former.ci_infd, i - len + 1, SEEK_CUR);
-                    goto skip_done;
-				}
-			}
-		}
-		ereport(ERROR, (errcode_for_file_access(),
-			errmsg("could not skip " int64_FMT " lines in the input file: %m",
-				self->former.ci_offset)));
-skip_done:
-		;	/* done */
-	}
-#endif
 }
 
 /**
@@ -372,6 +328,54 @@ CSVParserRead(CSVParser *self, Source *source)
 	 */
 	if (self->eof)
 		return NULL;
+
+	/* Skip first offset lines in the input file */
+	if (unlikely(self->offset > 0))
+	{
+#define LINEBUFLEN		1024
+		int		len;
+		int		skipped = 0;
+		bool	inCR = false;
+
+		while ((len = SourceRead(source, self->rec_buf, self->buf_len - 1)) > 0)
+		{
+			int		i;
+
+			for (i = 0; i < len; i++)
+			{
+				if (self->rec_buf[i] == '\r')
+				{
+					if (i == len - 1)
+					{
+						inCR = true;
+						continue;
+					}
+					else if (self->rec_buf[i + 1] == '\n')
+						i++;
+				}
+				else if (!inCR && self->rec_buf[i] != '\n')
+					continue;
+
+				/* Skip the line */
+				inCR = false;
+				++skipped;
+				if (skipped >= self->offset)
+				{
+					/* Seek to head of the next line. */
+					self->next = self->rec_buf + i + 1;
+					self->used_len = len;
+					self->rec_buf[self->used_len] = '\0';
+					goto skip_done;
+				}
+			}
+		}
+		ereport(ERROR, (errcode_for_file_access(),
+			errmsg("could not skip " int64_FMT " lines in the input file: %m",
+				self->offset)));
+skip_done:
+		/* done */
+		self->offset = 0;
+	}
 
 	cur = self->next;
 
@@ -670,6 +674,11 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 	else if (pg_strcasecmp(keyword, "FORCE_NOT_NULL") == 0)
 	{
 		self->fnn_name = lappend(self->fnn_name, pstrdup(value));
+	}
+	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
+	{
+		ASSERT_ONCE(self->offset < 0);
+		self->offset = ParseInt64(value, 0);
 	}
 	else
 		return false;	/* unknown parameter */

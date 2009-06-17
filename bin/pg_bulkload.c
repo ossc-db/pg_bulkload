@@ -205,7 +205,7 @@ LoaderLoadMain(void)
 		PQclear(res);
 		res = RemoteLoad(connection, stdin, false);
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
-			elog(ERROR, "remote load failed: %s", PQerrorMessage(connection));
+			elog(ERROR, "copy failed: %s", PQerrorMessage(connection));
 	}
 	command("COMMIT", 0, NULL);
 

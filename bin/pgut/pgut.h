@@ -75,8 +75,9 @@ extern unsigned int sleep(unsigned int seconds);
  */
 #define IsSpace(c)		(isspace((unsigned char)(c)))
 #define IsAlpha(c)		(isalpha((unsigned char)(c)))
+#define IsAlnum(c)		(isalnum((unsigned char)(c)))
 #define IsIdentHead(c)	(IsAlpha(c) || (c) == '_')
-#define IsIdentBody(c)	(IsAlpha(c) || (c) == '_')
+#define IsIdentBody(c)	(IsAlnum(c) || (c) == '_')
 
 /*
  * elog

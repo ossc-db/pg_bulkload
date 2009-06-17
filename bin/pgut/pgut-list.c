@@ -525,8 +525,6 @@ list_copy_tail(List *oldlist, int nskip)
 /*
  * When using non-GCC compilers, we can't define these as inline
  * functions in pg_list.h, so they are defined here.
- *
- * TODO: investigate supporting inlining for some non-GCC compilers.
  */
 #ifndef __GNUC__
 

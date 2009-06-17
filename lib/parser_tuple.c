@@ -52,13 +52,6 @@ TupleParserInit(TupleParser *self, TupleDesc desc)
 {
 	self->buflen = BLCKSZ;
 	self->buffer = palloc(self->buflen);
-
-#if 0
-	/* Skip first ci_offset lines in the input file */
-	if (rd->ci_offset > 0)
-	{
-	}
-#endif
 }
 
 static void
@@ -97,5 +90,6 @@ TupleParserRead(TupleParser *self, Source *source)
 static bool
 TupleParserParam(TupleParser *self, const char *keyword, char *value)
 {
+	/* TupleParser does not support OFFSET */
 	return false;	/* no parameters supported */
 }

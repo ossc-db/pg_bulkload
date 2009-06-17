@@ -109,10 +109,12 @@ typedef struct BinaryParser
 
 	TupleFormer	former;
 
-	int		rec_len;			/**< One record length */
-	char   *record_buf;			/**< Record buffer to keep input data */
-	int		total_rec_cnt;		/**< # of records in record_buf */
-	int		used_rec_cnt;		/**< # of returned records in record_buf */
+	int64	offset;				/**< lines to skip */
+
+	size_t	rec_len;			/**< One record length */
+	char   *buffer;				/**< Record buffer to keep input data */
+	int		total_rec_cnt;		/**< # of records in buffer */
+	int		used_rec_cnt;		/**< # of returned records in buffer */
 	char	next_head;			/**< Preserved the head of next record */
 
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
@@ -141,6 +143,7 @@ CreateBinaryParser(void)
 	self->base.read = (ParserReadProc) BinaryParserRead;
 	self->base.term = (ParserTermProc) BinaryParserTerm;
 	self->base.param = (ParserParamProc) BinaryParserParam;
+	self->offset = -1;
 	return (Parser *)self;
 }
 
@@ -162,7 +165,12 @@ static void
 BinaryParserInit(BinaryParser *self, TupleDesc desc)
 {
 	int		i;
-	int		maxlen;
+	size_t	maxlen;
+
+	/*
+	 * set default values
+	 */
+	self->offset = self->offset > 0 ? self->offset : 0;
 
 	/*
 	 * checking necessary setting items for fixed length file
@@ -194,34 +202,14 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
 	else if (self->rec_len < maxlen)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			errmsg("STRIDE should be %d or greater (%d given)", maxlen, self->rec_len)));
-	self->record_buf = palloc(self->rec_len * READ_LINE_NUM + 1);
-
-#ifdef FIXME
-	/* Skip first ci_offset lines in the input file */
-	if (self->former.ci_offset > 0)
-	{
-		long	skipbytes;
-
-		skipbytes = self->former.ci_offset  *self->rec_len;
-
-		if (skipbytes > fseek(self->former.ci_infd, 0, SEEK_END) ||
-			skipbytes != fseek(self->former.ci_infd, skipbytes, SEEK_SET))
-		{
-			if (errno == 0)
-				errno = EINVAL;
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not skip " int64_FMT " lines (%ld bytes) in the input file: %m",
-							self->former.ci_offset, skipbytes)));
-		}
-	}
-#endif
+	self->buffer = palloc(self->rec_len * READ_LINE_NUM + 1);
 }
 
 /**
  * @brief Free the resources used in the reading fixed file module.
  *
  * Process flow
- * -# Release self->record_buf
+ * -# Release self->buffer
  *
  * @param void
  * @return void
@@ -229,8 +217,8 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
 static void
 BinaryParserTerm(BinaryParser *self)
 {
-	if (self->record_buf)
-		pfree(self->record_buf);
+	if (self->buffer)
+		pfree(self->buffer);
 	if (self->fields)
 		pfree(self->fields);
 	TupleFormerTerm(&self->former);
@@ -261,6 +249,28 @@ BinaryParserRead(BinaryParser *self, Source *source)
 {
 	char	   *record;
 
+	/* Skip first offset lines in the input file */
+	if (unlikely(self->offset > 0))
+	{
+		int		i;
+
+		for (i = 0; i < self->offset; i++)
+		{
+			int		len;
+			len = SourceRead(source, self->buffer, self->rec_len * self->offset);
+
+			if (len != self->rec_len * self->offset)
+			{
+				if (errno == 0)
+					errno = EINVAL;
+				ereport(ERROR, (errcode_for_file_access(),
+								errmsg("could not skip " int64_FMT " lines (%d bytes) in the input file: %m",
+								self->offset, len)));
+			}
+		}
+		self->offset = 0;
+	}
+
 	/*
 	 * If the record buffer is exhausted, read next records from file
 	 * up to READ_LINE_NUM rows at once.
@@ -271,7 +281,7 @@ BinaryParserRead(BinaryParser *self, Source *source)
 		div_t	v;
 
 		BULKLOAD_PROFILE(&prof_reader_parser);
-		while ((len = SourceRead(source, self->record_buf,
+		while ((len = SourceRead(source, self->buffer,
 						self->rec_len * READ_LINE_NUM)) < 0)
 		{
 			if (errno != EAGAIN && errno != EINTR)
@@ -294,11 +304,11 @@ BinaryParserRead(BinaryParser *self, Source *source)
 		if (self->total_rec_cnt <= 0)
 			return NULL;	/* eof */
 
-		record = self->record_buf;
+		record = self->buffer;
 	}
 	else
 	{
-		record = self->record_buf + (self->rec_len  *self->used_rec_cnt);
+		record = self->buffer + (self->rec_len  *self->used_rec_cnt);
 		record[0] = self->next_head;	/* restore the head */
 	}
 
@@ -627,6 +637,11 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	{
 		ASSERT_ONCE(self->rec_len == 0);
 		self->rec_len = ParseInt32(value, 1);
+	}
+	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
+	{
+		ASSERT_ONCE(self->offset < 0);
+		self->offset = ParseInt64(value, 0);
 	}
 	else
 		return false;	/* unknown parameter */

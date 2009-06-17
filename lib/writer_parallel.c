@@ -41,6 +41,7 @@ static const char *finish_and_get_message(PGconn *conn);
 static char *get_relation_name(Oid relid);
 static void write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len);
 static void transfer_message(void *arg, const PGresult *res);
+static PGconn *connect_to_localhost(void);
 
 /* ========================================================================
  * Implementation
@@ -51,7 +52,6 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 {
 	unsigned	queryKey;
 	char		queueName[MAXPGPATH];
-	char		port[32];
 	char	   *relname;
 	const char *params[3];
 
@@ -65,44 +65,14 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 							ALLOCSET_DEFAULT_INITSIZE,
 							ALLOCSET_DEFAULT_MAXSIZE);
 
-	snprintf(port, lengthof(port), "%d", PostPortNumber);
 	relname = get_relation_name(relid);
 
-	/* create self */
+	/* create queue */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
 	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
 	/* connect to localhost */
-	self->conn = PQsetdbLogin(
-		"localhost",
-		port,
-		NULL, NULL,
-		get_database_name(MyDatabaseId),
-		GetUserNameFromId(GetUserId()),
-		NULL);
-	if (PQstatus(self->conn) == CONNECTION_BAD)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-				 errmsg("could not establish connection"),
-				 errdetail("%s", finish_and_get_message(self->conn))));
-	}
-
-	/*
-	 * set configuration parameters.
-	 * FIXME: do we need more settings?
-	 */
-	do
-	{
-		char	sql[1024];
-		snprintf(sql, lengthof(sql), "SET client_encoding = '%s'", pg_encoding_to_char(GetDatabaseEncoding()));
-		PQexec(self->conn, sql);
-		snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle"));
-		PQexec(self->conn, sql);
-	} while(0);
-
-	/* set message receiver */
-	PQsetNoticeReceiver(self->conn, transfer_message, NULL);
+	self->conn = connect_to_localhost();
 
 	/* async query send */
 	params[0] = queueName;
@@ -220,6 +190,45 @@ write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
 
 		/* retry */
 	}
+}
+
+static PGconn *
+connect_to_localhost(void)
+{
+	PGconn *conn;
+	char	port[32];
+	char	sql[1024];
+
+	snprintf(port, lengthof(port), "%d", PostPortNumber);
+
+	conn = PQsetdbLogin(
+		"localhost",
+		port,
+		NULL, NULL,
+		get_database_name(MyDatabaseId),
+		GetUserNameFromId(GetUserId()),
+		NULL);
+	if (PQstatus(conn) == CONNECTION_BAD)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+				 errmsg("could not establish connection"),
+				 errdetail("%s", finish_and_get_message(conn))));
+	}
+
+	/* attempt to set client encoding to match server encoding */
+	PQsetClientEncoding(conn, GetDatabaseEncodingName());
+
+	/* attempt to set default datestyle */
+	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle"));
+	PQexec(conn, sql);
+
+	/* TODO: do we need more settings? (ex. CLIENT_CONN_xxx) */
+
+	/* set message receiver */
+	PQsetNoticeReceiver(conn, transfer_message, NULL);
+
+	return conn;
 }
 
 static void

@@ -75,25 +75,24 @@ struct Reader
 	 * Information from control file.
 	 *	XXX: writer and on_duplicate should be another place?
 	 */
-	Oid			relid;				/**< target relation name */
-	char	   *infile;				/**< input file name */
-	int64		ci_offset;			/**< lines to skip */
-	int64		ci_limit;			/**< max input lines */
-	int			ci_max_err_cnt;		/**< max error admissible number */
+	Oid				relid;			/**< target relation id */
+	char		   *infile;			/**< input file name */
+	int64			limit;			/**< max input lines */
+	int				max_err_cnt;	/**< max error admissible number */
 
 	WriterCreate	writer;			/**< writer factory */
-	ON_DUPLICATE	on_duplicate;
+	ON_DUPLICATE	on_duplicate;	/**< writer options */
 
 	/*
 	 * Source and Parser
 	 */
-	Source	   *source;				/**< input source stream */
-	Parser	   *parser;				/**< source stream parser */
+	Source		   *source;			/**< input source stream */
+	Parser		   *parser;			/**< source stream parser */
 
 	/*
 	 * Internal status
 	 */
-	int			ci_err_cnt;			/**< number of errors ignored */
+	int				errors;			/**< number of errors ignored */
 };
 
 extern void ReaderOpen(Reader *rd, const char *fname, const char *options);
