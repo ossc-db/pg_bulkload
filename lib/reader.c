@@ -577,7 +577,17 @@ TupleFormerTerm(TupleFormer *former)
 }
 
 HeapTuple
-TupleFormerForm(TupleFormer *former)
+TupleFormerTuple(TupleFormer *former)
 {
 	return heap_form_tuple(former->desc, former->values, former->isnull);
+}
+
+/* Read null-terminated string and convert to internal format */
+Datum
+TupleFormerValue(TupleFormer *former, const char *str, int col)
+{
+	return FunctionCall3(&former->typInput[col],
+		CStringGetDatum(str),
+		ObjectIdGetDatum(former->typIOParam[col]),
+		Int32GetDatum(former->desc->attrs[col]->atttypmod));
 }

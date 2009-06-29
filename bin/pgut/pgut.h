@@ -60,6 +60,8 @@ extern bool			interrupted;
 extern void	parse_options(int argc, char **argv);
 extern bool	assign_option(const char **value, int c, const char *arg);
 
+
+extern PGconn *reconnect_elevel(int elevel);
 extern void reconnect(void);
 extern void disconnect(void);
 extern PGresult *execute_elevel(const char *query, int nParams, const char **params, int elevel);
@@ -149,3 +151,4 @@ typedef int aclitem;
 #endif
 
 #endif   /* PGUT_H */
+

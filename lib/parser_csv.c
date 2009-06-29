@@ -645,7 +645,7 @@ skip_done:
 	ExtractValuesFromCSV(self);
 	self->base.parsing_field = 0;
 
-	return TupleFormerForm(&self->former);
+	return TupleFormerTuple(&self->former);
 }
 
 static bool
@@ -722,6 +722,8 @@ ExtractValuesFromCSV(CSVParser *self)
 	 */
 	for (i = 0; i < self->former.nfields; i++)
 	{
+		Datum	value;
+		bool	isnull;
 		int		index;
 
 		self->base.parsing_field = i + 1;		/* 1 origin */
@@ -729,11 +731,8 @@ ExtractValuesFromCSV(CSVParser *self)
 		index = self->former.attnum[i];	/* Physical column index */
 		if (self->fields[i] || self->fnn[index])
 		{
-			self->former.isnull[index] = false;
-			self->former.values[index] = FunctionCall3(&self->former.typInput[index],
-				CStringGetDatum(self->fields[i]),
-				ObjectIdGetDatum(self->former.typIOParam[index]),
-				Int32GetDatum(attrs[index]->atttypmod));
+			value = TupleFormerValue(&self->former, self->fields[i], index);
+			isnull = false;
 		}
 		else
 		{
@@ -748,7 +747,11 @@ ExtractValuesFromCSV(CSVParser *self)
 						 ("null value in column \"%s\" violates not-null constraint",
 						  NameStr(attrs[index]->attname))));
 			}
-			self->former.isnull[index] = true;
+			value = (Datum) 0;
+			isnull = true;
 		}
+
+		self->former.isnull[index] = isnull;
+		self->former.values[index] = value;
 	}
 }

@@ -114,7 +114,8 @@ typedef struct TupleFormer
 
 extern void TupleFormerInit(TupleFormer *former, TupleDesc desc);
 extern void TupleFormerTerm(TupleFormer *former);
-extern HeapTuple TupleFormerForm(TupleFormer *former);
+extern HeapTuple TupleFormerTuple(TupleFormer *former);
+extern Datum TupleFormerValue(TupleFormer *former, const char *str, int col);
 
 /*
  * Utilitiy functions

@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "access/htup.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "catalog/pg_type.h"

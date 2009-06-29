@@ -323,7 +323,7 @@ BinaryParserRead(BinaryParser *self, Source *source)
 	ExtractValuesFromFixed(self, record);
 	self->base.parsing_field = 0;
 
-	return TupleFormerForm(&self->former);
+	return TupleFormerTuple(&self->former);
 }
 
 /*
@@ -649,16 +649,6 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	return true;
 }
 
-/* Read null-terminated string and convert to internal format */
-static Datum
-ReadCString(TupleFormer *former, const char *in, int idx)
-{
-	return FunctionCall3(&former->typInput[idx],
-        CStringGetDatum(in),
-        ObjectIdGetDatum(former->typIOParam[idx]),
-        Int32GetDatum(former->desc->attrs[idx]->atttypmod));
-}
-
 #define IsWhiteSpace(c)	((c) == ' ' || (c) == '\0')
 
 static Datum
@@ -684,7 +674,7 @@ Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnu
 		in[k + 1] = '\0';
 
 		*isnull = false;
-		value = ReadCString(former, in, idx);
+		value = TupleFormerValue(former, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -708,7 +698,7 @@ Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *i
 	else
 	{
 		*isnull = false;
-		value = ReadCString(former, in, idx);
+		value = TupleFormerValue(former, in, idx);
 	}
 
 	in[len] = head;	/* restore '\0' */
@@ -771,7 +761,7 @@ Read_##T(TupleFormer *former, char *in, const Field* field, int idx, bool *isnul
 		return DirectFunctionCall1(T##_numeric, T##_GetDatum(v)); \
 	default: \
 		snprintf(str, lengthof(str), T##_FMT, v); \
-		return ReadCString(former, str, idx); \
+		return TupleFormerValue(former, str, idx); \
 	} \
 }
 

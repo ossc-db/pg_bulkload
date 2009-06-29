@@ -201,12 +201,21 @@ assign_option(const char **value, int c, const char *arg)
 	return true;
 }
 
-void
-reconnect(void)
+/*
+ * the result is also available with the global variable 'connection'.
+ */
+PGconn *
+reconnect_elevel(int elevel)
 {
 	PGconn	   *conn;
 	char	   *pwd = NULL;
 	bool		new_pass;
+
+	if (interrupted)
+	{
+		interrupted = false;
+		elog(ERROR, "%s: interrupted", PROGRAM_NAME);
+	}
 
 	disconnect();
 
@@ -223,7 +232,10 @@ reconnect(void)
 		conn = PQsetdbLogin(host, port, NULL, NULL, dbname, username, pwd);
 
 		if (!conn)
-			elog(ERROR, "could not connect to database %s", dbname);
+		{
+			elog(elevel, "could not connect to database %s", dbname);
+			return NULL;
+		}
 
 		if (PQstatus(conn) == CONNECTION_BAD &&
 #if PG_VERSION_NUM >= 80300
@@ -244,10 +256,17 @@ reconnect(void)
 
 	/* check to see that the backend connection was successfully made */
 	if (PQstatus(conn) == CONNECTION_BAD)
-		elog(ERROR, "could not connect to database %s: %s",
+		elog(elevel, "could not connect to database %s: %s",
 					dbname, PQerrorMessage(conn));
 
 	connection = conn;
+	return conn;
+}
+
+void
+reconnect(void)
+{
+	reconnect_elevel(ERROR);
 }
 
 void
@@ -575,3 +594,4 @@ sleep(unsigned int seconds)
 }
 
 #endif   /* WIN32 */
+
