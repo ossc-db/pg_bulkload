@@ -9,6 +9,8 @@
 
 #include "postgres.h"
 
+#include <unistd.h>
+
 #ifdef HAVE_SYS_IPC_H
 #include <sys/ipc.h>
 #endif
@@ -142,13 +144,13 @@ QueueOpen(unsigned key)
 	if (header == NULL)
 		elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
 #else
-	handle = shmget(shmemKey, sizeof(QueueHeader), 0);
+	handle = shmget(key, sizeof(QueueHeader), 0);
 	if (handle < 0)
-		elog(ERROR, "shmget(id=%d) failed: %m", shmemKey);
+		elog(ERROR, "shmget(id=%d) failed: %m", key);
 
 	header = shmat(handle, NULL, PG_SHMAT_FLAGS);
 	if (header == NULL)
-		elog(ERROR, "shmat(id=%d) failed: %m", shmemKey);
+		elog(ERROR, "shmat(id=%d) failed: %m", key);
 #endif
 
 	/* TODO: check magic number in header here */

@@ -93,7 +93,7 @@ while [ $# -gt 0 ];do
         ;;
     -V|--version)
         # Show a version of postgresql and PostgreSQL and exit normally
-        echo "postgresql 3.0.0"
+        echo "postgresql 3.0alpha1"
         pg_ctl --version
         exit 0
         ;;

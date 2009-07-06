@@ -201,7 +201,8 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
 		self->rec_len = maxlen;
 	else if (self->rec_len < maxlen)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			errmsg("STRIDE should be %d or greater (%d given)", maxlen, self->rec_len)));
+			errmsg("STRIDE should be %ld or greater (%ld given)",
+				(long) maxlen, (long) self->rec_len)));
 	self->buffer = palloc(self->rec_len * READ_LINE_NUM + 1);
 }
 

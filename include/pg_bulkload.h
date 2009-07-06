@@ -7,6 +7,7 @@
 #define BULKLOAD_H_INCLUDED
 
 #include "postgres.h"
+#include "access/tupdesc.h"
 #include "pgut/pgut-be.h"
 
 /**

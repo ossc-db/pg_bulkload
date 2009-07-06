@@ -14,9 +14,10 @@
  *	by errors in the previous loading.
  */
 #include "postgres_fe.h"
+#include <unistd.h>
 #include "pgut/pgut.h"
 
-const char *PROGRAM_VERSION	= "3.0.0";		/**< My version string */
+const char *PROGRAM_VERSION	= "3.0alpha1";
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
