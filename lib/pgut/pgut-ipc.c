@@ -22,6 +22,7 @@
 #endif
 
 #include "pgut-ipc.h"
+#include "storage/ipc.h"
 #include "storage/spin.h"
 #include "miscadmin.h"
 
@@ -46,6 +47,8 @@ typedef int		ShmemHandle;
 
 typedef struct QueueHeader
 {
+	uint32		magic;		/* magic # to identify pgut-queue segments */
+#define PGUTShmemMagic	0550
 	uint32		size;		/* size of data */
 	uint32		begin;		/* read size */
 	uint32		end;		/* written size */
@@ -77,7 +80,8 @@ retry:
 #ifdef WIN32
 	win32_shmemName(shmemName, lengthof(shmemName), shmemKey);
 
-	handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, size, shmemName);
+	handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
+							   offsetof(QueueHeader, data) + size, shmemName);
 	if (handle == NULL)
 	{
 		if (GetLastError() == ERROR_ALREADY_EXISTS)
@@ -92,7 +96,8 @@ retry:
 	if (header == NULL)
 		elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
 #else
-	handle = shmget(shmemKey, size, IPC_CREAT | IPC_EXCL | 0600);
+	handle = shmget(shmemKey, offsetof(QueueHeader, data) + size, IPC_CREAT | IPC_EXCL | 0600);
+	// TODO  BUGTEST handle = shmget(shmemKey, size, IPC_CREAT | IPC_EXCL | 0600);
 	if (handle < 0)
 	{
 		if (errno == EEXIST || errno == EACCES
@@ -113,6 +118,7 @@ retry:
 #endif
 
 	*key = shmemKey;
+	header->magic = PGUTShmemMagic;
 	header->size = size;
 	header->begin = header->end = 0;
 	SpinLockInit(&header->mutex);
@@ -149,11 +155,22 @@ QueueOpen(unsigned key)
 		elog(ERROR, "shmget(id=%d) failed: %m", key);
 
 	header = shmat(handle, NULL, PG_SHMAT_FLAGS);
-	if (header == NULL)
+	if (header == (void *) -1)
 		elog(ERROR, "shmat(id=%d) failed: %m", key);
 #endif
 
-	/* TODO: check magic number in header here */
+	/* check magic number */
+	if (header->magic != PGUTShmemMagic)
+	{
+#ifdef WIN32
+		UnmapViewOfFile(header);
+		CloseHandle(handle);
+#else
+		shmdt(header);
+		shmctl(handle, IPC_RMID, NULL);
+#endif
+		elog(ERROR, "segment belongs to a non-pgut app");
+	}
 
 	self = palloc(sizeof(Queue));
 	self->handle = handle;
@@ -183,7 +200,7 @@ QueueClose(Queue *self)
  * TODO: do memcpy out of spinlock.
  */
 uint32
-QueueRead(Queue *self, void *buffer, uint32 len)
+QueueRead(Queue *self, void *buffer, uint32 len, bool need_lock)
 {
 	volatile QueueHeader *header = self->header;
 	const char *data = (const char *) header->data;
@@ -195,7 +212,9 @@ QueueRead(Queue *self, void *buffer, uint32 len)
 		elog(ERROR, "read length is too large");
 
 retry:
-	SpinLockAcquire(&header->mutex);
+	if (need_lock)
+		SpinLockAcquire(&header->mutex);
+
 	begin = header->begin;
 	end = header->end;
 
@@ -205,7 +224,9 @@ retry:
 		{
 			memcpy(buffer, data + begin, len);
 			header->begin += len;
-			SpinLockRelease(&header->mutex);
+			if (need_lock)
+				SpinLockRelease(&header->mutex);
+
 			return len;
 		}
 	}
@@ -224,12 +245,16 @@ retry:
 			memcpy((char *) buffer + first, data, second);
 			header->begin = second;
 		}
-		SpinLockRelease(&header->mutex);
+		if (need_lock)
+			SpinLockRelease(&header->mutex);
+
 		return len;
 	}
 
 	/* not enough data yet */
-	SpinLockRelease(&header->mutex);
+	if (need_lock)
+		SpinLockRelease(&header->mutex);
+
 	CHECK_FOR_INTERRUPTS();
 	pg_usleep(SPIN_SLEEP_MSEC * 1000);
 
@@ -240,7 +265,7 @@ retry:
  * TODO: do memcpy out of spinlock.
  */
 bool
-QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec)
+QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec, bool need_lock)
 {
 	volatile QueueHeader *header = self->header;
 	char   *data = (char *) header->data;
@@ -260,7 +285,9 @@ QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec
 		elog(ERROR, "write length is too large");
 
 retry:
-	SpinLockAcquire(&header->mutex);
+	if (need_lock)
+		SpinLockAcquire(&header->mutex);
+
 	begin = header->begin;
 	end = header->end;
 	dst = data + end;
@@ -275,7 +302,9 @@ retry:
 				dst += iov[i].iov_len;
 			}
 			header->end += total;
-			SpinLockRelease(&header->mutex);
+			if (need_lock)
+				SpinLockRelease(&header->mutex);
+
 			return true;
 		}
 	}
@@ -321,12 +350,15 @@ retry:
 			}
 		}
 		header->end = dst - data;
-		SpinLockRelease(&header->mutex);
+		if (need_lock)
+			SpinLockRelease(&header->mutex);
+
 		return true;
 	}
 
 	/* buffer is full. sleep and retry unless timeout */
-	SpinLockRelease(&header->mutex);
+	if (need_lock)
+		SpinLockRelease(&header->mutex);
 
 	if (sleep_msec > timeout_msec)
 		return false;	/* timeout */

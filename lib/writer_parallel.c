@@ -18,6 +18,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
+#include "logger.h"
 #include "writer.h"
 #include "pg_strutil.h"
 #include "pgut/pgut-ipc.h"
@@ -36,36 +37,47 @@ typedef struct ParallelWriter
 } ParallelWriter;
 
 static void	ParallelWriterInsert(ParallelWriter *self, HeapTuple tuple);
-static void	ParallelWriterClose(ParallelWriter *self);
-static const char *finish_and_get_message(PGconn *conn);
+static WriterResult	ParallelWriterClose(ParallelWriter *self, bool onError);
+static void	ParallelWriterDumpParams(ParallelWriter *self);
+static const char *finish_and_get_message(ParallelWriter *self);
 static char *get_relation_name(Oid relid);
-static void write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len);
+static void write_queue(ParallelWriter *self, const void *buffer, uint32 len);
 static void transfer_message(void *arg, const PGresult *res);
 static PGconn *connect_to_localhost(void);
 
 /* ========================================================================
  * Implementation
  * ========================================================================*/
+#define MAXINT8LEN		25
 
 Writer *
-CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
+CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
 {
+	ParallelWriter *self;
 	unsigned	queryKey;
 	char		queueName[MAXPGPATH];
 	char	   *relname;
-	const char *params[3];
-
-	ParallelWriter *self = palloc0(sizeof(ParallelWriter));
-	self->base.insert = (WriterInsertProc) ParallelWriterInsert;
-	self->base.close = (WriterCloseProc) ParallelWriterClose;
+	PGresult   *res;
+	const char *params[6];
+	char		buf[MAXINT8LEN + 1];
+	int			len;
+ 
+	self = palloc0(sizeof(ParallelWriter));
+	self->base.insert = (WriterInsertProc) ParallelWriterInsert,
+	self->base.close = (WriterCloseProc) ParallelWriterClose,
+	self->base.dumpParams = (WriterDumpParamsProc) ParallelWriterDumpParams,
 	self->base.context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"ParallelWriter",
 							ALLOCSET_DEFAULT_MINSIZE,
 							ALLOCSET_DEFAULT_INITSIZE,
 							ALLOCSET_DEFAULT_MAXSIZE);
+	self->base.count = 0;
 
 	relname = get_relation_name(relid);
+
+	if ((len = snprintf(buf, MAXINT8LEN, INT64_FORMAT, max_dup_errors)) < 0)
+		elog(ERROR, "could not format int8");
 
 	/* create queue */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
@@ -74,18 +86,34 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 	/* connect to localhost */
 	self->conn = connect_to_localhost();
 
+	/* start transaction */
+	res = PQexec(self->conn, "BEGIN");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+				 errmsg("could not start transaction"),
+				 errdetail("%s", finish_and_get_message(self))));
+	}
+
+	PQclear(res);
+
 	/* async query send */
 	params[0] = queueName;
 	params[1] = relname;
 	params[2] = ON_DUPLICATE_NAMES[on_duplicate];
+	params[3] = buf;
+	params[4] = dup_badfile;
+	params[5] = "remote";
+
 	if (1 != PQsendQueryParams(self->conn,
-		"SELECT pg_bulkload(NULL, 'TYPE=TUPLE\nINFILE=' || $1 || '\nTABLE=' || $2 || '\nON_DUPLICATE=' || $3 || '\n')",
-		3, NULL, params, NULL, NULL, 0))
+		"SELECT * FROM pg_bulkload(NULL, 'TYPE=TUPLE\nINFILE=' || $1 || '\nTABLE=' || $2 || '\nON_DUPLICATE=' || $3 || '\nDUPLICATE_ERRORS=' || $4 || '\nDUPLICATE_BADFILE=' || $5 || '\nLOGFILE=' || $6 || '\n')",
+		6, NULL, params, NULL, NULL, 0))
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
 				 errmsg("could not send query"),
-				 errdetail("%s", finish_and_get_message(self->conn))));
+				 errdetail("%s", finish_and_get_message(self))));
 	}
 
 	return (Writer *) self;
@@ -94,38 +122,88 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate)
 static void
 ParallelWriterInsert(ParallelWriter *self, HeapTuple tuple)
 {
-	write_queue(self->conn, self->queue, tuple->t_data, tuple->t_len);
+	write_queue(self, tuple->t_data, tuple->t_len);
 }
 
-static void
-ParallelWriterClose(ParallelWriter *self)
+static WriterResult
+ParallelWriterClose(ParallelWriter *self, bool onError)
 {
+	WriterResult	ret = { 0 };
+
 	/* wait for reader */
 	if (self->conn)
 	{
-		/* terminate with zero */
-		if (self->queue)
+		if (self->queue && !onError)
 		{
-			PGresult *res;
-			write_queue(self->conn, self->queue, NULL, 0);
+			PGresult   *res;
+			int			sock;
+			fd_set		input_mask;
 
-			while ((res = PQgetResult(self->conn)) == NULL)
+			/* terminate with zero */
+			write_queue(self, NULL, 0);
+
+			do
 			{
-				CHECK_FOR_INTERRUPTS();
-				pg_usleep(DEFAULT_TIMEOUT_MSEC);
-			}
+				sock = PQsocket(self->conn);
+
+				FD_ZERO(&input_mask);
+				FD_SET(sock, &input_mask);
+
+				while (select(sock + 1, &input_mask, NULL, NULL, NULL) < 0)
+				{
+					if (errno == EINTR)
+					{
+						CHECK_FOR_INTERRUPTS();
+						continue;
+					}
+					ereport(ERROR,
+							(errcode(ERRCODE_INTERNAL_ERROR),
+							 errmsg("select() failed"),
+							 errdetail("%s", finish_and_get_message(self))));
+				}
+
+				PQconsumeInput(self->conn);
+			} while (PQisBusy(self->conn));
+
+			res = PQgetResult(self->conn);
 
 			if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			{
 				PQfinish(self->conn);
+				self->conn = NULL;
 				transfer_message(NULL, res);
 			}
+			else
+			{
+				self->base.count = ParseInt64(PQgetvalue(res, 0, 1), 0);
+				ret.num_dup_new = ParseInt64(PQgetvalue(res, 0, 3), 0);
+				ret.num_dup_old = ParseInt64(PQgetvalue(res, 0, 4), 0);
+				LoggerLog(WARNING, "%s", PQgetvalue(res, 0, 8));
+				PQclear(res);
 
-			self->base.count = ParseInt64(PQgetvalue(res, 0, 0), 0);
+				/* commit transaction */
+				res = PQexec(self->conn, "COMMIT");
+				if (PQresultStatus(res) != PGRES_COMMAND_OK)
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+							 errmsg("could not commit transaction"),
+							 errdetail("%s", finish_and_get_message(self))));
+				}
+			}
 			PQclear(res);
 		}
+		else if (PQisBusy(self->conn))
+		{
+			char		errbuf[256];
+			PGcancel   *cancel = PQgetCancel(self->conn);
+			if (cancel)
+				PQcancel(cancel, errbuf, lengthof(errbuf));
+		}
 
-		PQfinish(self->conn);
+		if (self->conn)
+			PQfinish(self->conn);
+		self->conn = NULL;
 	}
 
 	/* 
@@ -135,17 +213,28 @@ ParallelWriterClose(ParallelWriter *self)
 	if (self->queue)
 		QueueClose(self->queue);
 
-	MemoryContextDelete(self->base.context);
-	pfree(self);
+	self->queue = NULL;
+
+	if (!onError)
+		MemoryContextDelete(self->base.context);
+
+	return ret;
+}
+
+static void
+ParallelWriterDumpParams(ParallelWriter *self)
+{
+	LoggerLog(INFO, "WRITER = PARALLEL\n\n");
 }
 
 static const char *
-finish_and_get_message(PGconn *conn)
+finish_and_get_message(ParallelWriter *self)
 {
 	const char *msg;
-	msg = PQerrorMessage(conn);
+	msg = PQerrorMessage(self->conn);
 	msg = (msg ? pstrdup(msg) : "(no message)");
-	PQfinish(conn);
+	PQfinish(self->conn);
+	self->conn = NULL;
 	return msg;
 }
 
@@ -158,12 +247,12 @@ get_relation_name(Oid relid)
 }
 
 static void
-write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
+write_queue(ParallelWriter *self, const void *buffer, uint32 len)
 {
 	struct iovec	iov[2];
 
-	AssertArg(conn != NULL);
-	AssertArg(queue != NULL);
+	AssertArg(self->conn != NULL);
+	AssertArg(self->queue != NULL);
 	AssertArg(len == 0 || buffer != NULL);
 
 	iov[0].iov_base = &len;
@@ -175,17 +264,16 @@ write_queue(PGconn *conn, Queue *queue, const void *buffer, uint32 len)
 	{
 		PGresult *res;
 
-		if (QueueWrite(queue, iov, 2, DEFAULT_TIMEOUT_MSEC))
+		if (QueueWrite(self->queue, iov, 2, DEFAULT_TIMEOUT_MSEC, false))
 			return;
 
-		if ((res = PQgetResult(conn)) != NULL)
+		if ((res = PQgetResult(self->conn)) != NULL)
 		{
 			PQclear(res);
-			/* TODO: free queue's mmap object. */
 			ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
 				 errmsg("unexpected reader termination"),
-				 errdetail("%s", finish_and_get_message(conn))));
+				 errdetail("%s", finish_and_get_message(self))));
 		}
 
 		/* retry */
@@ -210,17 +298,20 @@ connect_to_localhost(void)
 		NULL);
 	if (PQstatus(conn) == CONNECTION_BAD)
 	{
+		ParallelWriter wr;
+
+		wr.conn = conn;
 		ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
 				 errmsg("could not establish connection"),
-				 errdetail("%s", finish_and_get_message(conn))));
+				 errdetail("%s", finish_and_get_message(&wr))));
 	}
 
 	/* attempt to set client encoding to match server encoding */
 	PQsetClientEncoding(conn, GetDatabaseEncodingName());
 
 	/* attempt to set default datestyle */
-	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle"));
+	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle", false));
 	PQexec(conn, sql);
 
 	/* TODO: do we need more settings? (ex. CLIENT_CONN_xxx) */

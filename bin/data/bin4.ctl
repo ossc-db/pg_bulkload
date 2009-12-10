@@ -1,9 +1,6 @@
-#INFILE = data.bin
 TABLE = customer
 TYPE = FIXED
-PRESERVE_BLANKS = NO
-OFFSET = 1
-LIMIT = 8
+LOAD = 0
 
 COL = CHAR(10) # c_id
 COL = CHAR(4)  # c_d_id

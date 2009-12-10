@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include "pgut/pgut.h"
 
-const char *PROGRAM_VERSION	= "3.0alpha1";
+const char *PROGRAM_VERSION	= "3.0alpha2";
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
@@ -30,9 +30,6 @@ const char *DataDir = NULL;
 
 /** @Flag do recovery, or bulkload */
 static bool		recovery = false;
-
-/** @brief control file path */
-static char		control_file[MAXPGPATH];
 
 static char	   *additional_options = NULL;
 
@@ -49,11 +46,60 @@ static char	   *additional_options = NULL;
  * Prototypes
  */
 
-static int LoaderLoadMain(void);
+static int LoaderLoadMain(const char *control_file);
 extern int LoaderRecoveryMain(void);
-static void make_absolute_path(char *path, size_t dstlen, const char *relpath);
+static void make_absolute_path(char dst[], const char *key, const char *relpath);
 static void add_option(const char *option);
 static PGresult *RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary);
+
+static void
+parse_option(pgut_option *opt, const char *arg)
+{
+	char	path[MAXPGPATH];
+
+	switch (opt->sname)
+	{
+		case 'i':
+			if (pg_strcasecmp(arg, "stdin") == 0)
+				strlcpy(path, "INFILE = stdin", lengthof(path));
+			else
+				make_absolute_path(path, "INFILE = ", arg);
+			add_option(path);
+			break;
+		case 'l':
+			make_absolute_path(path, "LOGFILE = ", arg);
+			add_option(path);
+			break;
+		case 'P':
+			make_absolute_path(path, "PARSE_BADFILE = ", arg);
+			add_option(path);
+			break;
+		case 'u':
+			make_absolute_path(path, "DUPLICATE_BADFILE = ", arg);
+			add_option(path);
+			break;
+		case 'o':
+			opt->source = SOURCE_DEFAULT;	/* -o can be specified many times */
+			add_option(arg);
+			break;
+	}
+}
+
+static pgut_option options[] =
+{
+	/* Dataload options */
+	{ 'f', 'i', "infile"			, parse_option },
+	{ 'f', 'l', "logfile"			, parse_option },
+	{ 'f', 'P', "parse_badfile"		, parse_option },
+	{ 'f', 'u', "duplicate_badfile"	, parse_option },
+	{ 'f', 'o', "option"			, parse_option },
+	/* Recovery options */
+	{ 's', 'D', "pgdata"	, &DataDir },
+	{ 'b', 'r', "recovery"	, &recovery },
+	/* Common options */
+	{ 'b', 's', "silent", &quiet },	/* same as 'q'.*/
+	{ 0 }
+};
 
 /**
  * @brief Entry point for pg_bulkload command.
@@ -72,7 +118,17 @@ static PGresult *RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary);
 int
 main(int argc, char *argv[])
 {
-	parse_options(argc, argv);
+	char	control_file[MAXPGPATH] = "";
+	int		i;
+
+	i = pgut_getopt(argc, argv, options);
+
+	for (; i < argc; i++)
+	{
+		if (control_file[0])
+			elog(ERROR_ARGS, "too many arguments");
+		make_absolute_path(control_file, NULL, argv[i]);
+	}
 
 	/*
 	 * Determines data loading or recovery.
@@ -94,88 +150,31 @@ main(int argc, char *argv[])
 		/* verify arguments */
 		if (DataDir)
 			elog(ERROR, "invalid option '-D' for data load");
-		if (control_file[0] == '\0')
-			elog(ERROR, "no control file path specified");
 
-		return LoaderLoadMain();
+		return LoaderLoadMain(control_file);
 	}
 }
 
-/*
- * pgut framework callbacks
- */
-
-const struct option pgut_options[] =
-{
-	{"pgdata", required_argument, NULL, 'D'},
-	{"infile", required_argument, NULL, 'i'},
-	{"recovery", no_argument, NULL, 'r'},
-	{"silent", no_argument, NULL, 's'},	/* same as 'q'.*/
-	{"option", required_argument, NULL, 'o'},
-	{NULL, 0, NULL, 0}
-};
-
-bool
-pgut_argument(int c, const char *arg)
-{
-	switch (c)
-	{
-		case 0:	/* default arguments */
-			if (control_file[0])
-				return false;	/* two or more arguments */
-			make_absolute_path(control_file, MAXPGPATH, arg);
-			break;
-		case 'r':
-			recovery = true;
-			break;
-		case 'D':
-			return assign_option(&DataDir, c, arg);
-		case 's':	/* for backward compatibility; use quiet instead */
-			quiet = true;
-			break;
-		case 'i':
-		{
-			char	infile[MAXPGPATH] = "INFILE = ";
-			if (pg_strcasecmp(arg, "stdin") == 0)
-				strlcpy(infile + 9, "stdin", MAXPGPATH - 9);
-			else
-				make_absolute_path(infile + 9, MAXPGPATH - 9, arg);
-			add_option(infile);
-			break;
-		}
-		case 'o':
-			add_option(arg);
-			break;
-		default:
-			return false;
-	}
-
-	return true;
-}
-
 void
-pgut_help(void)
+pgut_help(bool details)
 {
-	fprintf(stderr,
-		"%s is a bulk data loading tool for PostgreSQL\n"
-		"\n"
-		"Usage:\n"
-		"  Dataload: %s [dataload options] control_file_path\n"
-		"  Recovery: %s -r [-D DATADIR]\n"
-		"\n"
-		"Dataload options:\n"
-		"  -i, --infile=INFILE       INFILE path\n"
-		"  -o, --option=\"key=val\"    additional option\n"
-		"\n"
-		"Recovery options:\n"
-		"  -r, --recovery            execute recovery\n"
-		"  -D, --pgdata=DATADIR      database directory\n",
-		PROGRAM_NAME, PROGRAM_NAME, PROGRAM_NAME);
-}
+	printf("%s is a bulk data loading tool for PostgreSQL\n", PROGRAM_NAME);
+	printf("\nUsage:\n");
+	printf("  Dataload: %s [dataload options] control_file_path\n", PROGRAM_NAME);
+	printf("  Recovery: %s -r [-D DATADIR]\n", PROGRAM_NAME);
 
-void
-pgut_cleanup(bool fatal)
-{
+	if (!details)
+		return;
+
+	printf("\nDataload options:\n");
+	printf("  -i, --infile=INFILE       INFILE path\n");
+	printf("  -l, --logfile=LOGFILE     LOGFILE path\n");
+	printf("  -P, --parse_badfile=*     PARSE_BADFILE path\n");
+	printf("  -u, --duplicate_badfile=* DUPLICATE_BADFILE path\n");
+	printf("  -o, --option=\"key=val\"    additional option\n");
+	printf("\nRecovery options:\n");
+	printf("  -r, --recovery            execute recovery\n");
+	printf("  -D, --pgdata=DATADIR      database directory\n");
 }
 
 /**
@@ -187,7 +186,7 @@ pgut_cleanup(bool fatal)
  * @return exitcode (always 0).
  */
 static int
-LoaderLoadMain(void)
+LoaderLoadMain(const char *control_file)
 {
 	PGresult	   *res;
 	const char	   *params[2];
@@ -200,7 +199,7 @@ LoaderLoadMain(void)
 	elog(NOTICE, "BULK LOAD START");
 
 	command("BEGIN", 0, NULL);
-	res = execute("SELECT pg_bulkload($1, $2)", 2, params);
+	res = execute("SELECT * FROM pg_bulkload($1, $2)", 2, params);
 	if (PQresultStatus(res) == PGRES_COPY_IN)
 	{
 		PQclear(res);
@@ -210,7 +209,15 @@ LoaderLoadMain(void)
 	}
 	command("COMMIT", 0, NULL);
 
-	elog(NOTICE, "BULK LOAD END (%s records)", PQgetvalue(res, 0, 0));
+	elog(NOTICE, "BULK LOAD END\n"
+				 "\t%s Rows skipped.\n"
+				 "\t%s Rows successfully loaded.\n"
+				 "\t%s Rows not loaded due to parse errors.\n"
+				 "\t%s Rows not loaded due to duplicate errors.\n"
+				 "\t%s Rows deleted due to duplicate errors.",
+				 PQgetvalue(res, 0, 0), PQgetvalue(res, 0, 1),
+				 PQgetvalue(res, 0, 2), PQgetvalue(res, 0, 3),
+				 PQgetvalue(res, 0, 4));
 	PQclear(res);
 
 	disconnect();
@@ -222,20 +229,26 @@ LoaderLoadMain(void)
  * Add current working directory if path is relative.
  */
 static void
-make_absolute_path(char *dst, size_t dstlen, const char *relpath)
+make_absolute_path(char dst[], const char *key, const char *relpath)
 {
 	char	cwd[MAXPGPATH];
+	size_t	keylen;
+
+	if (key)
+	{
+		keylen = strlen(key);
+		memcpy(dst, key, keylen);
+	}
+	else
+		keylen = 0;
 
 	if (is_absolute_path(relpath))
-		strlcpy(dst, relpath, dstlen);
+		strlcpy(dst + keylen, relpath, MAXPGPATH - keylen);
 	else
 	{
 		if (getcwd(cwd, MAXPGPATH) == NULL)
-		{
-			fprintf(stderr, "cannot read current directory\n");
-			exit(1);
-		}
-		snprintf(dst, dstlen, "%s/%s", cwd, relpath);
+			elog(ERROR_SYSTEM, "cannot read current directory");
+		snprintf(dst + keylen, MAXPGPATH - keylen, "%s/%s", cwd, relpath);
 	}
 }
 

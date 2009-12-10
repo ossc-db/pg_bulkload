@@ -17,6 +17,7 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
+#include "logger.h"
 #include "reader.h"
 #include "pg_strutil.h"
 #include "pg_profile.h"
@@ -107,9 +108,11 @@ typedef struct BinaryParser
 {
 	Parser	base;
 
-	TupleFormer	former;
+	Source		   *source;
+	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
+	int64	need_offset;		/**< lines to skip */
 
 	size_t	rec_len;			/**< One record length */
 	char   *buffer;				/**< Record buffer to keep input data */
@@ -120,15 +123,18 @@ typedef struct BinaryParser
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
 	int		nfield;				/**< number of fields */
 	Field  *fields;				/**< array of field descriptor */
+
 } BinaryParser;
 
 /*
  * Prototype declaration for local functions
  */
-static void	BinaryParserInit(BinaryParser *self, TupleDesc desc);
-static HeapTuple BinaryParserRead(BinaryParser *self, Source *source);
-static void	BinaryParserTerm(BinaryParser *self);
+static void	BinaryParserInit(BinaryParser *self, const char *infile, TupleDesc desc);
+static HeapTuple BinaryParserRead(BinaryParser *self);
+static int64	BinaryParserTerm(BinaryParser *self);
 static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
+static void BinaryParserDumpParams(BinaryParser *self);
+static void BinaryParserDumpRecord(BinaryParser *self, FILE *fp, char *badfile);
 
 static void ExtractValuesFromFixed(BinaryParser *self, char *record);
 
@@ -143,6 +149,8 @@ CreateBinaryParser(void)
 	self->base.read = (ParserReadProc) BinaryParserRead;
 	self->base.term = (ParserTermProc) BinaryParserTerm;
 	self->base.param = (ParserParamProc) BinaryParserParam;
+	self->base.dumpParams = (ParserDumpParamsProc) BinaryParserDumpParams;
+	self->base.dumpRecord = (ParserDumpRecordProc) BinaryParserDumpRecord;
 	self->offset = -1;
 	return (Parser *)self;
 }
@@ -162,7 +170,7 @@ CreateBinaryParser(void)
  * function.
  */
 static void
-BinaryParserInit(BinaryParser *self, TupleDesc desc)
+BinaryParserInit(BinaryParser *self, const char *infile, TupleDesc desc)
 {
 	int		i;
 	size_t	maxlen;
@@ -170,7 +178,7 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
 	/*
 	 * set default values
 	 */
-	self->offset = self->offset > 0 ? self->offset : 0;
+	self->need_offset = self->offset = self->offset > 0 ? self->offset : 0;
 
 	/*
 	 * checking necessary setting items for fixed length file
@@ -178,6 +186,8 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
 	if (self->nfield == 0)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no COL specified")));
+
+	self->source = CreateSource(infile, desc);
 
 	/*
 	 * Error if the number of valid fields is not equal to the number of
@@ -215,15 +225,23 @@ BinaryParserInit(BinaryParser *self, TupleDesc desc)
  * @param void
  * @return void
  */
-static void
+static int64
 BinaryParserTerm(BinaryParser *self)
 {
+	int64	skip;
+
+	skip = self->offset;
+
+	if (self->source)
+		SourceClose(self->source);
 	if (self->buffer)
 		pfree(self->buffer);
 	if (self->fields)
 		pfree(self->fields);
 	TupleFormerTerm(&self->former);
 	pfree(self);
+
+	return skip;
 }
 
 /**
@@ -246,30 +264,32 @@ BinaryParserTerm(BinaryParser *self)
  * @return	Return true if there is a next record, or false if EOF.
  */
 static HeapTuple
-BinaryParserRead(BinaryParser *self, Source *source)
+BinaryParserRead(BinaryParser *self)
 {
 	char	   *record;
 
 	/* Skip first offset lines in the input file */
-	if (unlikely(self->offset > 0))
+	if (unlikely(self->need_offset > 0))
 	{
 		int		i;
 
-		for (i = 0; i < self->offset; i++)
+		for (i = 0; i < self->need_offset; i++)
 		{
 			int		len;
-			len = SourceRead(source, self->buffer, self->rec_len * self->offset);
+			len = SourceRead(self->source, self->buffer, self->rec_len);
 
-			if (len != self->rec_len * self->offset)
+			if (len != self->rec_len)
 			{
 				if (errno == 0)
 					errno = EINVAL;
 				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not skip " int64_FMT " lines (%d bytes) in the input file: %m",
-								self->offset, len)));
+								errmsg("could not skip " int64_FMT " lines ("
+								int64_FMT " bytes) in the input file: %m",
+								self->need_offset,
+								self->rec_len * self->need_offset)));
 			}
 		}
-		self->offset = 0;
+		self->need_offset = 0;
 	}
 
 	/*
@@ -282,7 +302,7 @@ BinaryParserRead(BinaryParser *self, Source *source)
 		div_t	v;
 
 		BULKLOAD_PROFILE(&prof_reader_parser);
-		while ((len = SourceRead(source, self->buffer,
+		while ((len = SourceRead(self->source, self->buffer,
 						self->rec_len * READ_LINE_NUM)) < 0)
 		{
 			if (errno != EAGAIN && errno != EINTR)
@@ -416,7 +436,7 @@ ParseLengthAndOffset(const char *value, Field *field)
 }
 
 static int
-hex(char c)
+hex_in(char c)
 {
 	if ('0' <= c && c <= '9')
 		return c - '0';
@@ -427,6 +447,18 @@ hex(char c)
 	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 		errmsg("NULLIF argument must be '...' or hex digits")));
 	return 0;
+}
+
+static char
+hex_out(int c)
+{
+	if (0 <= c && c <= 9)
+		return '0' + c;
+	else if (0xA <= c && c <= 0xF)
+		return 'A' + c - 0xA;
+	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+		errmsg("NULLIF argument must be '...' or hex digits")));
+	return '0';
 }
 
 /*
@@ -480,7 +512,7 @@ ParseFormat(const char *value, Field *field)
 			for (i = 0; i < n; i++)
 			{
 				field->nullif[i] = (char)
-					((hex(p[i*2]) << 4) + hex(p[i*2+1]));
+					((hex_in(p[i*2]) << 4) + hex_in(p[i*2+1]));
 			}
 		}
 	}
@@ -632,14 +664,15 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	}
 	else if (pg_strcasecmp(keyword, "PRESERVE_BLANKS") == 0)
 	{
-		self->preserve_blanks = ParseBoolean(value, true);
+		self->preserve_blanks = ParseBoolean(value, false);
 	}
 	else if (pg_strcasecmp(keyword, "STRIDE") == 0)
 	{
 		ASSERT_ONCE(self->rec_len == 0);
 		self->rec_len = ParseInt32(value, 1);
 	}
-	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
+	else if (pg_strcasecmp(keyword, "SKIP") == 0 ||
+			 pg_strcasecmp(keyword, "OFFSET") == 0)
 	{
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
@@ -650,6 +683,90 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	return true;
 }
 
+static void
+BinaryParserDumpParams(BinaryParser *self)
+{
+	int				i;
+	int				j;
+	StringInfoData	buf;
+
+	initStringInfo(&buf);
+	appendStringInfoString(&buf, "TYPE = BINARY\n");
+	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
+	appendStringInfo(&buf, "PRESERVE_BLANKS = %s\n",
+			   self->preserve_blanks ? "YES" : "NO");
+	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);
+
+	for (i = 0; i < self->nfield; i++)
+	{
+		Field  *field;
+
+		field = &self->fields[i];
+
+		for (j = 0; j < lengthof(TYPES); j++)
+		{
+			if (TYPES[j].read == field->read)
+			{
+				appendStringInfo(&buf, "COL = \"%s\" (%d + %d)", TYPES[j].name,
+					field->offset + 1, field->len);
+				break;
+			}
+		}
+
+		if (j == lengthof(TYPES))
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("invalid type")));
+
+		if (field->nulllen > 0)
+		{
+			bool	hex;
+
+			hex = false;
+			for (j = 0; j < field->nulllen; j++)
+			{
+				if (!isalnum(field->nullif[j]) && !isblank(field->nullif[j]))
+				{
+					hex = true;
+					break;
+				}
+			}
+
+			if (hex)
+			{
+				appendStringInfoString(&buf, " NULLIF \n");
+				for (j = 0; j < field->nulllen; j++)
+				{
+					appendStringInfoCharMacro(&buf,
+											  hex_out(field->nullif[j] >> 4));
+					appendStringInfoCharMacro(&buf,
+											  hex_out(field->nullif[j] % 0x10));
+				}
+			}
+			else
+				appendStringInfo(&buf, " NULLIF '%s'\n", field->nullif);
+		}
+		else
+			appendStringInfoCharMacro(&buf, '\n');
+	}
+
+	LoggerLog(INFO, buf.data);
+	pfree(buf.data);
+}
+
+static void
+BinaryParserDumpRecord(BinaryParser *self, FILE *fp, char *badfile)
+{
+	int	len;
+
+	len = fwrite(self->buffer + (self->rec_len * (self->used_rec_cnt - 1)), 1,
+				 self->rec_len, fp);
+	if (len < self->rec_len || fflush(fp))
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not write parse badfile \"%s\": %m",
+						badfile)));
+}
+
 #define IsWhiteSpace(c)	((c) == ' ' || (c) == '\0')
 
 static Datum
@@ -657,11 +774,13 @@ Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnu
 {
 	Datum		value;
 	const int	len = field->len;
-	char		head = in[len];	/* save the next char to restore '\0' */
+	char	   *str;
 
-	in[len] = '\0';
-	if (in[field->nulllen] == '\0' &&
-		strncmp(in, field->nullif, field->nulllen) == 0)
+	str = palloc(len + 1);
+	memcpy(str, in, len);
+	str[len] = '\0';
+	if (str[field->nulllen] == '\0' &&
+		strncmp(str, field->nullif, field->nulllen) == 0)
 	{
 		*isnull = true;
 		value = 0;
@@ -671,14 +790,14 @@ Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnu
 		int			k;
 
 		/* Trim trailing spaces */
-		for (k = len - 1; k >= 0 && IsWhiteSpace(in[k]); k--);
-		in[k + 1] = '\0';
+		for (k = len - 1; k >= 0 && IsWhiteSpace(str[k]); k--);
+		str[k + 1] = '\0';
 
 		*isnull = false;
-		value = TupleFormerValue(former, in, idx);
+		value = TupleFormerValue(former, str, idx);
 	}
 
-	in[len] = head;	/* restore '\0' */
+	pfree(str);
 	return value;
 }
 
@@ -687,11 +806,13 @@ Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *i
 {
 	Datum		value;
 	const int	len = field->len;
-	char		head = in[len];	/* save the next char to restore '\0' */
+	char	   *str;
 
-	in[len] = '\0';
-	if (in[field->nulllen] == '\0' &&
-		strncmp(in, field->nullif, field->nulllen) == 0)
+	str = palloc(len + 1);
+	memcpy(str, in, len);
+	str[len] = '\0';
+	if (str[field->nulllen] == '\0' &&
+		strncmp(str, field->nullif, field->nulllen) == 0)
 	{
 		*isnull = true;
 		value = 0;
@@ -699,10 +820,10 @@ Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *i
 	else
 	{
 		*isnull = false;
-		value = TupleFormerValue(former, in, idx);
+		value = TupleFormerValue(former, str, idx);
 	}
 
-	in[len] = head;	/* restore '\0' */
+	pfree(str);
 	return value;
 }
 

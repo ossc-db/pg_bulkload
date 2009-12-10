@@ -2,6 +2,5 @@
 TABLE = customer
 TYPE = CSV
 NULL = "nullvalue           "
-MAX_ERR_CNT = 1
-OFFSET = 2
-LIMIT = 8
+SKIP = 2
+LOAD = 5

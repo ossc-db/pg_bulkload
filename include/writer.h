@@ -22,25 +22,33 @@
  * Writer
  */
 
+typedef struct WriterResult
+{
+	int64		num_dup_new;
+	int64		num_dup_old;
+} WriterResult;
+
 typedef bool (*WriterInsertProc)(Writer *self, HeapTuple tuple);
-typedef void (*WriterCloseProc)(Writer *self);
+typedef WriterResult (*WriterCloseProc)(Writer *self, bool onError);
+typedef void (*WriterDumpParamsProc)(Writer *self);
 
 struct Writer
 {
-	WriterInsertProc	insert;	/**< insert one tuple */
-	WriterCloseProc		close;	/**< clean up */
+	WriterInsertProc		insert;		/**< insert one tuple */
+	WriterCloseProc			close;		/**< clean up */
+	WriterDumpParamsProc	dumpParams;	/**< dump parameters */
 
 	MemoryContext		context;
 	int64				count;
 };
 
-extern Writer *CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate);
-extern Writer *CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate);
-extern Writer *CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate);
-extern void AtEOXact_DirectLoader(XactEvent event, void *arg);
+extern Writer *CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
+extern Writer *CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
+extern Writer *CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
 
 #define WriterInsert(self, tuple)	((self)->insert((self), (tuple)))
-#define WriterClose(self)			((self)->close((self)))
+#define WriterClose(self, onError)	((self)->close((self), (onError)))
+#define WriterDumpParams(self)		((self)->dumpParams((self)))
 
 /*
  * Utilitiy functions

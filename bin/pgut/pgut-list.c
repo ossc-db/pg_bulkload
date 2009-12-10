@@ -11,7 +11,7 @@
 
 #include "postgres_fe.h"
 #include "pgut.h"
-#include "nodes/pg_list.h"
+#include "pgut-list.h"
 
 /*
  * Routines to simplify writing assertions about the type of a list; a
@@ -546,3 +546,12 @@ list_length(List *l)
 	return l ? l->length : 0;
 }
 #endif   /* ! __GNUC__ */
+
+void
+list_walk(List *list, void (*walker)())
+{
+	ListCell *cell;
+
+	foreach(cell, list)
+		walker(lfirst(cell));
+}

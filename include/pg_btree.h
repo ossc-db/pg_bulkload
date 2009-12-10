@@ -24,10 +24,15 @@ typedef struct Spooler
 	TupleTableSlot *slot;		/**<  */
 	ON_DUPLICATE	on_duplicate;
 	bool			use_wal;
+	int64			max_dup_errors;	/**< max error admissible number by duplicate */
+	int64			dup_old;	/**< number of deleted by duplicate error */
+	int64			dup_new;	/**< number of not loaded by duplicate error */
+	char		   *dup_badfile;
+	FILE		   *dup_fp;
 } Spooler;
 
 /* External declarations */
-extern void SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal);
+extern void SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal, int64 max_dup_errors, char *dup_badfile);
 extern void SpoolerClose(Spooler *self);
 extern void SpoolerInsert(Spooler *self, HeapTuple tuple);
 

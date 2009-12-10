@@ -59,8 +59,6 @@ pg_bulkload provides two programs to users.
 	  - No additional spaces and tabs are allowed.
 
 
-
-
 Installation
 ------------
 
@@ -190,4 +188,4 @@ STRIDE          : Length of one row. Use if you want to truncate the end of row.
 
 Author
 ------
-NTT Opensource Software Center
+NTT Open Source Software Center

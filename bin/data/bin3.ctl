@@ -1,0 +1,26 @@
+TABLE = customer
+TYPE = FIXED
+PRESERVE_BLANKS = NO
+LOAD = INFINITE
+
+COL = CHAR(2) # c_id
+COL = CHAR(3)  # c_d_id
+COL = CHAR(10)  # c_w_id
+COL = 16       # c_first
+COL = CHAR(2) NULLIF 'BB' # c_middle
+COL = CHAR(16) # c_last
+COL = CHAR(20) # c_street_1
+COL = VARCHAR(20) # c_street_2
+COL = CHAR(20) # c_city
+COL = CHAR(2)  # c_state
+COL = CHAR(9)  # c_zip
+COL = CHAR(16) # c_phone
+COL = CHAR(19) # c_since
+COL = CHAR(2)  # c_credit
+COL = CHAR(10) # c_credit_lim
+COL = CHAR(10) # c_discount
+COL = CHAR(10) # c_balance
+COL = CHAR(10) # c_ytd_payment
+COL = CHAR(10) # c_payment_cnt
+COL = CHAR(10) # c_delivery_cnt
+COL = CHAR(19) # c_data

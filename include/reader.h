@@ -13,6 +13,7 @@
 
 #include "pg_bulkload.h"
 
+#include "access/xact.h"
 #include "lib/stringinfo.h"
 #include "nodes/primnodes.h"
 #include "utils/relcache.h"
@@ -30,9 +31,7 @@ struct Source
 	SourceCloseProc		close;	/** close */
 };
 
-extern Source *CreateFileSource(const char *path, TupleDesc desc);
-extern Source *CreateRemoteSource(const char *path, TupleDesc desc);
-extern Source *CreateQueueSource(const char *path, TupleDesc desc);
+extern Source *CreateSource(const char *path, TupleDesc desc);
 
 #define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))
 #define SourceClose(self)				((self)->close((self)))
@@ -41,17 +40,21 @@ extern Source *CreateQueueSource(const char *path, TupleDesc desc);
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, TupleDesc desc);
-typedef HeapTuple (*ParserReadProc)(Parser *self, Source *source);
-typedef void (*ParserTermProc)(Parser *self);
+typedef void (*ParserInitProc)(Parser *self, const char *infile, TupleDesc desc);
+typedef HeapTuple (*ParserReadProc)(Parser *self);
+typedef int64 (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
+typedef void (*ParserDumpParamsProc)(Parser *self);
+typedef void (*ParserDumpRecordProc)(Parser *self, FILE *fp, char *badfile);
 
 struct Parser
 {
-	ParserInitProc		init;	/**< initialize */
-	ParserReadProc		read;	/**< read one tuple */
-	ParserTermProc		term;	/**< clean up */
-	ParserParamProc		param;	/**< parse a parameter */
+	ParserInitProc			init;		/**< initialize */
+	ParserReadProc			read;		/**< read one tuple */
+	ParserTermProc			term;		/**< clean up */
+	ParserParamProc			param;		/**< parse a parameter */
+	ParserDumpParamsProc	dumpParams;	/**< dump parameters */
+	ParserDumpRecordProc	dumpRecord;	/**< dump parse error record */
 
 	int			parsing_field;	/**< field number being parsed */
 	int64		count;			/**< number of records read from stream */
@@ -60,11 +63,14 @@ struct Parser
 extern Parser *CreateBinaryParser(void);
 extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
+extern Parser *CreateFunctionParser(void);
 
-#define ParserInit(self, desc)				((self)->init((self), (desc)))
-#define ParserRead(self, source)			((self)->read((self), (source)))
+#define ParserInit(self, infile, desc)		((self)->init((self), (infile), (desc)))
+#define ParserRead(self)					((self)->read((self)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
+#define ParserDumpParams(self)				((self)->dumpParams((self)))
+#define ParserDumpRecord(self, fp, fname)	((self)->dumpRecord((self), (fp), (fname)))
 
 /**
  * @brief Reader
@@ -77,11 +83,16 @@ struct Reader
 	 */
 	Oid				relid;			/**< target relation id */
 	char		   *infile;			/**< input file name */
+	char		   *logfile;		/**< log file name */
+	char		   *parse_badfile;	/**< parse error file name */
+	char		   *dup_badfile;	/**< duplicate error file name */
 	int64			limit;			/**< max input lines */
-	int				max_err_cnt;	/**< max error admissible number */
+	int64			max_parse_errors;	/**< max error admissible number by parse */
+	int64			max_dup_errors;	/**< max error admissible number by duplicate */
 
 	WriterCreate	writer;			/**< writer factory */
 	ON_DUPLICATE	on_duplicate;	/**< writer options */
+	bool			verbose;		/**< logger options */
 
 	/*
 	 * Source and Parser
@@ -92,12 +103,14 @@ struct Reader
 	/*
 	 * Internal status
 	 */
-	int				errors;			/**< number of errors ignored */
+	int64			parse_errors;	/**< number of parse errors ignored */
+	FILE		   *parse_fp;
 };
 
-extern void ReaderOpen(Reader *rd, const char *fname, const char *options);
+extern Reader *ReaderCreate(const char *fname, const char *options, time_t tm);
 extern HeapTuple ReaderNext(Reader *rd);
-extern void ReaderClose(Reader *rd);
+extern void ReaderDumpParams(Reader *rd);
+extern int64 ReaderClose(Reader *rd, bool onError);
 
 /* TupleFormer */
 

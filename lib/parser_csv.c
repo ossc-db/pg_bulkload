@@ -15,6 +15,7 @@
 #include "access/htup.h"
 #include "utils/rel.h"
 
+#include "logger.h"
 #include "reader.h"
 #include "pg_strutil.h"
 #include "pg_profile.h"
@@ -30,9 +31,11 @@ typedef struct CSVParser
 {
 	Parser	base;
 
-	TupleFormer	former;
+	Source		   *source;
+	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
+	int64	need_offset;		/**< lines to skip */
 
 	/**
 	 * @brief Record Buffer.
@@ -71,6 +74,11 @@ typedef struct CSVParser
 	int	used_len;
 	
 	/**
+	 * @brief Pointer to the current record in the record buffer.
+	 */
+	char *cur;
+	
+	/**
 	 * @brief Pointer to the next record in the record buffer.
 	 */
 	char *next;
@@ -95,10 +103,12 @@ typedef struct CSVParser
 	bool	   *fnn;			/**< array of NOT NULL column flag */
 } CSVParser;
 
-static void	CSVParserInit(CSVParser *self, TupleDesc desc);
-static HeapTuple	CSVParserRead(CSVParser *self, Source *source);
-static void	CSVParserTerm(CSVParser *self);
+static void	CSVParserInit(CSVParser *self, const char *infile, TupleDesc desc);
+static HeapTuple	CSVParserRead(CSVParser *self);
+static int64	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
+static void CSVParserDumpParams(CSVParser *self);
+static void CSVParserDumpRecord(CSVParser *self, FILE *fp, char *badfile);
 
 static void	ExtractValuesFromCSV(CSVParser *self);
 
@@ -148,6 +158,8 @@ CreateCSVParser(void)
 	self->base.read = (ParserReadProc) CSVParserRead;
 	self->base.term = (ParserTermProc) CSVParserTerm;
 	self->base.param = (ParserParamProc) CSVParserParam;
+	self->base.dumpParams = (ParserDumpParamsProc) CSVParserDumpParams;
+	self->base.dumpRecord = (ParserDumpRecordProc) CSVParserDumpRecord;
 	self->offset = -1;
 	return (Parser *)self;
 }
@@ -164,7 +176,7 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser *self, TupleDesc desc)
+CSVParserInit(CSVParser *self, const char *infile, TupleDesc desc)
 {
 	/*
 	 * set default values
@@ -173,7 +185,7 @@ CSVParserInit(CSVParser *self, TupleDesc desc)
 	self->quote = self->quote ? self->quote : '"';
 	self->escape = self->escape ? self->escape : '"';
 	self->null = self->null ? self->null : "";
-	self->offset = self->offset > 0 ? self->offset : 0;
+	self->need_offset = self->offset = self->offset > 0 ? self->offset : 0;
 
 	/*
 	 * validation check
@@ -189,6 +201,7 @@ CSVParserInit(CSVParser *self, TupleDesc desc)
 				 errmsg
 				 ("QUOTE must not appear in the NULL specification")));
 
+	self->source = CreateSource(infile, desc);
 	TupleFormerInit(&self->former, desc);
 
 	/*
@@ -251,9 +264,15 @@ CSVParserInit(CSVParser *self, TupleDesc desc)
  * @param None
  * @return None
  */
-static void
+static int64
 CSVParserTerm(CSVParser *self)
 {
+	int64	skip;
+
+	skip = self->offset;
+
+	if (self->source)
+		SourceClose(self->source);
 	if (self->fields)
 		pfree(self->fields);
 	if (self->rec_buf)
@@ -261,6 +280,8 @@ CSVParserTerm(CSVParser *self)
 	if (self->field_buf)
 		pfree(self->field_buf);
 	pfree(self);
+
+	return skip;
 }
 
 static bool
@@ -301,7 +322,7 @@ checkFieldIsNull(CSVParser *self, int field_num, int len)
  * @note When an error is found, it returns to the caller through ereport().
  */
 static HeapTuple
-CSVParserRead(CSVParser *self, Source *source)
+CSVParserRead(CSVParser *self)
 {
 	int			i = 0;			/* Index of the scanned character */
 	int			ret;
@@ -309,7 +330,6 @@ CSVParserRead(CSVParser *self, Source *source)
 	char		quote = self->quote;	/* Cache for the quote mark */
 	char		escape = self->escape; /* Cache for the escape character */
 	char		delim = self->delim;	/* Cache for the delimiter */
-	char	   *cur;			/* Return value */
 	bool		need_data = false;		/* Flag indicating the need to read more characters */
 	bool		in_quote = false;
 	bool		inCR = false;
@@ -321,7 +341,6 @@ CSVParserRead(CSVParser *self, Source *source)
 	int			dst;			/* Index to the next destination */
 	int			src;			/* Index to the next source */
 	int			field_num = 0;	/* Number of self->fields already parsed */
-	int			fetched_num;
 
 	/*
 	 * If EOF found in the previous calls, returns zero.
@@ -330,14 +349,14 @@ CSVParserRead(CSVParser *self, Source *source)
 		return NULL;
 
 	/* Skip first offset lines in the input file */
-	if (unlikely(self->offset > 0))
+	if (unlikely(self->need_offset > 0))
 	{
 #define LINEBUFLEN		1024
 		int		len;
 		int		skipped = 0;
 		bool	inCR = false;
 
-		while ((len = SourceRead(source, self->rec_buf, self->buf_len - 1)) > 0)
+		while ((len = SourceRead(self->source, self->rec_buf, self->buf_len - 1)) > 0)
 		{
 			int		i;
 
@@ -359,7 +378,7 @@ CSVParserRead(CSVParser *self, Source *source)
 				/* Skip the line */
 				inCR = false;
 				++skipped;
-				if (skipped >= self->offset)
+				if (skipped >= self->need_offset)
 				{
 					/* Seek to head of the next line. */
 					self->next = self->rec_buf + i + 1;
@@ -371,21 +390,21 @@ CSVParserRead(CSVParser *self, Source *source)
 		}
 		ereport(ERROR, (errcode_for_file_access(),
 			errmsg("could not skip " int64_FMT " lines in the input file: %m",
-				self->offset)));
+				self->need_offset)));
 skip_done:
 		/* done */
-		self->offset = 0;
+		self->need_offset = 0;
 	}
 
-	cur = self->next;
+	self->cur = self->next;
 
 	/*
 	 * Initialize variables related to fied data.
 	 */
-	src = cur - self->rec_buf;
+	src = self->cur - self->rec_buf;
 	dst = 0;
 	field_head = src;
-	fetched_num = 1;
+	self->base.parsing_field = 1;
 	self->field_buf[dst] = '\0';
 	self->fields[field_num] = self->field_buf + dst;
 
@@ -395,7 +414,7 @@ skip_done:
 	 * Because errors are accumulated until specified numbers of erros are
 	 * found, ereport() must no be used in this loop unless fatal error is found.
 	 */
-	for (i = cur - self->rec_buf;; i++)
+	for (i = self->cur - self->rec_buf;; i++)
 	{
 		/*
 		 * If no record is found in the record buffer, read them from the input file.
@@ -411,16 +430,16 @@ skip_done:
 			 * - The current line is not at the begenning of the record buffer,
 			 *	 -> Move the current line to the beginning of the record buffer and continue to read.
 			 */
-			if (cur != self->rec_buf)
+			if (self->cur != self->rec_buf)
 			{
-				int			move_size = cur - self->rec_buf;	/* Amount to move buffer. */
+				int			move_size = self->cur - self->rec_buf;	/* Amount to move buffer. */
 
-				memmove(self->rec_buf, cur, self->buf_len - move_size);
+				memmove(self->rec_buf, self->cur, self->buf_len - move_size);
 				self->used_len -= move_size;
 				i -= move_size;
 				field_head -= move_size;
 				src -= move_size;
-				cur = self->rec_buf;
+				self->cur = self->rec_buf;
 			}
 			else
 			{
@@ -443,11 +462,11 @@ skip_done:
 				 * Expanded buffer may be different from the original one, so we reset the
 				 * record beginning.
 				 */
-				cur = self->rec_buf;
+				self->cur = self->rec_buf;
 			}
 
 			BULKLOAD_PROFILE(&prof_reader_parser);
-			ret = SourceRead(source, self->rec_buf + self->used_len,
+			ret = SourceRead(self->source, self->rec_buf + self->used_len,
 								self->buf_len - self->used_len - 1);
 			BULKLOAD_PROFILE(&prof_reader_source);
 			if (ret == 0)
@@ -457,7 +476,7 @@ skip_done:
 				 * When no data is found in the record buffer and we encounter EOF,
 				 * there're no  more input to handle and return false.
 				 */
-				if (cur[0] == '\0')
+				if (self->cur[0] == '\0')
 					return NULL;
 
 				/*
@@ -465,7 +484,15 @@ skip_done:
 				 * it's an error.   At this point, whole line has been parsed and exit from the loop.
 				 */
 				if (in_quote)
+				{
+					/* Record string does not include a new line of the end. */
+					if (self->rec_buf[i - 1] == '\n')
+						i--;
+					if (self->rec_buf[i - 1] == '\r')
+						i--;
+					self->rec_buf[i] = '\0';
 					break;
+				}
 
 				/*
 				 * To simplify the following parsing, when the last character of the input
@@ -552,7 +579,7 @@ skip_done:
 			 * records to read.  The beginning of the record must not be a
 			 * quote mark and we can test this here.
 			 */
-			if (i == cur - self->rec_buf)
+			if (i == self->cur - self->rec_buf)
 				self->base.count++;
 
 			if (c == quote)
@@ -597,7 +624,7 @@ skip_done:
 				 */
 				if (field_num + 1 < self->former.nfields)
 					field_num++;
-				fetched_num++;
+				self->base.parsing_field++;
 
 				/*
 				 * The beginning of the next field is the next character from the delimiter.
@@ -626,7 +653,7 @@ skip_done:
 	/*
 	 * It's an error if the number of self->fields exceeds the number of valid column. 
 	 */
-	if (fetched_num > self->former.nfields)
+	if (self->base.parsing_field > self->former.nfields)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("extra data after last expected column")));
@@ -634,12 +661,12 @@ skip_done:
 	/*
 	 * Error, if the number of self->fields is less than the number of valid columns.
 	 */
-	if (fetched_num < self->former.nfields)
+	if (self->base.parsing_field < self->former.nfields)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("missing data for column \"%s\"",
-							   NameStr(self->former.desc->attrs[self->former.attnum[fetched_num]]->attname)),
-						errdetail("only %d columns, required %d", fetched_num, self->former.nfields)));
+							   NameStr(self->former.desc->attrs[self->former.attnum[self->base.parsing_field]]->attname)),
+						errdetail("only %d columns, required %d", self->base.parsing_field, self->former.nfields)));
 	}
 
 	ExtractValuesFromCSV(self);
@@ -675,7 +702,8 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 	{
 		self->fnn_name = lappend(self->fnn_name, pstrdup(value));
 	}
-	else if (pg_strcasecmp(keyword, "OFFSET") == 0)
+	else if (pg_strcasecmp(keyword, "SKIP") == 0 ||
+			 pg_strcasecmp(keyword, "OFFSET") == 0)
 	{
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
@@ -684,6 +712,59 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 		return false;	/* unknown parameter */
 
 	return true;
+}
+
+static void
+CSVParserDumpParams(CSVParser *self)
+{
+	StringInfoData	buf;
+	char		   *str;
+	ListCell	   *name;
+
+	initStringInfo(&buf);
+
+	appendStringInfoString(&buf, "TYPE = CSV\n");
+
+	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
+
+	str = QuoteSingleChar(self->delim);
+	appendStringInfo(&buf, "DELIMITER = %s\n", str);
+	pfree(str);
+
+	str = QuoteSingleChar(self->quote);
+	appendStringInfo(&buf, "QUOTE = %s\n", str);
+	pfree(str);
+
+	str = QuoteSingleChar(self->escape);
+	appendStringInfo(&buf, "ESCAPE = %s\n", str);
+	pfree(str);
+
+	str = QuoteString(self->null);
+	appendStringInfo(&buf, "NULL = %s\n", str);
+	pfree(str);
+
+	foreach(name, self->fnn_name)
+	{
+		str = QuoteString(lfirst(name));
+		appendStringInfo(&buf, "FORCE_NOT_NULL = %s\n", str);
+		pfree(str);
+	}
+
+	LoggerLog(INFO, buf.data);
+	pfree(buf.data);
+}
+
+static void
+CSVParserDumpRecord(CSVParser *self, FILE *fp, char *badfile)
+{
+	int	len;
+
+	len = fprintf(fp, "%s\n", self->cur);
+	if (len < strlen(self->cur) || fflush(fp))
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not write parse badfile \"%s\": %m",
+						badfile)));
 }
 
 /**

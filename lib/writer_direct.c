@@ -19,6 +19,7 @@
 #include "storage/fd.h"
 #include "utils/rel.h"
 
+#include "logger.h"
 #include "pg_loadstatus.h"
 #include "writer.h"
 #include "pg_btree.h"
@@ -101,7 +102,8 @@ typedef struct DirectWriter
 #define BLOCK_BUF_NUM		1024
 
 static void	DirectWriterInsert(DirectWriter *self, HeapTuple tuple);
-static void	DirectWriterClose(DirectWriter *self);
+static WriterResult	DirectWriterClose(DirectWriter *self, bool onError);
+static void	DirectWriterDumpParams(DirectWriter *self);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
 
@@ -118,29 +120,6 @@ static void	UpdateLSF(DirectWriter *loader, BlockNumber num);
 static void UnlinkLSF(DirectWriter *loader);
 static void ValidateLSFDirectory(const char *path);
 
-/*
- * TODO: If we need more loaders oncurrently, modify this variable
- * to something like a linked list.
- */
-static DirectWriter ActiveLoader =
-{
-	{
-		(WriterInsertProc) DirectWriterInsert,
-		(WriterCloseProc) DirectWriterClose,
-		false
-	},
-	NULL,
-	{},
-	{},
-	-1,
-	"",
-	InvalidTransactionId,
-	0,
-	-1,
-	NULL,
-	0
-};
-
 /* ========================================================================
  * Implementation
  * ========================================================================*/
@@ -151,23 +130,26 @@ static DirectWriter ActiveLoader =
  * @param rel [in] Relation for loading
  */
 Writer *
-CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate)
+CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
 {
 	DirectWriter	   *self;
 	LoadStatus		   *ls;
 
-	if (ActiveLoader.lsf_fd != -1)
-		elog(ERROR, "already direct loader is active");
-
-	self = &ActiveLoader;
+	self = palloc0(sizeof(DirectWriter));
+	self->base.insert = (WriterInsertProc) DirectWriterInsert,
+	self->base.close = (WriterCloseProc) DirectWriterClose,
+	self->base.dumpParams = (WriterDumpParamsProc) DirectWriterDumpParams,
+	self->base.count = 0;
 	self->lsf_fd = -1;
 	self->datafd = -1;
 	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
+	self->curblk = 0;
 
 	self->rel = heap_open(relid, AccessExclusiveLock);
 	VerifyTarget(self->rel);
 
-	SpoolerOpen(&self->spooler, self->rel, on_duplicate, false);
+	SpoolerOpen(&self->spooler, self->rel, on_duplicate, false, max_dup_errors,
+				dup_badfile);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	/* Verify DataDir/pg_bulkload directory */
@@ -297,38 +279,42 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
  * @param self [in/out] Load status information
  * @return void
  */
-static void
-DirectWriterClose(DirectWriter *self)
+static WriterResult
+DirectWriterClose(DirectWriter *self, bool onError)
 {
+	WriterResult	ret = { 0 };
+
+	Assert(self != NULL);
+
 	/* Flush unflushed block buffer and close the heap file. */
-	flush_pages(self);
+	if (!onError)
+		flush_pages(self);
+
 	close_data_file(self);
 	UnlinkLSF(self);
-	if (self->blocks)
+
+	if (!onError)
 	{
-		pfree(self->blocks);
-		self->blocks = NULL;
+		SpoolerClose(&self->spooler);
+		ret.num_dup_new = self->spooler.dup_new;
+		ret.num_dup_old = self->spooler.dup_old;
+
+		if (self->rel)
+			heap_close(self->rel, AccessExclusiveLock);
+
+		if (self->blocks)
+			pfree(self->blocks);
+
+		pfree(self);
 	}
 
-	SpoolerClose(&self->spooler);
-
-	if (self->rel)
-	{
-		heap_close(self->rel, AccessExclusiveLock);
-		self->rel = NULL;
-	}
+	return ret;
 }
 
-/**
- * @brief Clean up direct loader on error.
- * Data file and LSF might be still open.
- * @return void
- */
-void
-AtEOXact_DirectLoader(XactEvent event, void *arg)
+static void
+DirectWriterDumpParams(DirectWriter *self)
 {
-	close_data_file(&ActiveLoader);
-	UnlinkLSF(&ActiveLoader);
+	LoggerLog(INFO, "WRITER = DIRECT\n\n");
 }
 
 /**

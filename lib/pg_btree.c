@@ -16,6 +16,7 @@
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "executor/executor.h"
+#include "storage/fd.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -25,6 +26,7 @@
 #include "utils/snapmgr.h"
 #endif
 
+#include "logger.h"
 #include "pg_bulkload_win32.h"
 
 static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
@@ -62,12 +64,8 @@ typedef struct BTReader
 	char			   *page;	/**< Cached page */
 } BTReader;
 
-static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo);
-static void IndexSpoolEnd(BTSpool **spools,
-			  ResultRelInfo *relinfo,
-			  bool reindex,
-			  bool use_wal,
-			  ON_DUPLICATE on_duplicate);
+static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique);
+static void IndexSpoolEnd(Spooler *self , bool reindex);
 static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex);
 
 static IndexTuple BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free);
@@ -76,24 +74,28 @@ static void BTReaderTerm(BTReader *reader);
 static void BTReaderReadPage(BTReader *reader, BlockNumber blkno);
 static IndexTuple BTReaderGetNextItem(BTReader *reader);
 
-static void _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal,
-						   ON_DUPLICATE on_duplicate);
-static void _bt_mergeload(BTWriteState *wstate, BTSpool *btspool,
-						  BTReader *btspool2, Relation heapRel,
-						  ON_DUPLICATE on_duplicate);
+static void _bt_mergebuild(Spooler *self, BTSpool *btspool);
+static void _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool,
+						  BTReader *btspool2, Relation heapRel);
+static int compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
+	ScanKey entry, int keysz, TupleDesc tupdes, bool *hasnull);
 static bool heap_is_visible(Relation heapRel, ItemPointer htid);
 static void report_unique_violation(Relation rel, IndexTuple itup);
-static void remove_duplicate(Relation heap, IndexTuple itup);
-static char *tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple);
+static void remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *relname);
 
 
 void
-SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal)
+SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal, int64 max_dup_errors, char *dup_badfile)
 {
 	memset(self, 0, sizeof(Spooler));
 
 	self->on_duplicate = on_duplicate;
 	self->use_wal = use_wal;
+	self->max_dup_errors = max_dup_errors;
+	self->dup_old = 0;
+	self->dup_new = 0;
+	self->dup_badfile = pstrdup(dup_badfile);
+	self->dup_fp = NULL;
 
 	self->relinfo = makeNode(ResultRelInfo);
 	self->relinfo->ri_RangeTableIndex = 1;	/* dummy */
@@ -110,7 +112,8 @@ SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal
 
 	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
 
-	self->spools = IndexSpoolBegin(self->relinfo);
+	self->spools = IndexSpoolBegin(self->relinfo,
+								   on_duplicate == ON_DUPLICATE_ERROR);
 }
 
 void
@@ -118,13 +121,22 @@ SpoolerClose(Spooler *self)
 {
 	/* Merge indexes */
 	if (self->spools != NULL)
-		IndexSpoolEnd(self->spools, self->relinfo, true, self->use_wal, self->on_duplicate);
+		IndexSpoolEnd(self, true);
 
 	/* Terminate spooler. */
 	ExecDropSingleTupleTableSlot(self->slot);
 	if (self->estate->es_result_relation_info)
 		ExecCloseIndices(self->estate->es_result_relation_info);
 	FreeExecutorState(self->estate);
+
+	/* Close and release members. */
+	if (self->dup_fp != NULL && FreeFile(self->dup_fp) < 0)
+		ereport(WARNING,
+				(errcode_for_file_access(),
+				 errmsg("could not close duplicate bad file \"%s\": %m",
+						self->dup_badfile)));
+	if (self->dup_badfile != NULL)
+		pfree(self->dup_badfile);
 }
 
 void
@@ -140,7 +152,7 @@ SpoolerInsert(Spooler *self, HeapTuple tuple)
  * IndexSpoolBegin - Initialize spools.
  */
 static BTSpool **
-IndexSpoolBegin(ResultRelInfo *relinfo)
+IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 {
 	int				i;
 	int				numIndices = relinfo->ri_NumIndices;
@@ -156,7 +168,10 @@ IndexSpoolBegin(ResultRelInfo *relinfo)
 		{
 			elog(DEBUG1, "pg_bulkload: spool \"%s\"",
 				RelationGetRelationName(indices[i]));
-			spools[i] = _bt_spoolinit(indices[i], indices[i]->rd_index->indisunique, false);
+			spools[i] = _bt_spoolinit(indices[i],
+					enforceUnique ? indices[i]->rd_index->indisunique: false,
+					false);
+			spools[i]->isunique = indices[i]->rd_index->indisunique;
 		}
 		else
 			spools[i] = NULL;
@@ -169,23 +184,20 @@ IndexSpoolBegin(ResultRelInfo *relinfo)
  * IndexSpoolEnd - Flush and delete spools.
  */
 void
-IndexSpoolEnd(BTSpool **spools,
-			  ResultRelInfo *relinfo,
-			  bool reindex,
-			  bool use_wal,
-			  ON_DUPLICATE on_duplicate)
+IndexSpoolEnd(Spooler *self, bool reindex)
 {
+	BTSpool **spools = self->spools;
 	int				i;
-	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
+	RelationPtr		indices = self->relinfo->ri_IndexRelationDescs;
 
 	Assert(spools != NULL);
-	Assert(relinfo != NULL);
+	Assert(self->relinfo != NULL);
 
-	for (i = 0; i < relinfo->ri_NumIndices; i++)
+	for (i = 0; i < self->relinfo->ri_NumIndices; i++)
 	{
 		if (spools[i] != NULL)
 		{
-			_bt_mergebuild(spools[i], relinfo->ri_RelationDesc, use_wal, on_duplicate);
+			_bt_mergebuild(self, spools[i]);
 			_bt_spooldestroy(spools[i]);
 		}
 		else if (reindex)
@@ -306,8 +318,9 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 
 
 static void
-_bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on_duplicate)
+_bt_mergebuild(Spooler *self, BTSpool *btspool)
 {
+	Relation heapRel = self->relinfo->ri_RelationDesc;
 	BTWriteState	wstate;
 	BTReader		reader;
 	bool			merge;
@@ -322,7 +335,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on
 	 * We need to log index creation in WAL iff WAL archiving is enabled AND
 	 * it's not a temp index.
 	 */
-	wstate.btws_use_wal = use_wal &&
+	wstate.btws_use_wal = self->use_wal &&
 		XLogArchivingActive() && !wstate.index->rd_istemp;
 
 	/* reserve the metapage */
@@ -346,12 +359,12 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on
 		merge ? "with" : "without",
 		wstate.btws_use_wal ? "with" : "without");
 
-	if (merge)
+	if (merge || (btspool->isunique && self->on_duplicate != ON_DUPLICATE_ERROR))
 	{
 		/* Assign a new file node and merge two streams into it. */
 		setNewRelfilenode(wstate.index, RecentXmin);
 		BULKLOAD_PROFILE_PUSH();
-		_bt_mergeload(&wstate, btspool, &reader, heapRel, on_duplicate);
+		_bt_mergeload(self, &wstate, btspool, &reader, heapRel);
 		BULKLOAD_PROFILE_POP();
 		BULKLOAD_PROFILE(&prof_merge);
 	}
@@ -369,8 +382,7 @@ _bt_mergebuild(BTSpool *btspool, Relation heapRel, bool use_wal, ON_DUPLICATE on
  * _bt_mergeload - Merge two streams of index tuples into new index files.
  */
 static void
-_bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
-			  Relation heapRel, ON_DUPLICATE on_duplicate)
+_bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2, Relation heapRel)
 {
 	BTPageState	   *state = NULL;
 	IndexTuple		itup,
@@ -379,6 +391,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 	TupleDesc		tupdes = RelationGetDescr(wstate->index);
 	int				keysz = RelationGetNumberOfAttributes(wstate->index);
 	ScanKey			indexScanKey;
+	ON_DUPLICATE	on_duplicate = self->on_duplicate;
 
 	Assert(btspool != NULL);
 	Assert(btspool2 != NULL);
@@ -469,17 +482,26 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 				switch (on_duplicate)
 				{
 					case ON_DUPLICATE_REMOVE_NEW:
-						remove_duplicate(heapRel, itup);
+						self->dup_new++;
+						remove_duplicate(self, heapRel, itup,
+							RelationGetRelationName(wstate->index));
 						itup = BTSpoolGetNextItem(btspool, itup, &should_free);
 						continue;
 					case ON_DUPLICATE_REMOVE_OLD:
-						remove_duplicate(heapRel, itup2);
+						self->dup_old++;
+						remove_duplicate(self, heapRel, itup2,
+							RelationGetRelationName(wstate->index));
 						itup2 = BTReaderGetNextItem(btspool2);
 						continue;
 					default:
 						report_unique_violation(wstate->index, itup);
 						break;
 				}
+
+				if (self->dup_old + self->dup_new > self->max_dup_errors)
+					ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("Maximum duplicate error count exceeded")));
 			}
 			else
 			{
@@ -487,6 +509,7 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 				itup2 = BTReaderGetNextItem(btspool2);
 			}
 		}
+
 		BULKLOAD_PROFILE(&prof_merge_unique);
 
 		/* When we see first tuple, create first index page */
@@ -496,7 +519,52 @@ _bt_mergeload(BTWriteState *wstate, BTSpool *btspool, BTReader *btspool2,
 		if (load1)
 		{
 			_bt_buildadd(wstate, state, itup);
-			itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+
+			if (btspool->isunique)
+			{
+				IndexTuple	next_itup = NULL;
+				bool		next_should_free = false;
+
+				for (;;)
+				{
+					next_itup = BTSpoolGetNextItem(btspool, next_itup,
+												   &next_should_free);
+					if (next_itup == NULL)
+						break;
+					else
+					{
+						int32	compare;
+						bool	hasnull;
+
+						compare = compare_indextuple(itup, next_itup,
+									indexScanKey, keysz, tupdes, &hasnull);
+						if (compare < 0 || hasnull)
+							break;
+
+						if (compare > 0)
+						{
+							/* shouldn't happen */
+							elog(ERROR, "faild in tuplesort_performsort");
+						}
+
+						self->dup_new++;
+						remove_duplicate(self, heapRel, next_itup,
+							RelationGetRelationName(wstate->index));
+
+						if (self->dup_old + self->dup_new > self->max_dup_errors)
+							ereport(ERROR,
+								(errcode(ERRCODE_INTERNAL_ERROR),
+								 errmsg("Maximum duplicate error count exceeded")));
+					}
+				}
+				if (should_free)
+					pfree(itup);
+
+				itup = next_itup;
+				should_free = next_should_free;
+			}
+			else
+				itup = BTSpoolGetNextItem(btspool, itup, &should_free);
 		}
 		else
 		{
@@ -705,7 +773,8 @@ BTReaderGetNextItem(BTReader *reader)
 	/*
 	 * If any leaf page isn't read, the state is treated like as EOF 
 	 */
-	Assert(reader->blkno != InvalidBlockNumber);
+	if (reader->blkno == InvalidBlockNumber)
+		return NULL;
 
 	maxoff = PageGetMaxOffsetNumber(reader->page);
 
@@ -746,6 +815,57 @@ BTReaderGetNextItem(BTReader *reader)
 	}
 }
 
+static int
+compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
+	ScanKey entry, int keysz, TupleDesc tupdes, bool *hasnull)
+{
+	int		i;
+	int32	compare;
+
+	*hasnull = false;
+	for (i = 1; i <= keysz; i++, entry++)
+	{
+		Datum		attrDatum1,
+					attrDatum2;
+		bool		isNull1,
+					isNull2;
+
+		attrDatum1 = index_getattr(itup1, i, tupdes, &isNull1);
+		attrDatum2 = index_getattr(itup2, i, tupdes, &isNull2);
+		if (isNull1)
+		{
+			*hasnull = true;
+			if (isNull2)
+				compare = 0;		/* NULL "=" NULL */
+			else if (entry->sk_flags & SK_BT_NULLS_FIRST)
+				compare = -1;		/* NULL "<" NOT_NULL */
+			else
+				compare = 1;		/* NULL ">" NOT_NULL */
+		}
+		else if (isNull2)
+		{
+			*hasnull = true;
+			if (entry->sk_flags & SK_BT_NULLS_FIRST)
+				compare = 1;		/* NOT_NULL ">" NULL */
+			else
+				compare = -1;		/* NOT_NULL "<" NULL */
+		}
+		else
+		{
+			compare = DatumGetInt32(FunctionCall2(&entry->sk_func,
+												  attrDatum1,
+												  attrDatum2));
+
+			if (entry->sk_flags & SK_BT_DESC)
+				compare = -compare;
+		}
+		if (compare != 0)
+			return compare;
+	}
+
+	return 0;
+}
+
 /*
  * heap_is_visible
  */
@@ -775,68 +895,8 @@ heap_is_visible(Relation heapRel, ItemPointer htid)
 #endif
 }
 
-/*
- * borrowing from ri_ReportViolation.
- */
 static void
-report_unique_violation(Relation rel, IndexTuple itup)
-{
-#define BUFLENGTH	512
-	char		key_names[BUFLENGTH];
-	char		key_values[BUFLENGTH];
-	char	   *name_ptr = key_names;
-	char	   *val_ptr = key_values;
-	int			i;
-
-	TupleDesc	tupdesc = rel->rd_att;
-
-	for (i = 0; i < tupdesc->natts; i++)
-	{
-		Datum		value;
-		bool		isnull;
-		char	   *name,
-				   *val;
-
-		name = NameStr(tupdesc->attrs[i]->attname);
-		value = index_getattr(itup, i + 1, tupdesc, &isnull);
-		if (isnull)
-			val = "null";
-		else
-		{
-			Oid			foutoid;
-			bool		typisvarlena;
-
-			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
-							  &foutoid, &typisvarlena);
-			val = OidOutputFunctionCall(foutoid, value);
-		}
-
-		/*
-		 * Go to "..." if name or value doesn't fit in buffer.  We reserve 5
-		 * bytes to ensure we can add comma, "...", null.
-		 */
-		if (strlen(name) >= (key_names + BUFLENGTH - 5) - name_ptr ||
-			strlen(val) >= (key_values + BUFLENGTH - 5) - val_ptr)
-		{
-			sprintf(name_ptr, "...");
-			sprintf(val_ptr, "...");
-			break;
-		}
-
-		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? "," : "", name);
-		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? "," : "", val);
-	}
-
-	ereport(ERROR,
-			(errcode(ERRCODE_UNIQUE_VIOLATION),
-			 errmsg("duplicate key value violates unique constraint \"%s\"",
-					RelationGetRelationName(rel)),
-		errdetail("Key (%s)=(%s) already exists.",
-				  key_names, key_values)));
-}
-
-static void
-remove_duplicate(Relation heap, IndexTuple itup)
+remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *relname)
 {
 	HeapTupleData	tuple;
 	BlockNumber		blknum;
@@ -862,20 +922,38 @@ remove_duplicate(Relation heap, IndexTuple itup)
 		char		   *str;
 		TupleDesc		tupdesc;
 
+		simple_heap_delete(heap, &itup->t_tid);
+
+		/* output duplicate bad file. */
+		if (self->dup_fp == NULL)
+			if ((self->dup_fp = AllocateFile(self->dup_badfile, "w")) == NULL)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not open duplicate bad file \"%s\": %m",
+								self->dup_badfile)));
+
 		tupdesc = RelationGetDescr(heap);
 		tuple.t_len = ItemIdGetLength(itemid);
 		tuple.t_self = itup->t_tid;
 
 		str = tuple_to_cstring(RelationGetDescr(heap), &tuple);
-		elog(WARNING, "duplicate tuple removed: %s", str);
+		if (fprintf(self->dup_fp, "%s\n", str) < 0 || fflush(self->dup_fp))
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not write parse badfile \"%s\": %m",
+							self->dup_badfile)));
 
-		simple_heap_delete(heap, &itup->t_tid);
+		pfree(str);
 	}
 
 	ReleaseBuffer(buffer);
+
+	LoggerLog(WARNING, "Duplidate error Record " int64_FMT
+		": Rejected - duplicate key value violates unique constraint \"%s\"\n",
+		self->dup_old + self->dup_new, relname);
 }
 
-static char *
+char *
 tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 {
 	bool		needComma = false;
@@ -895,8 +973,6 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 
 	/* And build the result string */
 	initStringInfo(&buf);
-
-	appendStringInfoChar(&buf, '(');
 
 	for (i = 0; i < ncolumns; i++)
 	{
@@ -957,10 +1033,78 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 			appendStringInfoChar(&buf, '"');
 	}
 
-	appendStringInfoChar(&buf, ')');
-
 	pfree(values);
 	pfree(nulls);
 
 	return buf.data;
+}
+
+static void
+report_unique_violation(Relation rel, IndexTuple itup)
+{
+#if PG_VERSION_NUM >= 80500
+	Datum	values[INDEX_MAX_KEYS];
+	bool	isnull[INDEX_MAX_KEYS];
+
+	index_deform_tuple(itup, RelationGetDescr(rel), values, isnull);
+	ereport(ERROR,
+			(errcode(ERRCODE_UNIQUE_VIOLATION),
+			 errmsg("duplicate key value violates unique constraint \"%s\"",
+					RelationGetRelationName(rel)),
+			 errdetail("Key %s already exists.",
+					   BuildIndexValueDescription(rel, values, isnull))));
+#else
+#define BUFLENGTH	512
+	char		key_names[BUFLENGTH];
+	char		key_values[BUFLENGTH];
+	char	   *name_ptr = key_names;
+	char	   *val_ptr = key_values;
+	int			i;
+
+	TupleDesc	tupdesc = rel->rd_att;
+
+	for (i = 0; i < tupdesc->natts; i++)
+	{
+		Datum		value;
+		bool		isnull;
+		char	   *name,
+				   *val;
+
+		name = NameStr(tupdesc->attrs[i]->attname);
+		value = index_getattr(itup, i + 1, tupdesc, &isnull);
+		if (isnull)
+			val = "null";
+		else
+		{
+			Oid			foutoid;
+			bool		typisvarlena;
+
+			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
+							  &foutoid, &typisvarlena);
+			val = OidOutputFunctionCall(foutoid, value);
+		}
+
+		/*
+		 * Go to "..." if name or value doesn't fit in buffer.  We reserve 5
+		 * bytes to ensure we can add comma, "...", null.
+		 */
+		if (strlen(name) >= (key_names + BUFLENGTH - 5) - name_ptr ||
+			strlen(val) >= (key_values + BUFLENGTH - 5) - val_ptr)
+		{
+			sprintf(name_ptr, "...");
+			sprintf(val_ptr, "...");
+			break;
+		}
+
+		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? "," : "", name);
+		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? "," : "", val);
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_UNIQUE_VIOLATION),
+			 errmsg("duplicate key value violates unique constraint \"%s\"",
+					RelationGetRelationName(rel)),
+		errdetail("Key (%s)=(%s) already exists.",
+				  key_names, key_values)));
+#endif
 }

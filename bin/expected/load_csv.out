@@ -1,9 +1,57 @@
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/csv.ctl -o"delimiter=|" -i data/data1.csv
+\! pg_bulkload -d contrib_regression data/csv1.ctl -o"delimiter=|" -i data/data1.csv -l results/csv1.log -P results/csv1.prs -u results/csv1.dup -o "PARSE_ERRORS=3" -o "VERBOSE=YES"
 NOTICE: BULK LOAD START
-WARNING:  BULK LOAD ERROR (row=4, col=15) invalid input syntax for type numeric: "BAD-DATA"
-WARNING:  skip 1 error(s) in input file
-NOTICE: BULK LOAD END (8 records)
+WARNING:  Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
+WARNING:  Parse error Record 2: Input Record 4: Rejected - column 15. invalid input syntax for type numeric: "BAD-DATA"
+WARNING:  Parse error Record 3: Input Record 6: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
+WARNING:  Parse error Record 4: Input Record 7: Rejected - column 7. null value in column "c_street_1" violates not-null constraint
+WARNING:  Maximum parse error count exceeded - 4 error(s) found in input file
+NOTICE: BULK LOAD END
+	2 Rows skipped.
+	3 Rows successfully loaded.
+	4 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv1.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv1.ctl
+
+INFILE = .../data1.csv
+PARSE_BADFILE = .../csv1.prs
+DUPLICATE_BADFILE = .../csv1.dup
+LOGFILE = .../csv1.log
+TABLE = public.customer
+PARSE_ERRORS = 3
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE = ERROR
+VERBOSE = YES
+LOAD = 5
+TYPE = CSV
+SKIP = 2
+DELIMITER = |
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
+Parse error Record 2: Input Record 4: Rejected - column 15. invalid input syntax for type numeric: "BAD-DATA"
+Parse error Record 3: Input Record 6: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
+Parse error Record 4: Input Record 7: Rejected - column 7. null value in column "c_street_1" violates not-null constraint
+Maximum parse error count exceeded - 4 error(s) found in input file
+
+  2 Rows skipped.
+  3 Rows successfully loaded.
+  4 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -12,13 +60,8 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(8 rows)
+(3 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
@@ -28,21 +71,109 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(3 rows)
+
+\! pg_bulkload -d contrib_regression data/csv2.ctl -o"delimiter=|" -i data/data1.csv -l results/csv1-2.log -P results/csv1-2.prs -u results/csv1-2.dup -o "SKIP=9" -o "LOAD=2"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	9 Rows skipped.
+	2 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv1-2.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv2.ctl
+
+INFILE = .../data1.csv
+PARSE_BADFILE = .../csv1-2.prs
+DUPLICATE_BADFILE = .../csv1-2.dup
+LOGFILE = .../csv1-2.log
+TABLE = public.customer
+PARSE_ERRORS = 50
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE = ERROR
+VERBOSE = NO
+LOAD = 2
+TYPE = CSV
+SKIP = 9
+DELIMITER = |
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+
+  9 Rows skipped.
+  2 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(8 rows)
+(5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv.ctl -i data/data2.csv
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(5 rows)
+
+\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -l results/csv2.log -P results/csv2.prs -u results/csv2.dup
 NOTICE: BULK LOAD START
-WARNING:  BULK LOAD ERROR (row=2, col=13) invalid input syntax for type timestamp: "BAD-DATA"
-WARNING:  skip 1 error(s) in input file
 ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id,c_d_id,c_id)=(0,224,16777224) already exists.
-query was: SELECT pg_bulkload($1, $2)
+DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
+query was: SELECT * FROM pg_bulkload($1, $2)
+\! awk -f data/adjust.awk results/csv2.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv1.ctl
+
+INFILE = .../data2.csv
+PARSE_BADFILE = .../csv2.prs
+DUPLICATE_BADFILE = .../csv2.dup
+LOGFILE = .../csv2.log
+TABLE = public.customer
+PARSE_ERRORS = 50
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE = ERROR
+VERBOSE = NO
+LOAD = 5
+TYPE = CSV
+SKIP = 2
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+duplicate key value violates unique constraint "customer_pkey"
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -51,13 +182,10 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(8 rows)
+(5 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
@@ -67,20 +195,56 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(8 rows)
+(5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -l results/csv3.log -P results/csv3.prs -u results/csv3.dup
 NOTICE: BULK LOAD START
-WARNING:  BULK LOAD ERROR (row=2, col=13) invalid input syntax for type timestamp: "BAD-DATA"
-WARNING:  skip 1 error(s) in input file
-WARNING:  duplicate tuple removed: (16777224,224,0,"DUP-1           ",AA,AAAAAAAAAAAAAAAA,"c_street_1          ","c_street_2          ",AAAAAAAAAAAAAAAAAAAA,AA,AAAAAAAAA,AAAAAAAAAAAAAAAA,"Sun Jan 01 12:34:56 2006",AA,12345.6789,12345.6789,12345.6789,12345.6789,12345.7,12345.6789,123456789012345678)
-NOTICE: BULK LOAD END (7 records)
+NOTICE: BULK LOAD END
+	2 Rows skipped.
+	5 Rows successfully loaded.
+	1 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	1 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv3.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv1.ctl
+
+INFILE = .../data2.csv
+PARSE_BADFILE = .../csv3.prs
+DUPLICATE_BADFILE = .../csv3.dup
+LOGFILE = .../csv3.log
+TABLE = public.customer
+PARSE_ERRORS = 50
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE = REMOVE_OLD
+VERBOSE = NO
+LOAD = 5
+TYPE = CSV
+SKIP = 2
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+
+  2 Rows skipped.
+  5 Rows successfully loaded.
+  1 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  1 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -89,19 +253,14 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777231 |    231 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777232 |    232 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(14 rows)
+(9 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
@@ -111,17 +270,285 @@ SELECT * FROM customer ORDER BY c_id;
 ----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
  16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777218 |    218 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777221 |    221 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           |                      | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777222 |    222 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA |                      | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
  16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777231 |    231 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
- 16777232 |    232 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
-(14 rows)
+(9 rows)
 
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=0" -o "VERBOSE=YES" -l results/csv4.log -P results/csv4.prs -u results/csv4.dup
+NOTICE: BULK LOAD START
+WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
+WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+NOTICE: BULK LOAD END
+	2 Rows skipped.
+	1 Rows successfully loaded.
+	1 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	1 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv4.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv2.ctl
+
+INFILE = .../data2.csv
+PARSE_BADFILE = .../csv4.prs
+DUPLICATE_BADFILE = .../csv4.dup
+LOGFILE = .../csv4.log
+TABLE = public.customer
+PARSE_ERRORS = 0
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE = REMOVE_OLD
+VERBOSE = YES
+LOAD = 4
+TYPE = CSV
+SKIP = 2
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+Maximum parse error count exceeded - 1 error(s) found in input file
+Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+
+  2 Rows skipped.
+  1 Rows successfully loaded.
+  1 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  1 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=10" -o "VERBOSE=YES" -l results/csv5.log -P results/csv5.prs -u results/csv5.dup
+NOTICE: BULK LOAD START
+WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplidate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+NOTICE: BULK LOAD END
+	2 Rows skipped.
+	4 Rows successfully loaded.
+	1 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	4 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv5.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv2.ctl
+
+INFILE = .../data2.csv
+PARSE_BADFILE = .../csv5.prs
+DUPLICATE_BADFILE = .../csv5.dup
+LOGFILE = .../csv5.log
+TABLE = public.customer
+PARSE_ERRORS = 10
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE = REMOVE_OLD
+VERBOSE = YES
+LOAD = 4
+TYPE = CSV
+SKIP = 2
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplidate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+
+  2 Rows skipped.
+  4 Rows successfully loaded.
+  1 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  4 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(9 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(9 rows)
+
+-- do not error skip an error after of toast_insert_or_update.
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=1" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv6.log -P results/csv6.prs -u results/csv6.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  integer out of range
+query was: SELECT * FROM pg_bulkload($1, $2)
+\! awk -f data/adjust.awk results/csv6.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv2.ctl
+
+INFILE = .../data3.csv
+PARSE_BADFILE = .../csv6.prs
+DUPLICATE_BADFILE = .../csv6.dup
+LOGFILE = .../csv6.log
+TABLE = public.customer
+PARSE_ERRORS = 50
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE = REMOVE_OLD
+VERBOSE = YES
+LOAD = 4
+TYPE = CSV
+SKIP = 1
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+integer out of range
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv7.log -P results/csv7.prs -u results/csv7.dup
+NOTICE: BULK LOAD START
+WARNING:  Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "int4"
+WARNING:  Parse error Record 2: Input Record 2: Rejected - column 2. value "32768" is out of range for type smallint
+WARNING:  Parse error Record 3: Input Record 3: Rejected - column 3. value "2147483648" is out of range for type integer
+WARNING:  Parse error Record 4: Input Record 4: Rejected - column 4. value too long for type character varying(16)
+WARNING:  Parse error Record 5: Input Record 5: Rejected - column 5. value too long for type character(2)
+WARNING:  Parse error Record 6: Input Record 6: Rejected - column 13. invalid input syntax for type timestamp: "timestamp"
+WARNING:  Parse error Record 7: Input Record 7: Rejected - column 15. invalid input syntax for type numeric: "numeric"
+WARNING:  Parse error Record 8: Input Record 8: Rejected - column 19. invalid input syntax for type real: "float4"
+WARNING:  Parse error Record 9: Input Record 9: Rejected - column 20. invalid input syntax for type double precision: "float8"
+WARNING:  Parse error Record 10: Input Record 10: Rejected - column 3. null value in column "c_w_id" violates not-null constraint
+WARNING:  Parse error Record 11: Input Record 11: Rejected - column 20. missing data for column "c_data"
+WARNING:  Parse error Record 12: Input Record 12: Rejected - column 25. extra data after last expected column
+WARNING:  Parse error Record 13: Input Record 13: Rejected - column 4. unterminated CSV quoted field
+NOTICE: BULK LOAD END
+	2 Rows skipped.
+	0 Rows successfully loaded.
+	13 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows deleted due to duplicate errors.
+\! awk -f data/adjust.awk results/csv7.log
+
+pg_bulkload 3.0alpha2 on <TIMESTAMP>
+
+Control File: .../csv2.ctl
+
+INFILE = .../data3.csv
+PARSE_BADFILE = .../csv7.prs
+DUPLICATE_BADFILE = .../csv7.dup
+LOGFILE = .../csv7.log
+TABLE = public.customer
+PARSE_ERRORS = 50
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE = REMOVE_OLD
+VERBOSE = YES
+LOAD = 4
+TYPE = CSV
+SKIP = 2
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = "nullvalue           "
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "int4"
+Parse error Record 2: Input Record 2: Rejected - column 2. value "32768" is out of range for type smallint
+Parse error Record 3: Input Record 3: Rejected - column 3. value "2147483648" is out of range for type integer
+Parse error Record 4: Input Record 4: Rejected - column 4. value too long for type character varying(16)
+Parse error Record 5: Input Record 5: Rejected - column 5. value too long for type character(2)
+Parse error Record 6: Input Record 6: Rejected - column 13. invalid input syntax for type timestamp: "timestamp"
+Parse error Record 7: Input Record 7: Rejected - column 15. invalid input syntax for type numeric: "numeric"
+Parse error Record 8: Input Record 8: Rejected - column 19. invalid input syntax for type real: "float4"
+Parse error Record 9: Input Record 9: Rejected - column 20. invalid input syntax for type double precision: "float8"
+Parse error Record 10: Input Record 10: Rejected - column 3. null value in column "c_w_id" violates not-null constraint
+Parse error Record 11: Input Record 11: Rejected - column 20. missing data for column "c_data"
+Parse error Record 12: Input Record 12: Rejected - column 25. extra data after last expected column
+Parse error Record 13: Input Record 13: Rejected - column 4. unterminated CSV quoted field
+
+  2 Rows skipped.
+  0 Rows successfully loaded.
+  13 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows deleted due to duplicate errors.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(9 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+   c_id   | c_d_id | c_w_id |     c_first      | c_middle |      c_last      |      c_street_1      |      c_street_2      |        c_city        | c_state |   c_zip   |     c_phone      |         c_since          | c_credit | c_credit_lim | c_discount | c_balance  | c_ytd_payment | c_payment_cnt | c_delivery_cnt |       c_data       
+----------+--------+--------+------------------+----------+------------------+----------------------+----------------------+----------------------+---------+-----------+------------------+--------------------------+----------+--------------+------------+------------+---------------+---------------+----------------+--------------------
+ 16777216 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777217 |    217 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777220 |    220 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777223 |    223 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777224 |    224 |      0 | DUP-2            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777227 |    227 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777228 |    228 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777229 |    229 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+ 16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
+(9 rows)
+
+\! diff data/data3.csv results/csv7.prs
+1,2d0
+< HEADER1
+< 0016777227,0001,2147483647,ABCDEFG         ,AA,AAAAAAAAAAAAAAAA,c_street_1          ,c_street_2          ,AAAAAAAAAAAAAAAAAAAA,AA,AAAAAAAAA,AAAAAAAAAAAAAAAA,2006-01-01 12:34:56,AA,12345.6789,12345.6789,12345.6789,12345.6789,12345.6789,12345.6789,123456789012345678

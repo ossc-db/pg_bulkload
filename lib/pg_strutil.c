@@ -148,6 +148,73 @@ UnquoteString(char *str, char quote, char escape)
 	return str;
 }
 
+char *
+QuoteString(char *str)
+{
+	char   *qstr;
+	int		i;
+	int		len;
+	bool	need_quote;
+	char	c;
+
+	len = strlen(str);
+	qstr = palloc0(len * 2 + 2 + 1);
+
+	need_quote = false;
+	for (i = 0; i < len; i++)
+	{
+		c = str[i];
+
+		if (c == '"' || c == '#' || c == ' ' || c == '\t')
+		{
+			need_quote = true;
+			break;
+		}
+	}
+
+	if (need_quote)
+	{
+		int	j;
+
+		j = 0;
+		qstr[j++] = '"';
+
+		for (i = 0; i < len; i++)
+		{
+			c = str[i];
+
+			if (c == '"' || c == '\\')
+				qstr[j++] = '\\';
+
+			qstr[j++] = c;
+		}
+		qstr[j] = '"';
+	}
+	else
+		memcpy(qstr, str, len);
+
+	return qstr;
+}
+
+char *
+QuoteSingleChar(char c)
+{
+	char   *qstr;
+
+	qstr = palloc(5);
+
+	if (c == '"' || c == '#' || c == ' ' || c == '\t')
+	{
+		if (c == '"' || c == '\\')
+			sprintf(qstr, "\"\\%c\"", c);
+		else
+			sprintf(qstr, "\"%c\"", c);
+	}
+	else
+		sprintf(qstr, "%c", c);
+
+	return qstr;
+}
 
 /**
  * @brief Find the first specified character outside of quote mark
@@ -232,6 +299,9 @@ int64
 ParseInt64(char *value, int64 minValue)
 {
 	int64	i;
+
+	if (pg_strcasecmp(value, "INFINITE") == 0)
+		return INT64_MAX;
 
 	i = DatumGetInt64(DirectFunctionCall1(int8in, CStringGetDatum(value)));
 	if (i < minValue)

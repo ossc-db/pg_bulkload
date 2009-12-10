@@ -17,18 +17,14 @@
 
 /*-------------------------------------------------------------------------
  *
- * Source -> Parser -> Writer
+ * Parser -> Writer
  * |              |
  * +--------------+
- *      Reader
- * |                        |
- * +------------------------+
- *           Loader
+ *      Loader
  *
  * Source:
  *  - FileSource   : from local file
  *  - RemoteSource : from remote client using copy protocol
- *  - QueueSource  : from another process
  *
  * Parser:
  *  - BinaryParser : known as FixedParser before
@@ -56,9 +52,10 @@ typedef enum ON_DUPLICATE
 
 extern const char *ON_DUPLICATE_NAMES[3];
 
-typedef Source *(*SourceCreate)(const char *path, TupleDesc desc);
 typedef Parser *(*ParserCreate)(void);
-typedef Writer *(*WriterCreate)(Oid relid, ON_DUPLICATE on_duplicate);
+typedef Writer *(*WriterCreate)(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
+
+#define PG_BULKLOAD_COLS	9
 
 /*
  * 64bit integer utils

@@ -10,6 +10,7 @@
 #include "access/xact.h"
 #include "executor/executor.h"
 
+#include "logger.h"
 #include "writer.h"
 #include "pg_btree.h"
 
@@ -25,7 +26,8 @@ typedef struct BufferedWriter
 } BufferedWriter;
 
 static void	BufferedWriterInsert(BufferedWriter *self, HeapTuple tuple);
-static void	BufferedWriterClose(BufferedWriter *self);
+static WriterResult	BufferedWriterClose(BufferedWriter *self, bool onError);
+static void	BufferedWriterDumpParams(BufferedWriter *self);
 
 /* ========================================================================
  * Implementation
@@ -35,16 +37,18 @@ static void	BufferedWriterClose(BufferedWriter *self);
  * @brief Create a new BufferedWriter
  */
 Writer *
-CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate)
+CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
 {
 	BufferedWriter *self = palloc0(sizeof(BufferedWriter));
 	self->base.insert = (WriterInsertProc) BufferedWriterInsert;
 	self->base.close = (WriterCloseProc) BufferedWriterClose;
+	self->base.dumpParams = (WriterDumpParamsProc) BufferedWriterDumpParams;
 
 	self->rel = heap_open(relid, AccessExclusiveLock);
 	VerifyTarget(self->rel);
 
-	SpoolerOpen(&self->spooler, self->rel, on_duplicate, true);
+	SpoolerOpen(&self->spooler, self->rel, on_duplicate, true, max_dup_errors,
+				dup_badfile);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	self->bistate = GetBulkInsertState();
@@ -64,14 +68,30 @@ BufferedWriterInsert(BufferedWriter *self, HeapTuple tuple)
 	SpoolerInsert(&self->spooler, tuple);
 }
 
-static void
-BufferedWriterClose(BufferedWriter *self)
+static WriterResult
+BufferedWriterClose(BufferedWriter *self, bool onError)
 {
-	if (self->bistate)
-		FreeBulkInsertState(self->bistate);
+	WriterResult	ret = { 0 };
 
-	SpoolerClose(&self->spooler);
-	heap_close(self->rel, AccessExclusiveLock);
+	if (!onError)
+	{
+		if (self->bistate)
+			FreeBulkInsertState(self->bistate);
 
-	pfree(self);
+		SpoolerClose(&self->spooler);
+		ret.num_dup_new = self->spooler.dup_new;
+		ret.num_dup_old = self->spooler.dup_old;
+
+		heap_close(self->rel, AccessExclusiveLock);
+
+		pfree(self);
+	}
+
+	return ret;
+}
+
+static void
+BufferedWriterDumpParams(BufferedWriter *self)
+{
+	LoggerLog(INFO, "WRITER = BUFFERED\n\n");
 }

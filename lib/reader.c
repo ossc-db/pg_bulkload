@@ -11,11 +11,13 @@
 #include "postgres.h"
 
 #include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "access/heapam.h"
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
+#include "commands/dbcommands.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -23,11 +25,11 @@
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 
+#include "logger.h"
+#include "pg_loadstatus.h"
 #include "pg_strutil.h"
 #include "reader.h"
 #include "writer.h"
-
-extern PGDLLIMPORT CommandDest		whereToSendOutput;
 
 /**
  * @brief  length of a line in control file
@@ -44,7 +46,7 @@ typedef struct ControlFileLine
 /*
  * prototype declaration of internal function
  */
-static void	ParseControlFile(Reader *rd, const char *fname, const char *options);
+static void	ParseControlFile(Reader *rd, const char *fname, const char *options, time_t tm);
 static void ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf);
 static void ParseErrorCallback(void *arg);
 
@@ -57,66 +59,34 @@ static void ParseErrorCallback(void *arg);
  *	 -# open data file
  *	 -# get function information for type information and type transformation.
  *
- * @param rd      [in] reader
  * @param fname   [in] path of the control file (absolute path)
  * @param options [in] additonal options
- * @return None.
+ * @return reader.
  */
-void
-ReaderOpen(Reader *rd, const char *fname, const char *options)
+Reader *
+ReaderCreate(const char *fname, const char *options, time_t tm)
 {
+	Reader	   *self;
 	Relation	rel;
 	TupleDesc	desc;
 
-	memset(rd, 0, sizeof(Reader));
-	rd->max_err_cnt = -1;
-	rd->limit = INT64_MAX;
+	self = palloc0(sizeof(Reader));
+	self->max_parse_errors = -2;
+	self->max_dup_errors = -2;
+	self->limit = INT64_MAX;
 
-	ParseControlFile(rd, fname, options);
+	ParseControlFile(self, fname, options, tm);
 
 	/* create tuple descriptor without any relation locks */
-	rel = heap_open(rd->relid, NoLock);
+	rel = heap_open(self->relid, NoLock);
 	desc = RelationGetDescr(rel);
 
-	/*
-	 * open source
-	 */
-
-	if (pg_strcasecmp(rd->infile, "stdin") == 0)
-	{
-		if (whereToSendOutput != DestRemote)
-			ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("local stdin read is not supported")));
-
-		rd->source = CreateRemoteSource(NULL, desc);
-	}
-	else if (rd->infile[0] == ':')
-	{
-		/* shmem id in ":NNNN" form */
-		rd->source = CreateQueueSource(rd->infile, desc);
-	}
-	else
-	{
-		if (!is_absolute_path(rd->infile))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("relative path not allowed for INFILE: %s", rd->infile)));
-
-		/* must be the super user if load from a file */
-		if (!superuser())
-			ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to use pg_bulkload from a file"),
-				 errhint("Anyone can use pg_bulkload from stdin")));
-
-		rd->source = CreateFileSource(rd->infile, desc);
-	}
-
 	/* initialize parser */
-	ParserInit(rd->parser, desc);
+	ParserInit(self->parser, self->infile, desc);
 
 	heap_close(rel, NoLock);
+
+	return self;
 }
 
 const char *ON_DUPLICATE_NAMES[] =
@@ -233,6 +203,24 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 
 		rd->infile = pstrdup(target);
 	}
+	else if (pg_strcasecmp(keyword, "LOGFILE") == 0)
+	{
+		ASSERT_ONCE(rd->logfile == NULL);
+
+		rd->logfile = pstrdup(target);
+	}
+	else if (pg_strcasecmp(keyword, "PARSE_BADFILE") == 0)
+	{
+		ASSERT_ONCE(rd->parse_badfile == NULL);
+
+		rd->parse_badfile = pstrdup(target);
+	}
+	else if (pg_strcasecmp(keyword, "DUPLICATE_BADFILE") == 0)
+	{
+		ASSERT_ONCE(rd->dup_badfile == NULL);
+
+		rd->dup_badfile = pstrdup(target);
+	}
 	else if (pg_strcasecmp(keyword, "TYPE") == 0)
 	{
 		const char *keys[] =
@@ -241,6 +229,7 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 			"FIXED",	/* alias for backward compatibility. */
 			"CSV",
 			"TUPLE",
+			"FUNCTION",
 		};
 		const ParserCreate values[] =
 		{
@@ -248,6 +237,7 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 			CreateBinaryParser,
 			CreateCSVParser,
 			CreateTupleParser,
+			CreateFunctionParser,
 		};
 
 		ASSERT_ONCE(rd->parser == NULL);
@@ -272,12 +262,23 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 		ASSERT_ONCE(rd->writer == NULL);
 		rd->writer = values[choice(keyword, target, keys, lengthof(keys))];
 	}
-	else if (pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
+	else if (pg_strcasecmp(keyword, "PARSE_ERRORS") == 0 ||
+			 pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
 	{
-		ASSERT_ONCE(rd->max_err_cnt < 0);
-		rd->max_err_cnt = ParseInt32(target, 0);
+		ASSERT_ONCE(rd->max_parse_errors < -1);
+		rd->max_parse_errors = ParseInt64(target, -1);
+		if (rd->max_parse_errors == -1)
+			rd->max_parse_errors = INT64_MAX;
 	}
-	else if (pg_strcasecmp(keyword, "LIMIT") == 0)
+	else if (pg_strcasecmp(keyword, "DUPLICATE_ERRORS") == 0)
+	{
+		ASSERT_ONCE(rd->max_dup_errors < -1);
+		rd->max_dup_errors = ParseInt64(target, -1);
+		if (rd->max_dup_errors == -1)
+			rd->max_dup_errors = INT64_MAX;
+	}
+	else if (pg_strcasecmp(keyword, "LOAD") == 0 ||
+			 pg_strcasecmp(keyword, "LIMIT") == 0)
 	{
 		ASSERT_ONCE(rd->limit == INT64_MAX);
 		rd->limit = ParseInt64(target, 0);
@@ -292,6 +293,10 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 		};
 
 		rd->on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
+	}
+	else if (pg_strcasecmp(keyword, "VERBOSE") == 0)
+	{
+		rd->verbose = ParseBoolean(target, false);
 	}
 	else if (rd->parser == NULL ||
 			!ParserParam(rd->parser, keyword, target))
@@ -314,7 +319,8 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
  * @return void
  */
 static void
-ParseControlFile(Reader *rd, const char *fname, const char *options)
+ParseControlFile(Reader *rd, const char *fname, const char *options,
+				 time_t tm)
 {
 	char					buf[LINEBUF];
 	ControlFileLine			line = { 0 };
@@ -377,48 +383,150 @@ ParseControlFile(Reader *rd, const char *fname, const char *options)
 	/*
 	 * Set defaults to unspecified parameters.
 	 */
+	if (rd->logfile == NULL || rd->parse_badfile == NULL ||
+		rd->dup_badfile == NULL)
+	{
+		struct tm  *tp;
+		char		path[MAXPGPATH];
+		int			len;
+		int			elen;
+		char	   *dbname;
+		char	   *nspname;
+		char	   *relname;
+
+		len = snprintf(path, MAXPGPATH, BULKLOAD_LSF_DIR "/");
+
+		tp = localtime(&tm);
+		len += strftime(path + len, MAXPGPATH - len, "%Y%m%d%H%M%S_", tp);
+
+		dbname = get_database_name(MyDatabaseId);
+		nspname = get_namespace_name(get_rel_namespace(rd->relid));
+		relname = get_rel_name(rd->relid);
+		len += snprintf(path + len, MAXPGPATH - len, "%s_%s_%s.",dbname,
+						nspname, relname);
+		pfree(dbname);
+		pfree(nspname);
+		pfree(relname);
+
+		if (len >= MAXPGPATH)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("default loader output file name is too long")));
+
+		if (rd->logfile == NULL)
+		{
+			char   *str;
+
+			elen = snprintf(path + len, MAXPGPATH - len, "log");
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default loader log file name is too long")));
+
+			str = make_absolute_path(path);
+			rd->logfile = pstrdup(str);
+			free(str);
+		}
+		if (rd->parse_badfile == NULL)
+		{
+			char   *filename;
+			char   *extension;
+			char   *str;
+
+			filename = strrchr(rd->infile, '/');
+			extension = strrchr(rd->infile, '.');
+			if (filename && extension && filename < extension)
+				extension++;
+			else
+				extension = "";
+
+			elen = snprintf(path + len, MAXPGPATH - len, "prs.%s", extension);
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default parse bad file name is too long")));
+
+			str = make_absolute_path(path);
+			rd->parse_badfile = pstrdup(str);
+			free(str);
+		}
+		if (rd->dup_badfile == NULL)
+		{
+			char   *str;
+
+			elen = snprintf(path + len, MAXPGPATH - len, "dup.csv");
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default duplicate bad file name is too long")));
+
+			str = make_absolute_path(path);
+			rd->dup_badfile = pstrdup(str);
+			free(str);
+		}
+	}
+
 	if (rd->writer == NULL)
 		rd->writer = CreateDirectWriter;
-	if (rd->max_err_cnt < 0)
-		rd->max_err_cnt = 0;
+	if (rd->max_parse_errors < -1)
+		rd->max_parse_errors = 50;
+	if (rd->max_dup_errors < -1)
+		rd->max_dup_errors = 50;
+
+	/*
+	 * check it whether there is not the same file name.
+	 */
+	if (strcmp(rd->infile, rd->logfile) == 0 ||
+		strcmp(rd->infile, rd->parse_badfile) == 0 ||
+		strcmp(rd->infile, rd->dup_badfile) == 0 ||
+		strcmp(rd->logfile, rd->parse_badfile) == 0 ||
+		strcmp(rd->logfile, rd->dup_badfile) == 0 ||
+		strcmp(rd->parse_badfile, rd->dup_badfile) == 0)
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")
+#ifdef NOT_USED
+			 , errdetail("INFILE = %s\nPARSE_BADFILE = %s\nDUPLICATE_BADFILE = %s\nLOGFILE = %s",
+				rd->infile, rd->parse_badfile, rd->dup_badfile, rd->logfile)
+#endif
+			));
 }
 
 /**
  * @brief clean up Reader structure.
- *
- * @param rd [in/out] reader
- * @return void
  */
-void
-ReaderClose(Reader *rd)
+int64
+ReaderClose(Reader *rd, bool onError)
 {
+	int64	skip = 0;
+
 	if (rd == NULL)
-		return;
+		return 0;
 
 	/* Close and release members. */
 	if (rd->parser)
-		ParserTerm(rd->parser);
-	if (rd->source)
-		SourceClose(rd->source);
-	if (rd->infile != NULL)
-		pfree(rd->infile);
+		skip = ParserTerm(rd->parser);
 
-	/* Report error count and abort if limit exceeded. */
-	if (rd->errors > 0)
+	if (!onError)
 	{
-		if (rd->errors > rd->max_err_cnt)
-		{
-			ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("%d error(s) found in input file", rd->errors)));
-		}
-		else
-		{
+		if (rd->parse_fp != NULL && FreeFile(rd->parse_fp) < 0)
 			ereport(WARNING,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("skip %d error(s) in input file", rd->errors)));
-		}
+					(errcode_for_file_access(),
+					 errmsg("could not close parse bad file \"%s\": %m",
+							rd->parse_badfile)));
+		if (rd->infile != NULL)
+			pfree(rd->infile);
+		if (rd->logfile != NULL)
+			pfree(rd->logfile);
+		if (rd->parse_badfile != NULL)
+			pfree(rd->parse_badfile);
+		if (rd->dup_badfile != NULL)
+			pfree(rd->dup_badfile);
+
+		pfree(rd);
 	}
+
+	return skip;
 }
 
 /**
@@ -448,7 +556,6 @@ ReaderNext(Reader *rd)
 	MemoryContext	ccxt;
 	bool			eof;
 	Parser		   *parser = rd->parser;
-	Source		   *source = rd->source;
 
 	ccxt = CurrentMemoryContext;
 
@@ -460,7 +567,7 @@ ReaderNext(Reader *rd)
 
 		PG_TRY();
 		{
-			tuple = ParserRead(parser, source);
+			tuple = ParserRead(parser);
 			if (tuple == NULL)
 				eof = true;
 		}
@@ -486,8 +593,8 @@ ReaderNext(Reader *rd)
 					break;
 			}
 
-			/* Absorb general errors. */
-			rd->errors++;
+			/* Absorb parse errors. */
+			rd->parse_errors++;
 			if (errdata->message)
 				message = pstrdup(errdata->message);
 			else
@@ -495,19 +602,98 @@ ReaderNext(Reader *rd)
 			FlushErrorState();
 			FreeErrorData(errdata);
 
-			ereport(WARNING,
-				(errmsg("BULK LOAD ERROR (row=" int64_FMT ", col=%d) %s",
-					parser->count, parser->parsing_field, message)));
+			LoggerLog(WARNING,
+				"Parse error Record " int64_FMT ": Input Record " int64_FMT
+				": Rejected - column %d. %s\n",
+				rd->parse_errors, parser->count,
+				parser->parsing_field, message);
 
-			/* Terminate if MAX_ERR_CNT has been reached. */
-			if (rd->errors > rd->max_err_cnt)
+			/* Terminate if PARSE_ERRORS has been reached. */
+			if (rd->parse_errors > rd->max_parse_errors)
+			{
 				eof = true;
+				LoggerLog(WARNING,
+					"Maximum parse error count exceeded - " int64_FMT
+					" error(s) found in input file\n",
+					rd->parse_errors);
+			}
+
+			/* output parse bad file. */
+			if (rd->parse_fp == NULL)
+				if ((rd->parse_fp = AllocateFile(rd->parse_badfile, "w")) == NULL)
+					ereport(ERROR,
+							(errcode_for_file_access(),
+							 errmsg("could not open parse bad file \"%s\": %m",
+									rd->parse_badfile)));
+
+			ParserDumpRecord(parser, rd->parse_fp, rd->parse_badfile);
 		}
 		PG_END_TRY();
 
 	} while (!eof && !tuple);
 
 	return tuple;
+}
+
+void
+ReaderDumpParams(Reader *self)
+{
+	char		   *tablename;
+	char		   *nspname;
+	char		   *relname;
+	char		   *str;
+	StringInfoData	buf;
+
+	initStringInfo(&buf);
+
+	str = QuoteString(self->infile);
+	appendStringInfo(&buf, "INFILE = %s\n", str);
+	pfree(str);
+
+	str = QuoteString(self->parse_badfile);
+	appendStringInfo(&buf, "PARSE_BADFILE = %s\n", str);
+	pfree(str);
+
+	str = QuoteString(self->dup_badfile);
+	appendStringInfo(&buf, "DUPLICATE_BADFILE = %s\n", str);
+	pfree(str);
+
+	str = QuoteString(self->logfile);
+	appendStringInfo(&buf, "LOGFILE = %s\n", str);
+	pfree(str);
+
+	nspname = get_namespace_name(get_rel_namespace(self->relid));
+	relname = get_rel_name(self->relid);
+	tablename = quote_qualified_identifier(nspname, relname);
+	str = QuoteString(tablename);
+	appendStringInfo(&buf, "TABLE = %s\n", tablename);
+	pfree(str);
+	pfree(tablename);
+	pfree(nspname);
+	pfree(relname);
+
+	if (self->max_parse_errors == INT64_MAX)
+		appendStringInfo(&buf, "PARSE_ERRORS = INFINITE\n");
+	else
+		appendStringInfo(&buf, "PARSE_ERRORS = " int64_FMT "\n",
+						 self->max_parse_errors);
+	if (self->max_dup_errors == INT64_MAX)
+		appendStringInfo(&buf, "DUPLICATE_ERRORS = INFINITE\n");
+	else
+		appendStringInfo(&buf, "DUPLICATE_ERRORS = " int64_FMT "\n",
+						 self->max_dup_errors);
+	appendStringInfo(&buf, "ON_DUPLICATE = %s\n",
+					 ON_DUPLICATE_NAMES[self->on_duplicate]);
+	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
+	if (self->limit == INT64_MAX)
+		appendStringInfo(&buf, "LOAD = INFINITE\n");
+	else
+		appendStringInfo(&buf, "LOAD = " int64_FMT "\n", self->limit);
+
+	LoggerLog(INFO, buf.data);
+	pfree(buf.data);
+
+	ParserDumpParams(self->parser);
 }
 
 void
@@ -551,6 +737,8 @@ TupleFormerInit(TupleFormer *former, TupleDesc desc)
 		/* update valid column information */
 		former->attnum[former->nfields] = i;
 		former->nfields++;
+
+		former->desc->attrs[i]->attnotnull = attrs[i]->attnotnull;
 	}
 }
 

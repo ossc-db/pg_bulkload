@@ -1,0 +1,2 @@
+TABLE = customer
+TYPE = FUNCTION

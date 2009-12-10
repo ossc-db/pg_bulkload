@@ -1,6 +1,14 @@
 TRUNCATE customer;
 
-\! pg_bulkload -d contrib_regression data/bin.ctl -i data/data1.bin
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_logfile -l infile_logfile -P pbfile -u dbfile
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_pbfile -l logfile -P infile_pbfile -u dbfile
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_dbfile -l logfile -P pbfile -u infile_dbfile
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_pbfile -P logfile_pbfile -u dbfile
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_dbfile -P pbfile -u logfile_dbfile
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile -P pbfile_dbfile -u pbfile_dbfile
+
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i data/data1.bin -l results/bin1.log -P results/bin1.prs -u results/bin1.dup
+\! awk -f data/adjust.awk results/bin1.log
 
 SET enable_seqscan = on;
 SET enable_indexscan = off;
@@ -12,7 +20,8 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/bin.ctl -i data/data2.bin
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i data/data2.bin -l results/bin2.log -P results/bin2.prs -u results/bin2.dup
+\! awk -f data/adjust.awk results/bin2.log
 
 SET enable_seqscan = on;
 SET enable_indexscan = off;
@@ -23,3 +32,70 @@ SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
+
+UPDATE customer SET c_data = 'OLD1';
+\! pg_bulkload -d contrib_regression data/bin2.ctl -i data/data2.bin -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin3.log -P results/bin3.prs -u results/bin3.dup
+\! awk -f data/adjust.awk results/bin3.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+UPDATE customer SET c_data = 'OLD2';
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin3.dup -o "ON_DUPLICATE=REMOVE_OLD" -l results/bin4.log -P results/bin4.prs -u results/bin4.dup
+\! awk -f data/adjust.awk results/bin4.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+UPDATE customer SET c_data = 'OLD3';
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin4.dup -o "ON_DUPLICATE=REMOVE_NEW" -l results/bin5.log -P results/bin5.prs -u results/bin5.dup
+\! awk -f data/adjust.awk results/bin5.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+-- do not error skip an error after of toast_insert_or_update.
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
+\! awk -f data/adjust.awk results/bin6.log
+
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
+\! awk -f data/adjust.awk results/bin7.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+\! diff data/data3.bin results/bin7.prs
+
+\! pg_bulkload -d contrib_regression data/bin4.ctl -i data/data1.bin -l results/bin8.log -P pbfile -u dbfile -o "PARSE_ERRORS=-1" -o "DUPLICATE_ERRORS=-1"
+\! awk -f data/adjust.awk results/bin8.log
+\! pg_bulkload -d contrib_regression data/bin4.ctl -i data/data1.bin -l results/bin9.log -P pbfile -u dbfile -o "PARSE_ERRORS=INFINITE" -o "DUPLICATE_ERRORS=INFINITE"
+\! awk -f data/adjust.awk results/bin9.log
+

@@ -11,6 +11,8 @@
  */
 extern char *TrimSpace(char *str);
 extern char *UnquoteString(char *str, char quote, char escape);
+extern char *QuoteString(char *str);
+extern char *QuoteSingleChar(char c);
 extern char *FindUnquotedChar(char *str, char target, char quote, char escape);
 extern bool	ParseBoolean(const char *value, bool defaultValue);
 extern char	ParseSingleChar(const char *value);

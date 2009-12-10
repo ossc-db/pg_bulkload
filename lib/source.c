@@ -10,15 +10,19 @@
 #include <unistd.h>
 
 #include "access/htup.h"
+#include "catalog/pg_type.h"
+#include "fmgr.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
-#include "catalog/pg_type.h"
+#include "miscadmin.h"
 #include "storage/fd.h"
+#include "tcop/dest.h"
 
 #include "reader.h"
-#include "pgut/pgut-ipc.h"
+#include "pg_bulkload.h"
 
 extern PGDLLIMPORT ProtocolVersion	FrontendProtocol;
+extern PGDLLIMPORT CommandDest		whereToSendOutput;
 
 /* ========================================================================
  * FileSource
@@ -50,55 +54,44 @@ static size_t RemoteSourceRead(RemoteSource *self, void *buffer, size_t len);
 static size_t RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len);
 static void RemoteSourceClose(RemoteSource *self);
 
-/* ========================================================================
- * QueueSource
- * ========================================================================*/
-
-typedef struct QueueSource
-{
-	Source	base;
-
-	Queue  *queue;
-} QueueSource;
-
-static size_t QueueSourceRead(QueueSource *self, void *buffer, size_t len);
-static void QueueSourceClose(QueueSource *self);
+static Source *CreateFileSource(const char *path, TupleDesc desc);
+static Source *CreateRemoteSource(const char *path, TupleDesc desc);
 
 Source *
-CreateQueueSource(const char *path, TupleDesc desc)
+CreateSource(const char *path, TupleDesc desc)
 {
-	unsigned	key;
-	char		junk[2];
+	if (pg_strcasecmp(path, "stdin") == 0)
+	{
+		if (whereToSendOutput != DestRemote)
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("local stdin read is not supported")));
 
-	QueueSource *self = palloc0(sizeof(QueueSource));
-	self->base.read = (SourceReadProc) QueueSourceRead;
-	self->base.close = (SourceCloseProc) QueueSourceClose;
+		return CreateRemoteSource(NULL, desc);
+	}
+	else
+	{
+		if (!is_absolute_path(path))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("relative path not allowed for INFILE: %s", path)));
 
-	if (sscanf(path, ":%u%1s", &key, junk) != 1)
-		elog(ERROR, "invalid shmem key format: %s", path);
-	self->queue = QueueOpen(key);
+		/* must be the super user if load from a file */
+		if (!superuser())
+			ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to use pg_bulkload from a file"),
+				 errhint("Anyone can use pg_bulkload from stdin")));
 
-	return (Source *) self;
-}
-
-static size_t
-QueueSourceRead(QueueSource *self, void *buffer, size_t len)
-{
-	return QueueRead(self->queue, buffer, len);
-}
-
-static void
-QueueSourceClose(QueueSource *self)
-{
-	QueueClose(self->queue);
-	pfree(self);
+		return CreateFileSource(path, desc);
+	}
 }
 
 /* ========================================================================
  * FileSource
  * ========================================================================*/
 
-Source *
+static Source *
 CreateFileSource(const char *path, TupleDesc desc)
 {
 	FileSource *self = palloc0(sizeof(FileSource));
@@ -148,7 +141,7 @@ FileSourceClose(FileSource *self)
 
 #define IsBinaryCopy()	(false)
 
-Source *
+static Source *
 CreateRemoteSource(const char *path, TupleDesc desc)
 {
 	RemoteSource *self = palloc0(sizeof(RemoteSource));
@@ -292,31 +285,43 @@ RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len)
 	return 1;
 }
 
+typedef struct AttributeDefinition
+{
+	char   *name;
+	Oid		typid;
+	int16	typlen;
+	int32	typmod;
+} AttributeDefinition;
+
 static void
-SendResultDescriptionMessage(Oid typid, int16 typlen, int32 typmod)
+SendResultDescriptionMessage(AttributeDefinition *attrs, int natts)
 {
 	int			proto = PG_PROTOCOL_MAJOR(FrontendProtocol);
+	int			i;
 	StringInfoData buf;
 
 	pq_beginmessage(&buf, 'T'); /* tuple descriptor message type */
-	pq_sendint(&buf, 1, 2); /* # of attrs in tuples */
+	pq_sendint(&buf, natts, 2);	/* # of attrs in tuples */
 
-	pq_sendstring(&buf, "pg_bulkload");
-	/* column ID info appears in protocol 3.0 and up */
-	if (proto >= 3)
+	for (i = 0; i < natts; ++i)
 	{
-		pq_sendint(&buf, 0, 4);
-		pq_sendint(&buf, 0, 2);
+		pq_sendstring(&buf, attrs[i].name);
+		/* column ID info appears in protocol 3.0 and up */
+		if (proto >= 3)
+		{
+			pq_sendint(&buf, 0, 4);
+			pq_sendint(&buf, 0, 2);
+		}
+		/* If column is a domain, send the base type and typmod instead */
+		pq_sendint(&buf, attrs[i].typid, sizeof(Oid));
+		pq_sendint(&buf, attrs[i].typlen, sizeof(int16));
+		/* typmod appears in protocol 2.0 and up */
+		if (proto >= 2)
+			pq_sendint(&buf, attrs[i].typmod, sizeof(int32));
+		/* format info appears in protocol 3.0 and up */
+		if (proto >= 3)
+			pq_sendint(&buf, 0, 2);
 	}
-	/* If column is a domain, send the base type and typmod instead */
-	pq_sendint(&buf, typid, sizeof(Oid));
-	pq_sendint(&buf, typlen, sizeof(int16));
-	/* typmod appears in protocol 2.0 and up */
-	if (proto >= 2)
-		pq_sendint(&buf, typmod, sizeof(int32));
-	/* format info appears in protocol 3.0 and up */
-	if (proto >= 3)
-		pq_sendint(&buf, 0, 2);
 
 	pq_endmessage(&buf);
 }
@@ -324,6 +329,18 @@ SendResultDescriptionMessage(Oid typid, int16 typlen, int32 typmod)
 static void
 RemoteSourceClose(RemoteSource *self)
 {
-	SendResultDescriptionMessage(INT8OID, 8, -1);
+	AttributeDefinition attrs[] = {
+		{"skip", INT8OID, 8, -1},
+		{"count", INT8OID, 8, -1},
+		{"parse_errors", INT8OID, 8, -1},
+		{"duplicate_new", INT8OID, 8, -1},
+		{"duplicate_old", INT8OID, 8, -1},
+		{"system_time", FLOAT8OID, 8, -1},
+		{"user_time", FLOAT8OID, 8, -1},
+		{"duration", FLOAT8OID, 8, -1},
+		{"messages", TEXTOID, -1, -1}
+	};
+
+	SendResultDescriptionMessage(attrs, PG_BULKLOAD_COLS);
 	pfree(self);
 }

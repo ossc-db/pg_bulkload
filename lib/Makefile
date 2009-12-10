@@ -4,8 +4,10 @@
 #    Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
+	logger.c \
 	parser_binary.c \
 	parser_csv.c \
+	parser_function.c \
 	parser_tuple.c \
 	pg_btree.c \
 	pg_bulkload.c \
@@ -24,10 +26,6 @@ DATA = uninstall_pg_bulkload.sql
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
-ifndef MAJORVERSION
-MAJORVERSION := $(basename $(VERSION))
-endif
-
 ifdef USE_PROFILE
 PG_CPPFLAGS += -DENABLE_BULKLOAD_PROFILE
 endif
@@ -35,6 +33,9 @@ endif
 ifdef USE_PGXS
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
+ifndef MAJORVERSION
+MAJORVERSION := $(basename $(VERSION))
+endif
 pg_btree.o: nbtsort.c
 nbtsort.c:
 	cp nbtree/nbtsort-$(MAJORVERSION).c ./nbtsort.c

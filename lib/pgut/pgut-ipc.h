@@ -25,7 +25,7 @@ typedef struct Queue	Queue;
 extern Queue *QueueCreate(unsigned *key, uint32 size);
 extern Queue *QueueOpen(unsigned key);
 extern void QueueClose(Queue *self);
-extern uint32 QueueRead(Queue *self, void *buffer, uint32 len);
-extern bool QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec);
+extern uint32 QueueRead(Queue *self, void *buffer, uint32 len, bool need_lock);
+extern bool QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec, bool need_lock);
 
 #endif   /* PGUT_IPC_H */
