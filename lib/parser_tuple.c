@@ -29,7 +29,7 @@ typedef struct TupleParser
 	uint32			buflen;
 } TupleParser;
 
-static void	TupleParserInit(TupleParser *self, const char *infile, TupleDesc desc);
+static void	TupleParserInit(TupleParser *self, const char *infile, Oid relid);
 static HeapTuple TupleParserRead(TupleParser *self);
 static int64 TupleParserTerm(TupleParser *self);
 static bool TupleParserParam(TupleParser *self, const char *keyword, char *value);
@@ -54,7 +54,7 @@ CreateTupleParser(void)
 }
 
 static void
-TupleParserInit(TupleParser *self, const char *infile, TupleDesc desc)
+TupleParserInit(TupleParser *self, const char *infile, Oid relid)
 {
 	unsigned		key;
 	char			junk[2];

@@ -297,6 +297,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 1: Rejected - column 21. null value in column "c_data" violates not-null constraint
@@ -344,6 +345,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = NULL
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -769,6 +771,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -861,7 +864,7 @@ SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "ON_DUPLICATE=ERROR"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 216, 1) is duplicated.
+DETAIL:  Table contains duplicated values.
 query was: SELECT * FROM pg_bulkload($1, $2)
 \! awk -f data/adjust.awk results/function13.log
 
@@ -885,6 +888,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 could not create unique index "customer_pkey"
@@ -915,6 +919,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -950,6 +955,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -976,6 +982,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"

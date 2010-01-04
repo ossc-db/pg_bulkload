@@ -12,8 +12,12 @@
 
 #include <unistd.h>
 
+#include "access/heapam.h"
 #include "access/htup.h"
 #include "catalog/pg_type.h"
+#include "executor/executor.h"
+#include "mb/pg_wchar.h"
+#include "nodes/execnodes.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
@@ -102,6 +106,7 @@ struct Field
 	int		len;		/**< byte length of the field */
 	char   *nullif;		/**< null pattern, if any */
 	int		nulllen;	/**< length of nullif */
+	char   *in;			/**< pointer to the character string or binary */
 };
 
 typedef struct BinaryParser
@@ -109,6 +114,7 @@ typedef struct BinaryParser
 	Parser	base;
 
 	Source		   *source;
+	Checker			checker;
 	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
@@ -123,13 +129,12 @@ typedef struct BinaryParser
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
 	int		nfield;				/**< number of fields */
 	Field  *fields;				/**< array of field descriptor */
-
 } BinaryParser;
 
 /*
  * Prototype declaration for local functions
  */
-static void	BinaryParserInit(BinaryParser *self, const char *infile, TupleDesc desc);
+static void	BinaryParserInit(BinaryParser *self, const char *infile, Oid relid);
 static HeapTuple BinaryParserRead(BinaryParser *self);
 static int64	BinaryParserTerm(BinaryParser *self);
 static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
@@ -152,6 +157,7 @@ CreateBinaryParser(void)
 	self->base.dumpParams = (ParserDumpParamsProc) BinaryParserDumpParams;
 	self->base.dumpRecord = (ParserDumpRecordProc) BinaryParserDumpRecord;
 	self->offset = -1;
+	self->checker.encoding = -1;
 	return (Parser *)self;
 }
 
@@ -170,10 +176,12 @@ CreateBinaryParser(void)
  * function.
  */
 static void
-BinaryParserInit(BinaryParser *self, const char *infile, TupleDesc desc)
+BinaryParserInit(BinaryParser *self, const char *infile, Oid relid)
 {
-	int		i;
-	size_t	maxlen;
+	int			i;
+	size_t		maxlen;
+	Relation	rel;
+	TupleDesc	desc;
 
 	/*
 	 * set default values
@@ -187,7 +195,13 @@ BinaryParserInit(BinaryParser *self, const char *infile, TupleDesc desc)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no COL specified")));
 
+	/* open relation without any relation locks */
+	rel = heap_open(relid, NoLock);
+	desc = RelationGetDescr(rel);
+
 	self->source = CreateSource(infile, desc);
+
+	CheckerInit(&self->checker, rel);
 
 	/*
 	 * Error if the number of valid fields is not equal to the number of
@@ -238,6 +252,7 @@ BinaryParserTerm(BinaryParser *self)
 		pfree(self->buffer);
 	if (self->fields)
 		pfree(self->fields);
+	CheckerTerm(&self->checker);
 	TupleFormerTerm(&self->former);
 	pfree(self);
 
@@ -266,7 +281,9 @@ BinaryParserTerm(BinaryParser *self)
 static HeapTuple
 BinaryParserRead(BinaryParser *self)
 {
+	HeapTuple	tuple;
 	char	   *record;
+	int			i;
 
 	/* Skip first offset lines in the input file */
 	if (unlikely(self->need_offset > 0))
@@ -341,10 +358,67 @@ BinaryParserRead(BinaryParser *self)
 	self->used_rec_cnt++;
 	self->base.count++;
 
-	ExtractValuesFromFixed(self, record);
-	self->base.parsing_field = 0;
+	for (i = 0; i < self->former.nfields; i++)
+	{
+		/* Convert it to server encoding. */
+		if (self->fields[i].read == Read_char ||
+			self->fields[i].read == Read_varchar)
+		{
+			int		len = self->fields[i].len;
+			char   *str;
 
-	return TupleFormerTuple(&self->former);
+			str = palloc(len + 1);
+			memcpy(str, record + self->fields[i].offset, len);
+			str[len] = '\0';
+			self->base.parsing_field = i + 1;
+
+			if (self->checker.need_convert)
+			{
+				self->fields[i].in = CheckerConversion(&self->checker, str);
+				pfree(str);
+			}
+			else
+				self->fields[i].in = (char *) str;
+		}
+		else
+		{
+			self->fields[i].in = record + self->fields[i].offset;
+		}
+	}
+
+	ExtractValuesFromFixed(self, record);
+	self->base.parsing_field = -1;
+
+	tuple = TupleFormerTuple(&self->former);
+
+	if (self->checker.need_check_constraint)
+	{
+		self->base.parsing_field = 0;
+		CheckerConstraints(&self->checker, tuple);
+	}
+	else if (self->checker.need_check_not_null && HeapTupleHasNulls(tuple))
+	{
+		/*
+		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
+		 */
+		TupleDesc	desc = self->former.desc;
+		int			i;
+
+		for (i = 0; i < desc->natts; i++)
+		{
+			if (desc->attrs[i]->attnotnull &&
+				att_isnull(i, tuple->t_data->t_bits))
+			{
+				self->base.parsing_field = i + 1;	/* 1 origin */
+				ereport(ERROR,
+						(errcode(ERRCODE_NOT_NULL_VIOLATION),
+						 errmsg("null value in column \"%s\" violates not-null constraint",
+						NameStr(desc->attrs[i]->attname))));
+			}
+		}
+	}
+
+	return tuple;
 }
 
 /*
@@ -677,6 +751,20 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
 	}
+	else if (pg_strcasecmp(keyword, "ENCODING") == 0)
+	{
+		ASSERT_ONCE(self->checker.encoding < 0);
+		self->checker.encoding = pg_valid_client_encoding(value);
+		if (self->checker.encoding < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
+						value)));
+	}
+	else if (pg_strcasecmp(keyword, "CHECK_CONSTRAINTS") == 0)
+	{
+		self->checker.check_constraints = ParseBoolean(value, false);
+	}
 	else
 		return false;	/* unknown parameter */
 
@@ -696,6 +784,11 @@ BinaryParserDumpParams(BinaryParser *self)
 	appendStringInfo(&buf, "PRESERVE_BLANKS = %s\n",
 			   self->preserve_blanks ? "YES" : "NO");
 	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);
+	if (PG_VALID_FE_ENCODING(self->checker.encoding))
+		appendStringInfo(&buf, "ENCODING = %s\n",
+						 pg_encoding_to_char(self->checker.encoding));
+	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
+					 self->checker.check_constraints ? "YES" : "NO");
 
 	for (i = 0; i < self->nfield; i++)
 	{
@@ -733,7 +826,7 @@ BinaryParserDumpParams(BinaryParser *self)
 
 			if (hex)
 			{
-				appendStringInfoString(&buf, " NULLIF \n");
+				appendStringInfoString(&buf, " NULLIF ");
 				for (j = 0; j < field->nulllen; j++)
 				{
 					appendStringInfoCharMacro(&buf,
@@ -741,6 +834,7 @@ BinaryParserDumpParams(BinaryParser *self)
 					appendStringInfoCharMacro(&buf,
 											  hex_out(field->nullif[j] % 0x10));
 				}
+				appendStringInfoCharMacro(&buf, '\n');
 			}
 			else
 				appendStringInfo(&buf, " NULLIF '%s'\n", field->nullif);
@@ -773,7 +867,7 @@ static Datum
 Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
-	const int	len = field->len;
+	const int	len = strlen(in);
 	char	   *str;
 
 	str = palloc(len + 1);
@@ -805,7 +899,7 @@ static Datum
 Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
-	const int	len = field->len;
+	const int	len = strlen(in);
 	char	   *str;
 
 	str = palloc(len + 1);
@@ -924,7 +1018,6 @@ static void
 ExtractValuesFromFixed(BinaryParser *self, char *record)
 {
 	int			i;
-	Form_pg_attribute *attrs = self->former.desc->attrs;
 
 	/*
 	 * Loop for fields in the input file
@@ -937,14 +1030,8 @@ ExtractValuesFromFixed(BinaryParser *self, char *record)
 
 		self->base.parsing_field = i + 1;	/* 1 origin */
 		value = self->fields[i].read(&self->former,
-			record + self->fields[i].offset, &self->fields[i], j, &isnull);
-
-		/* Check NOT NULL constraint. */
-		if (isnull && attrs[j]->attnotnull)
-			ereport(ERROR,
-				(errcode(ERRCODE_NOT_NULL_VIOLATION),
-				 errmsg("null value in column \"%s\" violates not-null constraint",
-					  NameStr(attrs[j]->attname))));
+			self->fields[i].in, &self->fields[i], j, &isnull);
+			//record + self->fields[i].offset, &self->fields[i], j, &isnull);
 
 		self->former.isnull[j] = isnull;
 		self->former.values[j] = value;

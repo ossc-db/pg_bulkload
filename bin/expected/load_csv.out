@@ -34,6 +34,7 @@ DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
@@ -104,6 +105,7 @@ DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 
@@ -170,6 +172,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
@@ -230,6 +233,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
@@ -312,6 +316,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
@@ -363,6 +368,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
@@ -442,6 +448,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 integer out of range
@@ -488,6 +495,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "int4"

@@ -1096,8 +1096,8 @@ report_unique_violation(Relation rel, IndexTuple itup)
 			break;
 		}
 
-		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? "," : "", name);
-		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? "," : "", val);
+		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? ", " : "", name);
+		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? ", " : "", val);
 	}
 
 	ereport(ERROR,

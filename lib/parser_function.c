@@ -42,7 +42,7 @@ typedef struct FunctionParser
 	HeapTupleData			tuple;
 } FunctionParser;
 
-static void	FunctionParserInit(FunctionParser *self, const char *infile, TupleDesc desc);
+static void	FunctionParserInit(FunctionParser *self, const char *infile, Oid relid);
 static HeapTuple FunctionParserRead(FunctionParser *self);
 static int64	FunctionParserTerm(FunctionParser *self);
 static bool FunctionParserParam(FunctionParser *self, const char *keyword, char *value);
@@ -169,7 +169,7 @@ CreateFunctionParser(void)
 }
 
 static void
-FunctionParserInit(FunctionParser *self, const char *infile, TupleDesc desc)
+FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 {
 	int					i;
 	const char		   *p;
@@ -186,6 +186,8 @@ FunctionParserInit(FunctionParser *self, const char *infile, TupleDesc desc)
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
 	AclResult			aclresult;
+	Relation			rel;
+	TupleDesc			desc;
 
 	/* parse function name */
 	p = strchr(infile, '(');
@@ -412,6 +414,10 @@ FunctionParserInit(FunctionParser *self, const char *infile, TupleDesc desc)
 	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs, NULL,
 							 (Node *) &self->rsinfo);
 
+	/* create tuple descriptor without any relation locks */
+	rel = heap_open(relid, NoLock);
+	desc = RelationGetDescr(rel);
+
 	self->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)
 		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
@@ -428,6 +434,8 @@ FunctionParserInit(FunctionParser *self, const char *infile, TupleDesc desc)
 	self->rsinfo.setDesc = NULL;
 	for (i = 0; i < desc->natts; i++)
 		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
+
+	heap_close(rel, NoLock);
 }
 
 static int64
@@ -488,7 +496,7 @@ FunctionParserRead(FunctionParser *self)
 		}
 	}
 
-	self->base.parsing_field = 0;
+	self->base.parsing_field = -1;
 
 	return &self->tuple;
 

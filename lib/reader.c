@@ -19,6 +19,7 @@
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "executor/executor.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -67,8 +68,6 @@ Reader *
 ReaderCreate(const char *fname, const char *options, time_t tm)
 {
 	Reader	   *self;
-	Relation	rel;
-	TupleDesc	desc;
 
 	self = palloc0(sizeof(Reader));
 	self->max_parse_errors = -2;
@@ -77,14 +76,8 @@ ReaderCreate(const char *fname, const char *options, time_t tm)
 
 	ParseControlFile(self, fname, options, tm);
 
-	/* create tuple descriptor without any relation locks */
-	rel = heap_open(self->relid, NoLock);
-	desc = RelationGetDescr(rel);
-
 	/* initialize parser */
-	ParserInit(self->parser, self->infile, desc);
-
-	heap_close(rel, NoLock);
+	ParserInit(self->parser, self->infile, self->relid);
 
 	return self;
 }
@@ -563,7 +556,7 @@ ReaderNext(Reader *rd)
 	do
 	{
 		tuple = NULL;
-		parser->parsing_field = 0;
+		parser->parsing_field = -1;
 
 		PG_TRY();
 		{
@@ -576,8 +569,9 @@ ReaderNext(Reader *rd)
 			ErrorData	   *errdata;
 			MemoryContext	ecxt;
 			char		   *message;
+			StringInfoData	buf;
 
-			if (parser->parsing_field <= 0)
+			if (parser->parsing_field < 0)
 				PG_RE_THROW();	/* should not ignore */
 
 			ecxt = MemoryContextSwitchTo(ccxt);
@@ -602,11 +596,17 @@ ReaderNext(Reader *rd)
 			FlushErrorState();
 			FreeErrorData(errdata);
 
-			LoggerLog(WARNING,
-				"Parse error Record " int64_FMT ": Input Record " int64_FMT
-				": Rejected - column %d. %s\n",
-				rd->parse_errors, parser->count,
-				parser->parsing_field, message);
+			initStringInfo(&buf);
+			appendStringInfo(&buf, "Parse error Record " int64_FMT
+				": Input Record " int64_FMT ": Rejected",
+				rd->parse_errors, parser->count);
+
+			if (parser->parsing_field > 0)
+				appendStringInfo(&buf, " - column %d", parser->parsing_field);
+
+			appendStringInfo(&buf, ". %s\n", message);
+
+			LoggerLog(WARNING, buf.data);
 
 			/* Terminate if PARSE_ERRORS has been reached. */
 			if (rd->parse_errors > rd->max_parse_errors)
@@ -694,6 +694,91 @@ ReaderDumpParams(Reader *self)
 	pfree(buf.data);
 
 	ParserDumpParams(self->parser);
+}
+
+void
+CheckerInit(Checker *checker, Relation rel)
+{
+	TupleDesc	desc;
+
+	checker->rel = rel;
+
+	/*
+	 * When specify ENCODING, we check the input data encoding.
+	 * Convert encoding if the client and server encodings are different.
+	 */
+	checker->db_encoding = GetDatabaseEncoding();
+	if (checker->encoding != -1 && checker->encoding != checker->db_encoding &&
+		checker->encoding != PG_SQL_ASCII &&
+		checker->db_encoding != PG_SQL_ASCII)
+		checker->need_convert = true;
+
+	/* When specify CHECK_CONSTRAINTS, we check the constraints */
+	desc = RelationGetDescr(rel);
+	if (desc->constr &&
+		(checker->check_constraints || desc->constr->has_not_null))
+	{
+		if (checker->check_constraints)
+			checker->need_check_constraint = true;
+
+		if (desc->constr->has_not_null)
+			checker->need_check_not_null = true;
+
+		checker->resultRelInfo = makeNode(ResultRelInfo);
+		checker->resultRelInfo->ri_RangeTableIndex = 1;		/* dummy */
+		checker->resultRelInfo->ri_RelationDesc = rel;
+		checker->resultRelInfo->ri_TrigDesc = NULL; /* TRIGGER is not supported */
+		checker->resultRelInfo->ri_TrigInstrument = NULL;
+	}
+
+	if (checker->need_check_constraint)
+	{
+		checker->estate = CreateExecutorState();
+		checker->estate->es_result_relations = checker->resultRelInfo;
+		checker->estate->es_num_result_relations = 1;
+		checker->estate->es_result_relation_info = checker->resultRelInfo;
+
+		/* Set up a tuple slot too */
+		checker->slot = MakeSingleTupleTableSlot(desc);
+	}
+
+	if (!checker->need_check_constraint && !checker->need_check_not_null)
+	{
+		heap_close(rel, NoLock);
+		checker->rel = NULL;
+	}
+}
+
+void
+CheckerTerm(Checker *checker)
+{
+	if (checker->rel)
+		heap_close(checker->rel, NoLock);
+
+	if (checker->slot)
+		ExecDropSingleTupleTableSlot(checker->slot);
+
+	if (checker->estate)
+		FreeExecutorState(checker->estate);
+}
+
+char *
+CheckerConversion(Checker *checker, char *src)
+{
+	return (char *) pg_do_encoding_conversion((unsigned char *) src,
+											  strlen(src),
+											  checker->encoding,
+											  checker->db_encoding);
+}
+
+void
+CheckerConstraints(Checker *checker, HeapTuple tuple)
+{
+	/* Place tuple in tuple slot */
+	ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
+
+	/* Check the constraints of the tuple */
+	ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
 }
 
 void

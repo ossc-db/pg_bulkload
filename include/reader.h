@@ -15,6 +15,7 @@
 
 #include "access/xact.h"
 #include "lib/stringinfo.h"
+#include "nodes/execnodes.h"
 #include "nodes/primnodes.h"
 #include "utils/relcache.h"
 
@@ -40,7 +41,7 @@ extern Source *CreateSource(const char *path, TupleDesc desc);
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, const char *infile, TupleDesc desc);
+typedef void (*ParserInitProc)(Parser *self, const char *infile, Oid relid);
 typedef HeapTuple (*ParserReadProc)(Parser *self);
 typedef int64 (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
@@ -65,7 +66,7 @@ extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
 extern Parser *CreateFunctionParser(void);
 
-#define ParserInit(self, infile, desc)		((self)->init((self), (infile), (desc)))
+#define ParserInit(self, infile, relid)		((self)->init((self), (infile), (relid)))
 #define ParserRead(self)					((self)->read((self)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
@@ -95,9 +96,8 @@ struct Reader
 	bool			verbose;		/**< logger options */
 
 	/*
-	 * Source and Parser
+	 * Parser
 	 */
-	Source		   *source;			/**< input source stream */
 	Parser		   *parser;			/**< source stream parser */
 
 	/*
@@ -111,6 +111,31 @@ extern Reader *ReaderCreate(const char *fname, const char *options, time_t tm);
 extern HeapTuple ReaderNext(Reader *rd);
 extern void ReaderDumpParams(Reader *rd);
 extern int64 ReaderClose(Reader *rd, bool onError);
+
+/* Checker */
+
+typedef struct Checker
+{
+	Relation		rel;
+
+	/* Check the encoding */
+	bool			need_convert;	/**< Do convert input data? */
+	int				encoding;		/**< input data encoding */
+	int				db_encoding;	/**< database encoding */
+
+	/* Check the constraints */
+	bool			check_constraints;
+	bool			need_check_constraint;
+	bool			need_check_not_null;
+	ResultRelInfo  *resultRelInfo;
+	EState		   *estate;
+	TupleTableSlot *slot;
+} Checker;
+
+extern void CheckerInit(Checker *checker, Relation rel);
+extern void CheckerTerm(Checker *checker);
+extern char *CheckerConversion(Checker *checker, char *src);
+extern void CheckerConstraints(Checker *checker, HeapTuple tuple);
 
 /* TupleFormer */
 

@@ -12,7 +12,10 @@
 
 #include <unistd.h>
 
+#include "access/heapam.h"
 #include "access/htup.h"
+#include "executor/executor.h"
+#include "mb/pg_wchar.h"
 #include "utils/rel.h"
 
 #include "logger.h"
@@ -32,6 +35,7 @@ typedef struct CSVParser
 	Parser	base;
 
 	Source		   *source;
+	Checker			checker;
 	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
@@ -103,7 +107,7 @@ typedef struct CSVParser
 	bool	   *fnn;			/**< array of NOT NULL column flag */
 } CSVParser;
 
-static void	CSVParserInit(CSVParser *self, const char *infile, TupleDesc desc);
+static void	CSVParserInit(CSVParser *self, const char *infile, Oid relid);
 static HeapTuple	CSVParserRead(CSVParser *self);
 static int64	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
@@ -161,6 +165,7 @@ CreateCSVParser(void)
 	self->base.dumpParams = (ParserDumpParamsProc) CSVParserDumpParams;
 	self->base.dumpRecord = (ParserDumpRecordProc) CSVParserDumpRecord;
 	self->offset = -1;
+	self->checker.encoding = -1;
 	return (Parser *)self;
 }
 
@@ -176,8 +181,11 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser *self, const char *infile, TupleDesc desc)
+CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 {
+	Relation	rel;
+	TupleDesc	desc;
+
 	/*
 	 * set default values
 	 */
@@ -201,7 +209,12 @@ CSVParserInit(CSVParser *self, const char *infile, TupleDesc desc)
 				 errmsg
 				 ("QUOTE must not appear in the NULL specification")));
 
+	/* open relation without any relation locks */
+	rel = heap_open(relid, NoLock);
+	desc = RelationGetDescr(rel);
+
 	self->source = CreateSource(infile, desc);
+	CheckerInit(&self->checker, rel);
 	TupleFormerInit(&self->former, desc);
 
 	/*
@@ -279,6 +292,8 @@ CSVParserTerm(CSVParser *self)
 		pfree(self->rec_buf);
 	if (self->field_buf)
 		pfree(self->field_buf);
+	CheckerTerm(&self->checker);
+	TupleFormerTerm(&self->former);
 	pfree(self);
 
 	return skip;
@@ -324,6 +339,7 @@ checkFieldIsNull(CSVParser *self, int field_num, int len)
 static HeapTuple
 CSVParserRead(CSVParser *self)
 {
+	HeapTuple	tuple;			/* return tuple */
 	int			i = 0;			/* Index of the scanned character */
 	int			ret;
 	char		c;				/* Cache for the scanned character */
@@ -669,10 +685,52 @@ skip_done:
 						errdetail("only %d columns, required %d", self->base.parsing_field, self->former.nfields)));
 	}
 
-	ExtractValuesFromCSV(self);
-	self->base.parsing_field = 0;
+	/* Convert it to server encoding. */
+	if (self->checker.need_convert)
+	{
+		for (i = 0; i < self->former.nfields; i++)
+		{
+			if (self->fields[i] == NULL)
+				continue;
 
-	return TupleFormerTuple(&self->former);
+			self->base.parsing_field = i + 1;
+			self->fields[i] = CheckerConversion(&self->checker,
+												self->fields[i]);
+		}
+	}
+
+	ExtractValuesFromCSV(self);
+	self->base.parsing_field = -1;
+
+	tuple = TupleFormerTuple(&self->former);
+
+	if (self->checker.need_check_constraint)
+	{
+		self->base.parsing_field = 0;
+		CheckerConstraints(&self->checker, tuple);
+	}
+	else if (self->checker.need_check_not_null && HeapTupleHasNulls(tuple))
+	{
+		/*
+		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
+		 */
+		TupleDesc	desc = self->former.desc;
+		int			i;
+
+		for (i = 0; i < desc->natts; i++)
+		{
+			if (desc->attrs[i]->attnotnull &&
+				att_isnull(i, tuple->t_data->t_bits)) {
+				self->base.parsing_field = i + 1;	/* 1 origin */
+				ereport(ERROR,
+						(errcode(ERRCODE_NOT_NULL_VIOLATION),
+						 errmsg("null value in column \"%s\" violates not-null constraint",
+						NameStr(desc->attrs[i]->attname))));
+			}
+		}
+	}
+
+	return tuple;
 }
 
 static bool
@@ -708,6 +766,20 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
 	}
+	else if (pg_strcasecmp(keyword, "ENCODING") == 0)
+	{
+		ASSERT_ONCE(self->checker.encoding < 0);
+		self->checker.encoding = pg_valid_client_encoding(value);
+		if (self->checker.encoding < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
+						value)));
+	}
+	else if (pg_strcasecmp(keyword, "CHECK_CONSTRAINTS") == 0)
+	{
+		self->checker.check_constraints = ParseBoolean(value, false);
+	}
 	else
 		return false;	/* unknown parameter */
 
@@ -742,6 +814,13 @@ CSVParserDumpParams(CSVParser *self)
 	str = QuoteString(self->null);
 	appendStringInfo(&buf, "NULL = %s\n", str);
 	pfree(str);
+
+	if (PG_VALID_FE_ENCODING(self->checker.encoding))
+		appendStringInfo(&buf, "ENCODING = %s\n",
+						 pg_encoding_to_char(self->checker.encoding));
+
+	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
+		self->checker.check_constraints ? "YES" : "NO");
 
 	foreach(name, self->fnn_name)
 	{
@@ -795,7 +874,6 @@ static void
 ExtractValuesFromCSV(CSVParser *self)
 {
 	int					i;
-	Form_pg_attribute  *attrs = self->former.desc->attrs;
 
 	/*
 	 * Converts string data in the field array into the internal representation for
@@ -817,17 +895,6 @@ ExtractValuesFromCSV(CSVParser *self)
 		}
 		else
 		{
-			if (attrs[index]->attnotnull)
-			{
-				/*
-				 * If the input is NULL value, check NON NULL constraint for this table.
-				 */
-				ereport(ERROR,
-						(errcode(ERRCODE_NOT_NULL_VIOLATION),
-						 errmsg
-						 ("null value in column \"%s\" violates not-null constraint",
-						  NameStr(attrs[index]->attname))));
-			}
 			value = (Datum) 0;
 			isnull = true;
 		}
