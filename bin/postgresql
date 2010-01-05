@@ -12,7 +12,7 @@
 #      this script doesn't execute pg_bulkload's recovery and call pg_ctl 
 #      directory.
 #
-# Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 #------------------------------------------------------------------------------
 # Acquire a command name

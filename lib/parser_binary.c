@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_binary.c
  *
- *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -372,7 +372,7 @@ BinaryParserRead(BinaryParser *self)
 			str[len] = '\0';
 			self->base.parsing_field = i + 1;
 
-			if (self->checker.need_convert)
+			if (self->checker.check_encoding)
 			{
 				self->fields[i].in = CheckerConversion(&self->checker, str);
 				pfree(str);
@@ -391,12 +391,12 @@ BinaryParserRead(BinaryParser *self)
 
 	tuple = TupleFormerTuple(&self->former);
 
-	if (self->checker.need_check_constraint)
+	if (self->checker.has_constraints)
 	{
 		self->base.parsing_field = 0;
 		CheckerConstraints(&self->checker, tuple);
 	}
-	else if (self->checker.need_check_not_null && HeapTupleHasNulls(tuple))
+	else if (self->checker.has_not_null && HeapTupleHasNulls(tuple))
 	{
 		/*
 		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
@@ -1031,7 +1031,6 @@ ExtractValuesFromFixed(BinaryParser *self, char *record)
 		self->base.parsing_field = i + 1;	/* 1 origin */
 		value = self->fields[i].read(&self->former,
 			self->fields[i].in, &self->fields[i], j, &isnull);
-			//record + self->fields[i].offset, &self->fields[i], j, &isnull);
 
 		self->former.isnull[j] = isnull;
 		self->former.values[j] = value;

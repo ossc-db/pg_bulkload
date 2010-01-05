@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/reader.h
  *
- *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -119,14 +119,14 @@ typedef struct Checker
 	Relation		rel;
 
 	/* Check the encoding */
-	bool			need_convert;	/**< Do convert input data? */
+	bool			check_encoding;	/**< encoding check needed? */
 	int				encoding;		/**< input data encoding */
 	int				db_encoding;	/**< database encoding */
 
 	/* Check the constraints */
 	bool			check_constraints;
-	bool			need_check_constraint;
-	bool			need_check_not_null;
+	bool			has_constraints;	/**< constraints check needed? */
+	bool			has_not_null;		/**< not nulls check needed? */
 	ResultRelInfo  *resultRelInfo;
 	EState		   *estate;
 	TupleTableSlot *slot;

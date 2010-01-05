@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_buffered.c
  *
- *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"

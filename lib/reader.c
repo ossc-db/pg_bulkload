@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/reader.c
  *
- *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -708,10 +708,10 @@ CheckerInit(Checker *checker, Relation rel)
 	 * Convert encoding if the client and server encodings are different.
 	 */
 	checker->db_encoding = GetDatabaseEncoding();
-	if (checker->encoding != -1 && checker->encoding != checker->db_encoding &&
+	if (checker->encoding != -1 &&
 		checker->encoding != PG_SQL_ASCII &&
 		checker->db_encoding != PG_SQL_ASCII)
-		checker->need_convert = true;
+		checker->check_encoding = true;
 
 	/* When specify CHECK_CONSTRAINTS, we check the constraints */
 	desc = RelationGetDescr(rel);
@@ -719,10 +719,10 @@ CheckerInit(Checker *checker, Relation rel)
 		(checker->check_constraints || desc->constr->has_not_null))
 	{
 		if (checker->check_constraints)
-			checker->need_check_constraint = true;
+			checker->has_constraints = true;
 
 		if (desc->constr->has_not_null)
-			checker->need_check_not_null = true;
+			checker->has_not_null = true;
 
 		checker->resultRelInfo = makeNode(ResultRelInfo);
 		checker->resultRelInfo->ri_RangeTableIndex = 1;		/* dummy */
@@ -731,7 +731,7 @@ CheckerInit(Checker *checker, Relation rel)
 		checker->resultRelInfo->ri_TrigInstrument = NULL;
 	}
 
-	if (checker->need_check_constraint)
+	if (checker->has_constraints)
 	{
 		checker->estate = CreateExecutorState();
 		checker->estate->es_result_relations = checker->resultRelInfo;
@@ -742,7 +742,7 @@ CheckerInit(Checker *checker, Relation rel)
 		checker->slot = MakeSingleTupleTableSlot(desc);
 	}
 
-	if (!checker->need_check_constraint && !checker->need_check_not_null)
+	if (!checker->has_constraints && !checker->has_not_null)
 	{
 		heap_close(rel, NoLock);
 		checker->rel = NULL;
@@ -765,10 +765,21 @@ CheckerTerm(Checker *checker)
 char *
 CheckerConversion(Checker *checker, char *src)
 {
-	return (char *) pg_do_encoding_conversion((unsigned char *) src,
-											  strlen(src),
-											  checker->encoding,
-											  checker->db_encoding);
+	if (checker->encoding == checker->db_encoding)
+	{
+		/* Verify if the input and the database are in the same encoding. */
+		pg_verifymbstr(src, strlen(src), false);
+		return src;
+	}
+	else
+	{
+		/* Convert the input into the database encoding. */
+		/* XXX: Do we need to verify the input before conversion? */
+		return (char *) pg_do_encoding_conversion((unsigned char *) src,
+												  strlen(src),
+												  checker->encoding,
+												  checker->db_encoding);
+	}
 }
 
 void

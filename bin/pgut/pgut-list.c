@@ -2,7 +2,7 @@
  *
  * pgut-list.c : copied from postgres/nodes/list.c
  *
- * Copyright (c) 2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -30,11 +30,11 @@ new_list(NodeTag type)
 	List	   *new_list;
 	ListCell   *new_head;
 
-	new_head = (ListCell *) malloc(sizeof(*new_head));
+	new_head = pgut_new(ListCell);
 	new_head->next = NULL;
 	/* new_head->data is left undefined! */
 
-	new_list = (List *) malloc(sizeof(*new_list));
+	new_list = pgut_new(List);
 	new_list->type = type;
 	new_list->length = 1;
 	new_list->head = new_head;
@@ -55,7 +55,7 @@ new_head_cell(List *list)
 {
 	ListCell   *new_head;
 
-	new_head = (ListCell *) malloc(sizeof(*new_head));
+	new_head = pgut_new(ListCell);
 	new_head->next = list->head;
 
 	list->head = new_head;
@@ -74,7 +74,7 @@ new_tail_cell(List *list)
 {
 	ListCell   *new_tail;
 
-	new_tail = (ListCell *) malloc(sizeof(*new_tail));
+	new_tail = pgut_new(ListCell);
 	new_tail->next = NULL;
 
 	list->tail->next = new_tail;
@@ -114,7 +114,7 @@ add_new_cell(List *list, ListCell *prev_cell)
 {
 	ListCell   *new_cell;
 
-	new_cell = (ListCell *) malloc(sizeof(*new_cell));
+	new_cell = pgut_new(ListCell);
 	/* new_cell->data is left undefined! */
 	new_cell->next = prev_cell->next;
 	prev_cell->next = new_cell;
@@ -374,29 +374,6 @@ list_delete_first(List *list)
 }
 
 /*
- * Free all storage in a list, and optionally the pointed-to elements
- */
-static void
-list_free_private(List *list, bool deep)
-{
-	ListCell   *cell;
-
-	cell = list_head(list);
-	while (cell != NULL)
-	{
-		ListCell   *tmp = cell;
-
-		cell = lnext(cell);
-		if (deep)
-			free(lfirst(tmp));
-		free(tmp);
-	}
-
-	if (list)
-		free(list);
-}
-
-/*
  * Free all the cells of the list, as well as the list itself. Any
  * objects that are pointed-to by the cells of the list are NOT
  * free'd.
@@ -407,7 +384,7 @@ list_free_private(List *list, bool deep)
 void
 list_free(List *list)
 {
-	list_free_private(list, false);
+	list_destroy(list, NULL);
 }
 
 /*
@@ -425,7 +402,7 @@ list_free_deep(List *list)
 	 * A "deep" free operation only makes sense on a list of pointers.
 	 */
 	Assert(IsPointerList(list));
-	list_free_private(list, true);
+	list_destroy(list, free);
 }
 
 /*
@@ -456,7 +433,7 @@ list_copy(List *oldlist)
 	{
 		ListCell   *newlist_cur;
 
-		newlist_cur = (ListCell *) malloc(sizeof(*newlist_cur));
+		newlist_cur = pgut_new(ListCell);
 		newlist_cur->data = oldlist_cur->data;
 		newlist_prev->next = newlist_cur;
 
@@ -508,7 +485,7 @@ list_copy_tail(List *oldlist, int nskip)
 	{
 		ListCell   *newlist_cur;
 
-		newlist_cur = (ListCell *) malloc(sizeof(*newlist_cur));
+		newlist_cur = pgut_new(ListCell);
 		newlist_cur->data = oldlist_cur->data;
 		newlist_prev->next = newlist_cur;
 
@@ -547,11 +524,36 @@ list_length(List *l)
 }
 #endif   /* ! __GNUC__ */
 
+/* list_walk - apply walker for each item */
 void
 list_walk(List *list, void (*walker)())
 {
 	ListCell *cell;
 
+	Assert(walker != NULL);
+
 	foreach(cell, list)
 		walker(lfirst(cell));
+}
+
+/*
+ * Free all storage in a list, and optionally the pointed-to elements
+ */
+void
+list_destroy(List *list, void (*walker)())
+{
+	ListCell   *cell;
+
+	cell = list_head(list);
+	while (cell != NULL)
+	{
+		ListCell   *tmp = cell;
+
+		cell = lnext(cell);
+		if (walker)
+			walker(lfirst(tmp));
+		free(tmp);
+	}
+
+	free(list);
 }

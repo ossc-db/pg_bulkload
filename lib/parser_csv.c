@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_csv.c
  *
- *	  Copyright(C) 2007-2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -686,7 +686,7 @@ skip_done:
 	}
 
 	/* Convert it to server encoding. */
-	if (self->checker.need_convert)
+	if (self->checker.check_encoding)
 	{
 		for (i = 0; i < self->former.nfields; i++)
 		{
@@ -704,12 +704,12 @@ skip_done:
 
 	tuple = TupleFormerTuple(&self->former);
 
-	if (self->checker.need_check_constraint)
+	if (self->checker.has_constraints)
 	{
 		self->base.parsing_field = 0;
 		CheckerConstraints(&self->checker, tuple);
 	}
-	else if (self->checker.need_check_not_null && HeapTupleHasNulls(tuple))
+	else if (self->checker.has_not_null && HeapTupleHasNulls(tuple))
 	{
 		/*
 		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint

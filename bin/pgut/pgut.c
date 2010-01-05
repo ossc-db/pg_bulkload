@@ -2,7 +2,7 @@
  *
  * pgut.c
  *
- * Copyright (c) 2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -111,7 +111,7 @@ option_merge(const pgut_option opts1[], const pgut_option opts2[])
 	size_t	len2 = option_length(opts2);
 	size_t	n = len1 + len2;
 
-	result = pgut_malloc(sizeof(struct option) * (n + 1));
+	result = pgut_newarray(struct option, n + 1);
 	option_copy(result, opts1, len1);
 	option_copy(result + len1, opts2, len2);
 	memset(&result[n], 0, sizeof(pgut_option));
@@ -514,13 +514,6 @@ parse_time(const char *value, time_t *time)
 	char	   *endp;
 	struct tm	tm = { 0 };
 
-	/* special case for invalid time */
-	if (strcmp(value, "****-**-** **:**:**") == 0)
-	{
-		*time = (time_t) 0;
-		return true;
-	}
-
 	endp = strptime(value, "%Y-%m-%d %H:%M:%S", &tm);
 	if (endp == NULL || *endp)
 		return false;
@@ -674,7 +667,7 @@ pgut_readopt(const char *path, pgut_option options[], int elevel)
 	if (fp == NULL)
 	{
 		if (errno != ENOENT)
-			elog(WARNING, _("can't open config file \"%s\": %s"), path,
+			elog(WARNING, "could not open config file \"%s\": %s", path,
 				strerror(errno));
 		return;
 	}
@@ -823,7 +816,7 @@ parse_pair(const char buffer[], char key[], char value[])
 	if (end - start <= 0)
 	{
 		if (*start == '=')
-			elog(WARNING, _("syntax error in \"%s\"."), buffer);
+			elog(WARNING, "syntax error in \"%s\"", buffer);
 		return false;
 	}
 
@@ -837,7 +830,7 @@ parse_pair(const char buffer[], char key[], char value[])
 
 	if (*start != '=')
 	{
-		elog(WARNING, _("syntax error in \"%s\"."), buffer);
+		elog(WARNING, "syntax error in \"%s\"", buffer);
 		return false;
 	}
 
@@ -854,7 +847,7 @@ parse_pair(const char buffer[], char key[], char value[])
 
 	if (*start != '\0' && *start != '#')
 	{
-		elog(WARNING, _("syntax error in \"%s\"."), buffer);
+		elog(WARNING, "syntax error in \"%s\"", buffer);
 		return false;
 	}
 
@@ -1080,7 +1073,7 @@ pgut_wait(int num, PGconn *connections[], struct timeval *timeout)
 		for (i = 0; i < num; i++)
 		{
 			int	sock;
-			
+
 			if (connections[i] == NULL)
 				continue;
 			sock = PQsocket(connections[i]);
@@ -1297,7 +1290,7 @@ pgut_atexit_push(pgut_atexit_callback callback, void *userdata)
 
 	AssertArg(callback != NULL);
 
-	item = pgut_malloc(sizeof(pgut_atexit_item));
+	item = pgut_new(pgut_atexit_item);
 	item->callback = callback;
 	item->userdata = userdata;
 	item->next = pgut_atexit_stack;
@@ -1383,11 +1376,16 @@ help(bool details)
 		printf("  --debug                   debug mode\n");
 	}
 	printf("  --help                    show this help, then exit\n");
-	printf("  --version                 output version information, then exit\n\n");
-	if (PROGRAM_URL)
-		printf("Read the website for details. <%s>\n", PROGRAM_URL);
-	if (PROGRAM_EMAIL)
-		printf("Report bugs to <%s>.\n", PROGRAM_EMAIL);
+	printf("  --version                 output version information, then exit\n");
+
+	if (details && (PROGRAM_URL || PROGRAM_EMAIL))
+	{
+		printf("\n");
+		if (PROGRAM_URL)
+			printf("Read the website for details. <%s>\n", PROGRAM_URL);
+		if (PROGRAM_EMAIL)
+			printf("Report bugs to <%s>.\n", PROGRAM_EMAIL);
+	}
 }
 
 /*
@@ -1482,7 +1480,7 @@ pgut_malloc(size_t size)
 	char *ret;
 
 	if ((ret = malloc(size)) == NULL)
-		elog(ERROR_NOMEM, "can't allocate memory (%lu bytes): %s",
+		elog(ERROR_NOMEM, "could not allocate memory (%lu bytes): %s",
 			(unsigned long) size, strerror(errno));
 	return ret;
 }
@@ -1493,7 +1491,7 @@ pgut_realloc(void *p, size_t size)
 	char *ret;
 
 	if ((ret = realloc(p, size)) == NULL)
-		elog(ERROR_NOMEM, "can't re-allocate memory (%lu bytes): %s",
+		elog(ERROR_NOMEM, "could not re-allocate memory (%lu bytes): %s",
 			(unsigned long) size, strerror(errno));
 	return ret;
 }
@@ -1507,7 +1505,7 @@ pgut_strdup(const char *str)
 		return NULL;
 
 	if ((ret = strdup(str)) == NULL)
-		elog(ERROR_NOMEM, "can't duplicate string \"%s\": %s",
+		elog(ERROR_NOMEM, "could not duplicate string \"%s\": %s",
 			str, strerror(errno));
 	return ret;
 }
