@@ -57,7 +57,7 @@ static void StartLoaderRecovery(void);
 static List *GetLSFList(void);
 
 /* Tests DBCluster status. */
-static DBState GetDBClusterState(void);
+static DBState GetDBClusterState(const char *fname);
 
 /* Obtains load start block, end block, and the first data file name. */
 static void GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls);
@@ -151,7 +151,7 @@ StartLoaderRecovery(void)
 	if (list_length(lsflist) == 0)
 		return;
 
-	need_recovery = GetDBClusterState() != DB_SHUTDOWNED;
+	need_recovery = GetDBClusterState("global/pg_control") != DB_SHUTDOWNED;
 
 	/*
 	 * while there are load status files, process recovery.
@@ -163,7 +163,7 @@ StartLoaderRecovery(void)
 
 		lsfname = (char *) lfirst(cur);
 
-		snprintf(lsfpath, MAXPGPATH, BULKLOAD_LSF_DIR "/%s", (char *) lfirst(cur));
+		snprintf(lsfpath, MAXPGPATH, BULKLOAD_LSF_DIR "/%s", lsfname);
 
 		/*
 		 * if database cluster has abnormally shutdown,
@@ -200,7 +200,7 @@ StartLoaderRecovery(void)
 		 */
 		if (unlink(lsfpath) != 0)
 			elog(ERROR,
-				 "could not delete loadstatus file \"%s\" : %s",
+				 "could not delete loadstatus file \"%s\": %s",
 				 lsfpath, strerror(errno));
 
 		elog(NOTICE, "delete loadstatus file \"%s\"", lsfname);
@@ -254,7 +254,7 @@ GetLSFList(void)
 	 */
 	if ((dir = opendir(BULKLOAD_LSF_DIR)) == NULL)
 		elog(ERROR,
-			 "could not open LSF Directory \"%s\" : %s",
+			 "could not open LSF Directory \"%s\": %s",
 			 BULKLOAD_LSF_DIR, strerror(errno));
 
 	while ((dp = readdir(dir)) != NULL)
@@ -274,7 +274,7 @@ GetLSFList(void)
 
 	if (closedir(dir) == -1)
 		elog(ERROR,
-			 "could not close LSF Directory \"%s\" : %s",
+			 "could not close LSF Directory \"%s\": %s",
 			 BULKLOAD_LSF_DIR, strerror(errno));
 
 	return list;
@@ -293,11 +293,11 @@ GetLSFList(void)
  *	<li> return status of database cluster(State) of ControlFile. </li>
  * </ol>
  *
- * @param  none
+ * @param  fname	control file path from $PGDATA.
  * @return status of database cluster
  */
 static DBState
-GetDBClusterState(void)
+GetDBClusterState(const char *fname)
 {
 	int				fd;
 	ControlFileData ControlFile;
@@ -310,21 +310,22 @@ GetDBClusterState(void)
 	/*
 	 * open, read, and close ControlFileData
 	 */
-	if ((fd = open("global/pg_control", O_RDONLY | PG_BINARY, 0)) == -1)
+	if ((fd = open(fname, O_RDONLY | PG_BINARY, 0)) == -1)
 		elog(ERROR,
-			 "could not open Control File \"global/pg_control\" : %s",
-			 strerror(errno));
+			 "could not open control file \"%s\": %s",
+			 fname, strerror(errno));
 
-	if ((read(fd, &ControlFile,
-			  sizeof(ControlFileData))) != sizeof(ControlFileData))
+	if (read(fd, &ControlFile, sizeof(ControlFile)) != sizeof(ControlFile))
 		elog(ERROR,
-			 "could not read Control File \"global/pg_control\" : %s",
-			 strerror(errno));
+			 "could not read control file \"%s\": %s",
+			 fname, strerror(errno));
+
+	/* TODO: check CRC of the control file here. */
 
 	if (close(fd) == -1)
 		elog(ERROR,
-			 "could not close Control File \"global/pg_control\" : %s",
-			 strerror(errno));
+			 "could not close control file \"%s\": %s",
+			 fname, strerror(errno));
 
 	return ControlFile.state;
 }
@@ -357,18 +358,18 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
 	 */
 	if ((fd = open(lsfpath, O_RDONLY | PG_BINARY, 0)) == -1)
 		elog(ERROR,
-			 "could not open LoadStatusFile \"%s\" : %s",
+			 "could not open LoadStatusFile \"%s\": %s",
 			 lsfpath, strerror(errno));
 
 	read_len = read(fd, ls, sizeof(LoadStatus));
 	if (read_len != sizeof(LoadStatus))
 		elog(ERROR,
-			 "could not read LoadStatusFile \"%s\" : %s",
+			 "could not read LoadStatusFile \"%s\": %s",
 			 lsfpath, strerror(errno));
 
 	if (close(fd) == -1)
 		elog(ERROR,
-			 "could not close LoadStatusFile \"%s\" : %s",
+			 "could not close LoadStatusFile \"%s\": %s",
 			 lsfpath, strerror(errno));
 }
 
@@ -429,14 +430,14 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 	if (fd == -1)
 		elog(ERROR,
-			 "could not open data file \"%s\" : %s",
+			 "could not open data file \"%s\": %s",
 			 segpath, strerror(errno));
 
 	seekpos = lseek(fd, (blkbeg % RELSEG_SIZE) * BLCKSZ, SEEK_SET);
 
 	if (seekpos == -1)
 		elog(ERROR,
-			 "could not seek the target position in the data file \"%s\" : %s",
+			 "could not seek the target position in the data file \"%s\": %s",
 			 segpath, strerror(errno));
 
 	blknum = blkbeg;
@@ -462,7 +463,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 					continue;
 				else
 					elog(ERROR,
-						 "could not read data file \"%s\" : %s",
+						 "could not read data file \"%s\": %s",
 						 segpath, strerror(errno));
 			}
 			else if (ret == 0)
@@ -504,12 +505,12 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 		{
 			if (fsync(fd) != 0)
 				elog(ERROR,
-					 "could not sync data file \"%s\" : %s",
+					 "could not sync data file \"%s\": %s",
 					 segpath, strerror(errno));
 
 			if (close(fd) == -1)
 				elog(ERROR,
-					 "could not close data file \"%s\" : %s",
+					 "could not close data file \"%s\": %s",
 					 segpath, strerror(errno));
 
 			++segno;
@@ -518,7 +519,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 			fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 			if (fd == -1)
 				elog(ERROR,
-					 "could not open data file \"%s\" : %s",
+					 "could not open data file \"%s\": %s",
 					 segpath, strerror(errno));
 		}
 	}
@@ -528,12 +529,12 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	 */
 	if (fsync(fd) != 0)
 		elog(ERROR,
-			 "could not sync data file \"%s\" : %s",
+			 "could not sync data file \"%s\": %s",
 			 segpath, strerror(errno));
 
 	if (close(fd) == -1)
 		elog(ERROR,
-			 "could not close data file \"%s\" : %s",
+			 "could not close data file \"%s\": %s",
 			 segpath, strerror(errno));
 }
 

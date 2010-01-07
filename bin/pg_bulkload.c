@@ -31,6 +31,11 @@ const char *DataDir = NULL;
 /** @Flag do recovery, or bulkload */
 static bool		recovery = false;
 
+static char *infile = NULL;				/* INFILE */
+static char *logfile = NULL;			/* LOGFILE */
+static char *parse_badfile = NULL;		/* PARSE_BADFILE */
+static char *duplicate_badfile = NULL;	/* DUPLICATE_BADFILE */
+
 static char	   *additional_options = NULL;
 
 /*
@@ -55,43 +60,17 @@ static PGresult *RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary);
 static void
 parse_option(pgut_option *opt, const char *arg)
 {
-	char	path[MAXPGPATH];
-
-	switch (opt->sname)
-	{
-		case 'i':
-			if (pg_strcasecmp(arg, "stdin") == 0)
-				strlcpy(path, "INFILE = stdin", lengthof(path));
-			else
-				make_absolute_path(path, "INFILE = ", arg);
-			add_option(path);
-			break;
-		case 'l':
-			make_absolute_path(path, "LOGFILE = ", arg);
-			add_option(path);
-			break;
-		case 'P':
-			make_absolute_path(path, "PARSE_BADFILE = ", arg);
-			add_option(path);
-			break;
-		case 'u':
-			make_absolute_path(path, "DUPLICATE_BADFILE = ", arg);
-			add_option(path);
-			break;
-		case 'o':
-			opt->source = SOURCE_DEFAULT;	/* -o can be specified many times */
-			add_option(arg);
-			break;
-	}
+	opt->source = SOURCE_DEFAULT;	/* -o can be specified many times */
+	add_option(arg);
 }
 
 static pgut_option options[] =
 {
 	/* Dataload options */
-	{ 'f', 'i', "infile"			, parse_option },
-	{ 'f', 'l', "logfile"			, parse_option },
-	{ 'f', 'P', "parse_badfile"		, parse_option },
-	{ 'f', 'u', "duplicate_badfile"	, parse_option },
+	{ 's', 'i', "infile"			, &infile },
+	{ 's', 'l', "logfile"			, &logfile },
+	{ 's', 'P', "parse-badfile"		, &parse_badfile },
+	{ 's', 'u', "duplicate-badfile"	, &duplicate_badfile },
 	{ 'f', 'o', "option"			, parse_option },
 	/* Recovery options */
 	{ 's', 'D', "pgdata"	, &DataDir },
@@ -147,9 +126,36 @@ main(int argc, char *argv[])
 	}
 	else
 	{
+		char	path[MAXPGPATH];
+
 		/* verify arguments */
 		if (DataDir)
 			elog(ERROR, "invalid option '-D' for data load");
+
+		/* add file options */
+		if (infile)
+		{
+			if (pg_strcasecmp(infile, "stdin") == 0)
+				strlcpy(path, "INFILE = stdin", lengthof(path));
+			else
+				make_absolute_path(path, "INFILE = ", infile);
+			add_option(path);
+		}
+		if (logfile)
+		{
+			make_absolute_path(path, "LOGFILE = ", logfile);
+			add_option(path);
+		}
+		if (parse_badfile)
+		{
+			make_absolute_path(path, "PARSE_BADFILE = ", parse_badfile);
+			add_option(path);
+		}
+		if (duplicate_badfile)
+		{
+			make_absolute_path(path, "DUPLICATE_BADFILE = ", duplicate_badfile);
+			add_option(path);
+		}
 
 		return LoaderLoadMain(control_file);
 	}
@@ -169,8 +175,8 @@ pgut_help(bool details)
 	printf("\nDataload options:\n");
 	printf("  -i, --infile=INFILE       INFILE path\n");
 	printf("  -l, --logfile=LOGFILE     LOGFILE path\n");
-	printf("  -P, --parse_badfile=*     PARSE_BADFILE path\n");
-	printf("  -u, --duplicate_badfile=* DUPLICATE_BADFILE path\n");
+	printf("  -P, --parse-badfile=*     PARSE_BADFILE path\n");
+	printf("  -u, --duplicate-badfile=* DUPLICATE_BADFILE path\n");
 	printf("  -o, --option=\"key=val\"    additional option\n");
 	printf("\nRecovery options:\n");
 	printf("  -r, --recovery            execute recovery\n");

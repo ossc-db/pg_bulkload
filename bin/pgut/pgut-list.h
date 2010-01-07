@@ -2,7 +2,7 @@
  *
  * pgut-list.h
  *
- * Copyright (c) 2009, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -16,5 +16,6 @@
  * pgut-list.c : Extended list functions
  */
 extern void list_walk(List *list, void (*walker)());
+extern void list_destroy(List *list, void (*walker)());
 
 #endif /* PGUT_LIST_H */

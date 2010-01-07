@@ -13,10 +13,20 @@
 
 #include <getopt.h>
 #include <limits.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "pgut.h"
+
+/* old gcc doesn't have LLONG_MAX. */
+#ifndef LLONG_MAX
+#if defined(HAVE_LONG_INT_64) || !defined(HAVE_LONG_LONG_INT_64)
+#define LLONG_MAX		LONG_MAX
+#else
+#define LLONG_MAX		INT64CONST(0x7FFFFFFFFFFFFFFF)
+#endif
+#endif
 
 const char *PROGRAM_NAME = NULL;
 
@@ -404,13 +414,7 @@ parse_int64(const char *value, int64 *result)
 
 	if (strcmp(value, INFINITE_STR) == 0)
 	{
-#if defined(HAVE_LONG_INT_64)
-		*result = LONG_MAX;
-#elif defined(HAVE_LONG_LONG_INT_64)
 		*result = LLONG_MAX;
-#else
-		*result = LONG_MAX;
-#endif
 		return true;
 	}
 
@@ -474,49 +478,50 @@ parse_uint64(const char *value, uint64 *result)
 	return true;
 }
 
-#ifdef WIN32	/* == not defined(HAVE_STRPTIME) */
-
-static char *
-strptime(const char *s, const char *format, struct tm *tm)
-{
-	int		n;
-	char	c;
-
-	/* only support single format for now */
-	if (strcmp(format, "%Y-%m-%d %H:%M:%S") != 0)
-	{
-		errno = EINVAL;
-		return NULL;
-	}
-
-	n = sscanf(s, "%d-%d-%d %d:%d:%d%c",
-		&tm->tm_year, &tm->tm_mon, &tm->tm_mday,
-		&tm->tm_hour, &tm->tm_min, &tm->tm_sec, &c);
-	if (tm->tm_year >= 1900)
-		tm->tm_year -= 1900;	/* years since 1900 */
-	if (tm->tm_mon > 0)
-		tm->tm_mon -= 1;	/* tm_mon is [0,11] */
-
-	if (n == 6)
-		return (char *) (s + strlen(s));
-	else
-		return strchr(s, c);
-}
-
-#endif
-
 /*
  * Convert ISO-8601 format string to time_t value.
  */
 bool
 parse_time(const char *value, time_t *time)
 {
-	char	   *endp;
-	struct tm	tm = { 0 };
+	size_t		len;
+	char	   *tmp;
+	int			i;
+	struct tm	tm;
+	char		junk[2];
 
-	endp = strptime(value, "%Y-%m-%d %H:%M:%S", &tm);
-	if (endp == NULL || *endp)
+	/* tmp = replace( value, !isalnum, ' ' ) */
+	tmp = pgut_malloc(strlen(value) + + 1);
+	len = 0;
+	for (i = 0; value[i]; i++)
+		tmp[len++] = (IsAlnum(value[i]) ? value[i] : ' ');
+	tmp[len] = '\0';
+
+	/* parse for "YYYY-MM-DD HH:MI:SS" */
+	tm.tm_year = 0;		/* tm_year is year - 1900 */
+	tm.tm_mon = 0;		/* tm_mon is 0 - 11 */
+	tm.tm_mday = 1;		/* tm_mday is 1 - 31 */
+	tm.tm_hour = 0;
+	tm.tm_min = 0;
+	tm.tm_sec = 0;
+	i = sscanf(tmp, "%04d %02d %02d %02d %02d %02d%1s",
+		&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
+		&tm.tm_hour, &tm.tm_min, &tm.tm_sec, junk);
+	free(tmp);
+
+	if (i < 1 || 6 < i)
 		return false;
+
+	/* adjust year */
+	if (tm.tm_year < 100)
+		tm.tm_year += 2000 - 1900;
+	else if (tm.tm_year >= 1900)
+		tm.tm_year -= 1900;
+
+	/* adjust month */
+	if (i > 1)
+		tm.tm_mon -= 1;
+
 	*time = mktime(&tm);
 
 	return true;
@@ -663,14 +668,8 @@ pgut_readopt(const char *path, pgut_option options[], int elevel)
 	if (!options)
 		return;
 
-	fp = fopen(path, "rt");
-	if (fp == NULL)
-	{
-		if (errno != ENOENT)
-			elog(WARNING, "could not open config file \"%s\": %s", path,
-				strerror(errno));
+	if ((fp = pgut_fopen(path, "rt", true)) == NULL)
 		return;
-	}
 
 	while (fgets(buf, lengthof(buf), fp))
 	{
@@ -1538,6 +1537,146 @@ strdup_trim(const char *str)
 	while (len > 0 && IsSpace(str[len - 1])) { len--; }
 
 	return strdup_with_len(str, len);
+}
+
+/* Try open file. Also create parent directries if open for writes. */
+FILE *
+pgut_fopen(const char *path, const char *mode, bool missing_ok)
+{
+	FILE *fp;
+
+retry:
+	if ((fp = fopen(path, mode)) == NULL)
+	{
+		if (errno == ENOENT)
+		{
+			if (missing_ok)
+				return NULL;
+			if (mode[0] == 'w' || mode[0] == 'a')
+			{
+				char	dir[MAXPGPATH];
+
+				strlcpy(dir, path, MAXPGPATH);
+				get_parent_directory(dir);
+				pgut_mkdir(dir, S_IRWXU);
+				goto retry;
+			}
+		}
+
+		elog(ERROR_SYSTEM, "could not open file \"%s\": %s",
+			path, strerror(errno));
+	}
+
+	return fp;
+}
+
+/*
+ * this tries to build all the elements of a path to a directory a la mkdir -p
+ * we assume the path is in canonical form, i.e. uses / as the separator.
+ */
+void
+pgut_mkdir(const char *dirpath, mode_t omode)
+{
+	struct stat sb;
+	mode_t		numask,
+				oumask;
+	int			first,
+				last,
+				retval;
+	char	   *path;
+	char	   *p;
+
+	Assert(dirpath != NULL);
+
+	p = path = pgut_strdup(dirpath);
+	oumask = 0;
+	retval = 0;
+
+#ifdef WIN32
+	/* skip network and drive specifiers for win32 */
+	if (strlen(p) >= 2)
+	{
+		if (p[0] == '/' && p[1] == '/')
+		{
+			/* network drive */
+			p = strstr(p + 2, "/");
+			if (p == NULL)
+				elog(ERROR_ARGS, "invalid path \"%s\"", dirpath);
+		}
+		else if (p[1] == ':' &&
+				 ((p[0] >= 'a' && p[0] <= 'z') ||
+				  (p[0] >= 'A' && p[0] <= 'Z')))
+		{
+			/* local drive */
+			p += 2;
+		}
+	}
+#endif
+
+	if (p[0] == '/')			/* Skip leading '/'. */
+		++p;
+	for (first = 1, last = 0; !last; ++p)
+	{
+		if (p[0] == '\0')
+			last = 1;
+		else if (p[0] != '/')
+			continue;
+		*p = '\0';
+		if (!last && p[1] == '\0')
+			last = 1;
+		if (first)
+		{
+			/*
+			 * POSIX 1003.2: For each dir operand that does not name an
+			 * existing directory, effects equivalent to those caused by the
+			 * following command shall occcur:
+			 *
+			 * mkdir -p -m $(umask -S),u+wx $(dirname dir) && mkdir [-m mode]
+			 * dir
+			 *
+			 * We change the user's umask and then restore it, instead of
+			 * doing chmod's.
+			 */
+			oumask = umask(0);
+			numask = oumask & ~(S_IWUSR | S_IXUSR);
+			(void) umask(numask);
+			first = 0;
+		}
+		if (last)
+			(void) umask(oumask);
+
+retry:
+		/* check for pre-existing directory; ok if it's a parent */
+		if (stat(path, &sb) == 0)
+		{
+			if (!S_ISDIR(sb.st_mode))
+			{
+				if (last)
+					errno = EEXIST;
+				else
+					errno = ENOTDIR;
+				retval = 1;
+				break;
+			}
+		}
+		else if (mkdir(path, last ? omode : S_IRWXU | S_IRWXG | S_IRWXO) < 0)
+		{
+			if (errno == EEXIST)
+				goto retry;	/* another thread might create the directory. */
+			retval = 1;
+			break;
+		}
+		if (!last)
+			*p = '/';
+	}
+	if (!first && !last)
+		(void) umask(oumask);
+
+	if (retval != 0)
+		elog(ERROR_SYSTEM, "could not create directory \"%s\": %s",
+					 dirpath, strerror(errno));
+
+	free(path);
 }
 
 #ifdef WIN32

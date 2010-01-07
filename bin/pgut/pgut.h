@@ -133,8 +133,14 @@ extern char *pgut_strdup(const char *str);
 extern char *strdup_with_len(const char *str, size_t len);
 extern char *strdup_trim(const char *str);
 
-#define pgut_new(type)		((type *) pgut_malloc(sizeof(type)))
+#define pgut_new(type)			((type *) pgut_malloc(sizeof(type)))
 #define pgut_newarray(type, n)	((type *) pgut_malloc(sizeof(type) * (n)))
+
+/*
+ * file operations
+ */
+extern FILE *pgut_fopen(const char *path, const char *mode, bool missing_ok);
+extern void pgut_mkdir(const char *dirpath, mode_t omode);
 
 /*
  * elog
