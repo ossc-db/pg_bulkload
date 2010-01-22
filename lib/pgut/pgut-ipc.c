@@ -97,7 +97,6 @@ retry:
 		elog(ERROR, "MapViewOfFile failed: errcode=%lu", GetLastError());
 #else
 	handle = shmget(shmemKey, offsetof(QueueHeader, data) + size, IPC_CREAT | IPC_EXCL | 0600);
-	/* TODO  BUGTEST handle = shmget(shmemKey, size, IPC_CREAT | IPC_EXCL | 0600); */
 	if (handle < 0)
 	{
 		if (errno == EEXIST || errno == EACCES

@@ -17,12 +17,20 @@
 #include "access/heapam.h"
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "executor/executor.h"
+#include "executor/spi.h"
+#include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/resowner.h"
+#include "utils/syscache.h"
+#include "utils/typcache.h"
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 
@@ -793,48 +801,81 @@ CheckerConstraints(Checker *checker, HeapTuple tuple)
 }
 
 void
-TupleFormerInit(TupleFormer *former, TupleDesc desc)
+TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 {
-	Form_pg_attribute  *attrs;
 	AttrNumber			natts;
+	AttrNumber			maxatts;
 	int					i;
+	Oid					in_func_oid;
 
 	former->desc = CreateTupleDescCopy(desc);
+	for (i = 0; i < desc->natts; i++)
+		former->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
 
 	/*
-	 * allocate buffer to store columns
+	 * allocate buffer to store columns or function arguments
 	 */
-	natts = desc->natts;
-	former->values = palloc(sizeof(Datum) * natts);
-	former->isnull = palloc(sizeof(bool) * natts);
-	MemSet(former->isnull, true, sizeof(bool) * natts);
+	if (filter->funcstr)
+	{
+		natts = filter->nargs;
+		maxatts = Max(natts, desc->natts);
+	}
+	else
+		natts = maxatts = desc->natts;
+
+	former->values = palloc(sizeof(Datum) * maxatts);
+	former->isnull = palloc(sizeof(bool) * maxatts);
+	MemSet(former->isnull, true, sizeof(bool) * maxatts);
 
 	/*
 	 * get column information of the target relation
 	 */
-	attrs = desc->attrs;
 	former->typIOParam = (Oid *) palloc(natts * sizeof(Oid));
 	former->typInput = (FmgrInfo *) palloc(natts * sizeof(FmgrInfo));
+	former->typMod = (Oid *) palloc(natts * sizeof(Oid));
 	former->attnum = palloc(natts * sizeof(int));
-	former->nfields = 0;
-	for (i = 0; i < natts; i++)
+
+	if (filter->funcstr)
 	{
-		Oid	in_func_oid;
+		former->maxfields = natts;
+		former->minfields = former->maxfields - filter->fn_ndargs;
 
-		/* ignore dropped columns */
-		if (attrs[i]->attisdropped)
-			continue;
+		for (i = 0; i < natts; i++)
+		{
+			/* get type information and input function */
+			getTypeInputInfo(filter->argtypes[i],
+						 &in_func_oid, &former->typIOParam[i]);
+			fmgr_info(in_func_oid, &former->typInput[i]);
 
-		/* get type information and input function */
-		getTypeInputInfo(attrs[i]->atttypid,
-					 &in_func_oid, &former->typIOParam[i]);
-		fmgr_info(in_func_oid, &former->typInput[i]);
+			former->typMod[i] = -1;
+			former->attnum[i] = i;
+		}
+	}
+	else
+	{
+		Form_pg_attribute  *attrs;
 
-		/* update valid column information */
-		former->attnum[former->nfields] = i;
-		former->nfields++;
+		attrs = desc->attrs;
+		former->maxfields = 0;
+		for (i = 0; i < natts; i++)
+		{
+			/* ignore dropped columns */
+			if (attrs[i]->attisdropped)
+				continue;
 
-		former->desc->attrs[i]->attnotnull = attrs[i]->attnotnull;
+			/* get type information and input function */
+			getTypeInputInfo(attrs[i]->atttypid,
+							 &in_func_oid, &former->typIOParam[i]);
+			fmgr_info(in_func_oid, &former->typInput[i]);
+
+			former->typMod[i] = attrs[i]->atttypmod;
+
+			/* update valid column information */
+			former->attnum[former->maxfields] = i;
+			former->maxfields++;
+		}
+
+		former->minfields = former->maxfields;
 	}
 }
 
@@ -866,6 +907,15 @@ TupleFormerTuple(TupleFormer *former)
 	return heap_form_tuple(former->desc, former->values, former->isnull);
 }
 
+static HeapTuple
+TupleFormerNullTuple(TupleFormer *former)
+{
+	memset(former->values, 0, former->desc->natts * sizeof(Datum));
+	memset(former->isnull, true, former->desc->natts * sizeof(bool));
+
+	return TupleFormerTuple(former);
+}
+
 /* Read null-terminated string and convert to internal format */
 Datum
 TupleFormerValue(TupleFormer *former, const char *str, int col)
@@ -873,5 +923,293 @@ TupleFormerValue(TupleFormer *former, const char *str, int col)
 	return FunctionCall3(&former->typInput[col],
 		CStringGetDatum(str),
 		ObjectIdGetDatum(former->typIOParam[col]),
-		Int32GetDatum(former->desc->attrs[col]->atttypmod));
+		Int32GetDatum(former->typMod[col]));
+}
+
+/*
+ * Check that function result tuple type (src_tupdesc) matches or can
+ * be considered to match what the target table (dst_tupdesc). If
+ * they don't match, ereport.
+ *
+ * We really only care about number of attributes and data type.
+ * Also, we can ignore type mismatch on columns that are dropped in the
+ * destination type, so long as the physical storage matches.  This is
+ * helpful in some cases involving out-of-date cached plans.
+ */
+static void
+tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
+{
+	int			i;
+
+	if (dst_tupdesc->natts != src_tupdesc->natts)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("function return row and target table row do not match"),
+				 errdetail_plural("Returned row contains %d attribute, but target table expects %d.",
+				"Returned row contains %d attributes, but query expects %d.",
+								  src_tupdesc->natts,
+								  src_tupdesc->natts, dst_tupdesc->natts)));
+
+	for (i = 0; i < dst_tupdesc->natts; i++)
+	{
+		Form_pg_attribute dattr = dst_tupdesc->attrs[i];
+		Form_pg_attribute sattr = src_tupdesc->attrs[i];
+
+		if (dattr->atttypid == sattr->atttypid)
+			continue;			/* no worries */
+		if (!dattr->attisdropped)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATATYPE_MISMATCH),
+					 errmsg("function return row and target table row do not match"),
+					 errdetail("Returned type %s at ordinal position %d, but target table %s.",
+							   format_type_be(sattr->atttypid),
+							   i + 1,
+							   format_type_be(dattr->atttypid))));
+
+		if (dattr->attlen != sattr->attlen ||
+			dattr->attalign != sattr->attalign)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATATYPE_MISMATCH),
+					 errmsg("function return row and target table row do not match"),
+					 errdetail("Physical storage mismatch on dropped attribute at ordinal position %d.",
+							   i + 1)));
+	}
+}
+
+void
+FilterInit(Filter *filter, TupleDesc desc)
+{
+	int				i;
+	ParsedFunction	func;
+	HeapTuple		ftup;
+	Form_pg_proc	pp;
+
+	if (filter->funcstr == NULL)
+		return;
+
+	/* parse filter function */
+	func = ParseFunction(filter->funcstr, true);
+
+	filter->funcid = func.oid;
+	filter->nargs = func.nargs;
+	for (i = 0; i < filter->nargs; i++)
+	{
+		/* Check for polymorphic types and internal pseudo-type argument */
+		if (IsPolymorphicType(func.argtypes[i]) ||
+			func.argtypes[i] == INTERNALOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("filter function does not support a polymorphic function and having a internal pseudo-type argument function: %s",
+							get_func_name(filter->funcid))));
+
+		filter->argtypes[i] = func.argtypes[i];
+	}
+
+	ftup = SearchSysCache(PROCOID, ObjectIdGetDatum(filter->funcid), 0, 0, 0);
+	pp = (Form_pg_proc) GETSTRUCT(ftup);
+
+	if (pp->proretset)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("filter function must not return set")));
+
+	/* Check data type of the function result value */
+	if (pp->prorettype == desc->tdtypeid)
+		filter->tupledesc_matched = true;
+	else if (pp->prorettype == RECORDOID)
+	{
+		TupleDesc	resultDesc = NULL;
+
+		/* Check for OUT parameters defining a RECORD result */
+		resultDesc = build_function_result_tupdesc_t(ftup);
+
+		if (resultDesc)
+		{
+			tupledesc_match(desc, resultDesc);
+			filter->tupledesc_matched = true;
+		}
+	}
+	else if (get_typtype(pp->prorettype) != TYPTYPE_COMPOSITE)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("function return data type and target table data type do not match")));
+
+	/* Get default values */
+#if PG_VERSION_NUM >= 80400
+	filter->fn_ndargs = pp->pronargdefaults;
+	if (filter->fn_ndargs > 0)
+	{
+		Datum		proargdefaults;
+		bool		isnull;
+		char	   *str;
+		List	   *defaults;
+		ListCell   *l;
+
+		filter->defaultValues = palloc(sizeof(Datum) * filter->fn_ndargs);
+		filter->defaultIsnull = palloc(sizeof(bool) * filter->fn_ndargs);
+
+		proargdefaults = SysCacheGetAttr(PROCOID, ftup,
+										 Anum_pg_proc_proargdefaults,
+										 &isnull);
+		Assert(!isnull);
+		str = TextDatumGetCString(proargdefaults);
+		defaults = (List *) stringToNode(str);
+		Assert(IsA(defaults, List));
+		pfree(str);
+
+		filter->econtext = CreateStandaloneExprContext();
+		i = 0;
+		foreach(l, defaults)
+		{
+			Expr		   *expr = (Expr *) lfirst(l);
+			ExprState	   *argstate;
+			ExprDoneCond	thisArgIsDone;
+
+			argstate = ExecInitExpr(expr, NULL);
+
+			filter->defaultValues[i] = ExecEvalExpr(argstate,
+													filter->econtext,
+													&filter->defaultIsnull[i],
+													&thisArgIsDone);
+
+			if (thisArgIsDone != ExprSingleResult)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("functions and operators can take at most one set argument")));
+
+			i++;
+		}
+	}
+
+	if (OidIsValid(pp->provariadic))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("filter function does not support a valiadic function %s",
+						get_func_name(filter->funcid))));
+#else
+	filter->fn_ndargs = 0;
+#endif
+
+	filter->fn_strict = pp->proisstrict;
+
+	ReleaseSysCache(ftup);
+}
+
+void
+FilterTerm(Filter *filter)
+{
+	if (filter->funcstr)
+		pfree(filter->funcstr);
+	if (filter->defaultValues)
+		pfree(filter->defaultValues);
+	if (filter->defaultIsnull)
+		pfree(filter->defaultIsnull);
+	if (filter->econtext)
+		FreeExprContext(filter->econtext, true);
+}
+
+HeapTuple
+FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
+{
+#if PG_VERSION_NUM >= 80400
+	PgStat_FunctionCallUsage	fcusage;
+#endif
+	int						i;
+	FunctionCallInfoData	fcinfo;
+	FmgrInfo				flinfo;
+	MemoryContext			oldcontext;
+	ResourceOwner			oldowner;
+	Datum					datum;
+
+	/*
+	 * If function is strict, and there are any NULL arguments, return tuple,
+	 * it's all columns of null.
+	 */
+	if (filter->fn_strict)
+	{
+		for (i = 0; i < filter->nargs; i++)
+		{
+			if (former->isnull[i])
+				return TupleFormerNullTuple(former);
+		}
+	}
+
+	fmgr_info(filter->funcid, &flinfo);
+
+	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, NULL, NULL);
+
+	for (i = 0; i < filter->nargs; i++)
+	{
+		fcinfo.arg[i] = former->values[i];
+		fcinfo.argnull[i] = former->isnull[i];
+	}
+
+	/*
+	 * Execute the function inside a sub-transaction, so we can cope with
+	 * errors sanely
+	 */
+	oldcontext = CurrentMemoryContext;
+	oldowner = CurrentResourceOwner;
+	BeginInternalSubTransaction(NULL);
+
+	/* Want to run inside per tuple memory context */
+	MemoryContextSwitchTo(oldcontext);
+
+	*parsing_field = 0;
+	pgstat_init_function_usage(&fcinfo, &fcusage);
+
+	fcinfo.isnull = false;
+
+	PG_TRY();
+	{
+		datum = FunctionCallInvoke(&fcinfo);
+	}
+	PG_CATCH();
+	{
+		pgstat_end_function_usage(&fcusage, true);
+
+		/* Abort the inner transaction */
+		RollbackAndReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(oldcontext);
+		CurrentResourceOwner = oldowner;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	pgstat_end_function_usage(&fcusage, true);
+
+	*parsing_field = -1;
+
+	/* Commit the inner transaction, return to outer xact context */
+	ReleaseCurrentSubTransaction();
+	MemoryContextSwitchTo(oldcontext);
+	CurrentResourceOwner = oldowner;
+
+	/*
+	 * If function result is NULL, return tuple, it's all columns of null.
+	 */
+	if (fcinfo.isnull)
+		return TupleFormerNullTuple(former);
+
+	/* Check tupdesc of the function result value */
+	if (!filter->tupledesc_matched)
+	{
+		HeapTupleHeader	td = DatumGetHeapTupleHeader(datum);
+		TupleDesc		resultDesc;
+
+		resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
+											HeapTupleHeaderGetTypMod(td));
+		tupledesc_match(former->desc, resultDesc);
+
+		ReleaseTupleDesc(resultDesc);
+
+		if (HeapTupleHeaderGetTypeId(td) != RECORDOID)
+			filter->tupledesc_matched = true;
+	}
+
+	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);
+	filter->tuple.t_len = HeapTupleHeaderGetDatumLength(filter->tuple.t_data);
+
+	return &filter->tuple;
 }

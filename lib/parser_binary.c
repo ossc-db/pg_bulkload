@@ -115,6 +115,7 @@ typedef struct BinaryParser
 
 	Source		   *source;
 	Checker			checker;
+	Filter			filter;
 	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
@@ -202,15 +203,27 @@ BinaryParserInit(BinaryParser *self, const char *infile, Oid relid)
 	self->source = CreateSource(infile, desc);
 
 	CheckerInit(&self->checker, rel);
+	FilterInit(&self->filter, desc);
+	TupleFormerInit(&self->former, &self->filter, desc);
 
 	/*
-	 * Error if the number of valid fields is not equal to the number of
+	 * Error if the number of input data fields is out of range to the number of
 	 * fields
 	 */
-	TupleFormerInit(&self->former, desc);
-	if (self->former.nfields != self->nfield)
+	if (self->former.minfields > self->nfield ||
+		self->former.maxfields < self->nfield)
 		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
 						errmsg("invalid field count (%d)", self->nfield)));
+
+	/* set function default value */
+	for (i = self->nfield; i < self->former.maxfields; i++)
+	{
+		int		index;
+
+		index = i - self->former.minfields;
+		self->former.isnull[i] = self->filter.defaultIsnull[index];
+		self->former.values[i] = self->filter.defaultValues[index];
+	}
 
 	/*
 	 * Acquire record buffer as much as input file record length
@@ -253,6 +266,7 @@ BinaryParserTerm(BinaryParser *self)
 	if (self->fields)
 		pfree(self->fields);
 	CheckerTerm(&self->checker);
+	FilterTerm(&self->filter);
 	TupleFormerTerm(&self->former);
 	pfree(self);
 
@@ -358,7 +372,7 @@ BinaryParserRead(BinaryParser *self)
 	self->used_rec_cnt++;
 	self->base.count++;
 
-	for (i = 0; i < self->former.nfields; i++)
+	for (i = 0; i < self->nfield; i++)
 	{
 		/* Convert it to server encoding. */
 		if (self->fields[i].read == Read_char ||
@@ -389,7 +403,11 @@ BinaryParserRead(BinaryParser *self)
 	ExtractValuesFromFixed(self, record);
 	self->base.parsing_field = -1;
 
-	tuple = TupleFormerTuple(&self->former);
+	if (self->filter.funcstr)
+		tuple = FilterTuple(&self->filter, &self->former,
+							&self->base.parsing_field);
+	else
+		tuple = TupleFormerTuple(&self->former);
 
 	if (self->checker.has_constraints)
 	{
@@ -765,6 +783,11 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	{
 		self->checker.check_constraints = ParseBoolean(value, false);
 	}
+	else if (pg_strcasecmp(keyword, "FILTER") == 0)
+	{
+		ASSERT_ONCE(!self->filter.funcstr);
+		self->filter.funcstr = pstrdup(value);
+	}
 	else
 		return false;	/* unknown parameter */
 
@@ -789,6 +812,8 @@ BinaryParserDumpParams(BinaryParser *self)
 						 pg_encoding_to_char(self->checker.encoding));
 	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
 					 self->checker.check_constraints ? "YES" : "NO");
+	if (self->filter.funcstr)
+		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);
 
 	for (i = 0; i < self->nfield; i++)
 	{

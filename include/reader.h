@@ -146,14 +146,38 @@ typedef struct TupleFormer
 	bool	   *isnull;		/**< array[desc->natts] of NULL marker */
 	Oid		   *typIOParam;	/**< array[desc->natts] of type information */
 	FmgrInfo   *typInput;	/**< array[desc->natts] of type input functions */
-	int		   *attnum;		/**< array[nfields] of attnum mapping */
-	int			nfields;	/**< number of valid fields */
+	Oid		   *typMod;		/**< array[desc->natts] of type modifiers */
+	int		   *attnum;		/**< array[maxfields] of attnum mapping */
+	int			minfields;	/**< min number of valid fields */
+	int			maxfields;	/**< max number of valid fields */
 } TupleFormer;
 
-extern void TupleFormerInit(TupleFormer *former, TupleDesc desc);
+typedef struct Filter	Filter;
+extern void TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc);
 extern void TupleFormerTerm(TupleFormer *former);
 extern HeapTuple TupleFormerTuple(TupleFormer *former);
 extern Datum TupleFormerValue(TupleFormer *former, const char *str, int col);
+
+/* Filter */
+
+struct Filter
+{
+	char		   *funcstr;
+	Oid				funcid;
+	int				nargs;
+	int				fn_ndargs;
+	bool			fn_strict;
+	Oid				argtypes[FUNC_MAX_ARGS];
+	Datum		   *defaultValues;
+	bool		   *defaultIsnull;
+	ExprContext	   *econtext;
+	HeapTupleData	tuple;
+	bool			tupledesc_matched;
+};
+
+extern void FilterInit(Filter *filter, TupleDesc desc);
+extern void FilterTerm(Filter *filter);
+extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field);
 
 /*
  * Utilitiy functions

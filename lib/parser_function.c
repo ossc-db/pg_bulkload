@@ -12,14 +12,11 @@
 
 #include "access/heapam.h"
 #include "access/htup.h"
-#include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
-#include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
-#include "parser/parse_func.h"
 #include "pgstat.h"
-#include "utils/acl.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -27,6 +24,7 @@
 
 #include "logger.h"
 #include "pg_profile.h"
+#include "pg_strutil.h"
 #include "reader.h"
 
 typedef struct FunctionParser
@@ -38,6 +36,7 @@ typedef struct FunctionParser
 	TupleDesc				desc;
 	EState				   *estate;
 	ExprContext			   *econtext;
+	ExprContext			   *arg_econtext;
 	ReturnSetInfo			rsinfo;
 	HeapTupleData			tuple;
 } FunctionParser;
@@ -52,104 +51,6 @@ static void FunctionParserDumpRecord(FunctionParser *self, FILE *fp, char *bafdi
 /* ========================================================================
  * FunctionParser
  * ========================================================================*/
-
-static bool
-GetNextArgument(const char *ptr, char **arg, const char **endptr, const char *path)
-{
-	const char	   *p;
-
-	p = ptr;
-	while (isspace((unsigned char) *p))
-		p++;
-
-	if (*p == '\0')
-		return false;
-
-	if (*p == '\'')
-	{
-		StringInfoData	buf;
-
-		initStringInfo(&buf);
-
-		p++;
-		while (*p != '\0')
-		{
-			if (*p == '\'')
-			{
-				if (*(p + 1) == '\'')
-					p++;
-				else
-					break;
-			}
-
-			appendStringInfoCharMacro(&buf, *p++);
-		}
-
-		if (*p != '\'')
-			ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("function call syntax error: %s", path)));
-
-		p++;
-		*arg = buf.data;
-	}
-	else if (pg_strncasecmp(p, "NULL", strlen("NULL")) == 0)
-	{
-		p += strlen("NULL");
-		*arg = NULL;
-	}
-	else
-	{
-		bool		minus;
-		const char *startptr;
-		int			len;
-		char	   *str;
-
-		minus = false;
-		while (*p == '+' || *p == '-')
-		{
-			if (*p == '-') 
-			{
-				if (*(p + 1) == '-')
-					ereport(ERROR,
-							(errcode(ERRCODE_SYNTAX_ERROR),
-							 errmsg("function call syntax error: %s", path)));
-				minus = !minus;
-			}
-
-			p++;
-			while (isspace((unsigned char) *p))
-				p++;
-		}
-
-		startptr = p;
-		while (!isspace((unsigned char) *p) && *p != ',' && *p != ')')
-			p++;
-
-		len = p - startptr;
-		str = palloc(len + 2);
-		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
-
-		/* Check for numeric constants. */
-		DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
-							ObjectIdGetDatum(InvalidOid), -1);
-		*arg = str;
-	}
-
-	while (isspace((unsigned char) *p))
-		p++;
-
-	if (*p == ')' || *p == ',')
-		p++;
-	else
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("function call syntax error: %s", path)));
-
-	*endptr = p;
-
-	return true;
-}
 
 /**
  * @brief Create a new binary parser.
@@ -172,83 +73,18 @@ static void
 FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 {
 	int					i;
-	const char		   *p;
-	char			   *funcname;
-	List			   *names;
+	ParsedFunction		function;
 	ListCell		   *l;
-	int					len;
 	int					nargs;
-	char			   *arg;
-	char			   *args[FUNC_MAX_ARGS];
-	FuncCandidateList	candidates;
-	Oid					actual_arg_types[FUNC_MAX_ARGS];
 	Oid					funcid;
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
-	AclResult			aclresult;
 	Relation			rel;
 	TupleDesc			desc;
 
-	/* parse function name */
-	p = strchr(infile, '(');
-	if (p == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("function call syntax error: %s", infile)));
+	function = ParseFunction(infile, false);
 
-	len = p - infile;
-	while (isspace((unsigned char) infile[len]))
-		len--;
-	funcname = palloc(len + 1);
-	memcpy(funcname, infile, len);
-	funcname[len] = '\0';
-
-	/* parse function arguments */
-	p++;
-	nargs = 0;
-	while (GetNextArgument(p, &arg, &p, infile))
-	{
-		args[nargs++] = arg;
-		if (nargs > FUNC_MAX_ARGS)
-			ereport(ERROR,
-				(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
-				 errmsg("functions cannot have more than %d arguments", FUNC_MAX_ARGS)));
-	}
-
-	names = stringToQualifiedNameList(funcname);
-	pfree(funcname);
-
-	/* Get list of possible candidates from namespace search */
-	candidates = FuncnameGetCandidates(names, nargs, NIL, true, true);
-
-	for (i = 0; i < nargs; i++)
-		actual_arg_types[i] = UNKNOWNOID;
-
-	if (candidates == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_FUNCTION),
-				 errmsg("function %s does not exist",
-						func_signature_string(names, nargs, NIL,
-											  actual_arg_types)),
-		errhint("No function matches the given name and argument types.")));
-	else if (candidates->next != NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
-				 errmsg("function %s is not unique",
-						func_signature_string(names, nargs, NIL,
-											  actual_arg_types)),
-				 errhint("Could not choose a best candidate function.")));
-
-	foreach (l, names)
-	{
-		Value  *v = lfirst(l);
-
-		pfree(strVal(v));
-		pfree(v);
-	}
-	list_free(names);
-
-	funcid = candidates->oid;
+	funcid = function.oid;
 	fmgr_info(funcid, &self->flinfo);
 
 	if (!self->flinfo.fn_retset)
@@ -259,29 +95,19 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	ftup = SearchSysCache(PROCOID, ObjectIdGetDatum(funcid), 0, 0, 0);
 	pp = (Form_pg_proc) GETSTRUCT(ftup);
 
-	/* Check permission to access and call function. */
-	aclresult = pg_namespace_aclcheck(pp->pronamespace, GetUserId(), ACL_USAGE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
-					   get_namespace_name(pp->pronamespace));
-
-	aclresult = pg_proc_aclcheck(funcid, GetUserId(), ACL_EXECUTE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_PROC,
-					   get_func_name(funcid));
-
 	/*
 	 * assign arguments
 	 */
+	nargs = function.nargs;
 	for (i = 0;
 #if PG_VERSION_NUM >= 80400
-		i < nargs - candidates->nvargs;
+		i < nargs - function.nvargs;
 #else
 		i < nargs;
 #endif
 		++i)
 	{
-		if (args[i] == NULL)
+		if (function.args[i] == NULL)
 		{
 			if (self->flinfo.fn_strict)
 				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -295,9 +121,9 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 
 			getTypeInputInfo(pp->proargtypes.values[i], &typinput, &typioparam);
 			self->fcinfo.arg[i] = OidInputFunctionCall(typinput,
-									(char *) args[i], typioparam, -1);
+									(char *) function.args[i], typioparam, -1);
 			self->fcinfo.argnull[i] = false;
-			pfree(args[i]);
+			pfree(function.args[i]);
 		}
 	}
 
@@ -305,7 +131,7 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	 * assign variadic arguments
 	 */
 #if PG_VERSION_NUM >= 80400
-	if (candidates->nvargs > 0)
+	if (function.nvargs > 0)
 	{
 		int			nfixedarg;
 		Oid			func;
@@ -331,21 +157,21 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 						 &elmlen, &elmbyval, &elmalign, &elmdelim,
 						 &elmioparam, &func);
 
-		elems = (Datum *) palloc(candidates->nvargs * sizeof(Datum));
-		nulls = (bool *) palloc0(candidates->nvargs * sizeof(bool));
-		for (i = 0; i < candidates->nvargs; i++)
+		elems = (Datum *) palloc(function.nvargs * sizeof(Datum));
+		nulls = (bool *) palloc0(function.nvargs * sizeof(bool));
+		for (i = 0; i < function.nvargs; i++)
 		{
-			if (args[nfixedarg + i] == NULL)
+			if (function.args[nfixedarg + i] == NULL)
 				nulls[i] = true;
 			else
 			{
 				elems[i] = OidInputFunctionCall(func,
-								(char *) args[nfixedarg + i], elmioparam, -1);
-				pfree(args[nfixedarg + i]);
+								(char *) function.args[nfixedarg + i], elmioparam, -1);
+				pfree(function.args[nfixedarg + i]);
 			}
 		}
 
-		dims[0] = candidates->nvargs;
+		dims[0] = function.nvargs;
 		lbs[0] = 1;
 		arry = construct_md_array(elems, nulls, 1, dims, lbs, element_type,
 								  elmlen, elmbyval, elmalign);
@@ -355,7 +181,7 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	/*
 	 * assign default arguments
 	 */
-	if (candidates->ndargs > 0)
+	if (function.ndargs > 0)
 	{
 		Datum		proargdefaults;
 		bool		isnull;
@@ -364,7 +190,7 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 		int			ndelete;
 
 		/* shouldn't happen, FuncnameGetCandidates messed up */
-		if (candidates->ndargs > pp->pronargdefaults)
+		if (function.ndargs > pp->pronargdefaults)
 			elog(ERROR, "not enough default arguments");
 
 		proargdefaults = SysCacheGetAttr(PROCOID, ftup,
@@ -376,13 +202,16 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 		Assert(IsA(defaults, List));
 		pfree(str);
 		/* Delete any unused defaults from the returned list */
-		ndelete = list_length(defaults) - candidates->ndargs;
+		ndelete = list_length(defaults) - function.ndargs;
 		while (ndelete-- > 0)
 			defaults = list_delete_first(defaults);
 
+		self->arg_econtext = CreateStandaloneExprContext();
 		foreach(l, defaults)
 		{
-			Node	   *expr = (Node *) lfirst(l);
+			Expr	   *expr = (Expr *) lfirst(l);
+			ExprState  *argstate;
+			ExprDoneCond thisArgIsDone;
 
 			/* probably shouldn't happen ... */
 			if (nargs >= FUNC_MAX_ARGS)
@@ -390,18 +219,17 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 						(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
 				 errmsg("cannot pass more than %d arguments to a function", FUNC_MAX_ARGS)));
 
-			if (!IsA(expr, Const))
+			argstate = ExecInitExpr(expr, NULL);
+
+			self->fcinfo.arg[nargs] = ExecEvalExpr(argstate,
+												   self->arg_econtext,
+												   &self->fcinfo.argnull[nargs],
+												   &thisArgIsDone);
+
+			if (thisArgIsDone != ExprSingleResult)
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("default arguments of the function supports only constants")));
-
-			if (((Const *) expr)->constisnull)
-				self->fcinfo.argnull[nargs] = false;
-			else
-			{
-				self->fcinfo.arg[nargs] = ((Const *) expr)->constvalue;
-				self->fcinfo.argnull[nargs] = false;
-			}
+						 errmsg("functions and operators can take at most one set argument")));
 
 			nargs++;
 		}
@@ -409,7 +237,6 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 #endif
 
 	ReleaseSysCache(ftup);
-	pfree(candidates);
 
 	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs, NULL,
 							 (Node *) &self->rsinfo);
@@ -422,6 +249,8 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	for (i = 0; i < desc->natts; i++)
 		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
 
+	heap_close(rel, NoLock);
+
 	self->estate = CreateExecutorState();
 	self->econtext = GetPerTupleExprContext(self->estate);
 	self->rsinfo.type = T_ReturnSetInfo;
@@ -432,15 +261,13 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	self->rsinfo.isDone = ExprSingleResult;
 	self->rsinfo.setResult = NULL;
 	self->rsinfo.setDesc = NULL;
-	for (i = 0; i < desc->natts; i++)
-		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
-
-	heap_close(rel, NoLock);
 }
 
 static int64
 FunctionParserTerm(FunctionParser *self)
 {
+	if (self->arg_econtext)
+		FreeExprContext(self->arg_econtext, true);
 	if (self->econtext)
 		FreeExprContext(self->econtext, true);
 	if (self->estate)
@@ -475,7 +302,7 @@ FunctionParserRead(FunctionParser *self)
 	if (self->rsinfo.isDone == ExprEndResult)
 		return NULL;
 
-	self->tuple.t_data = (HeapTupleHeader) DatumGetPointer(datum);
+	self->tuple.t_data = DatumGetHeapTupleHeader(datum);
 	self->tuple.t_len = HeapTupleHeaderGetDatumLength(self->tuple.t_data);
 	self->base.count++;
 

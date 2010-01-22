@@ -36,6 +36,7 @@ typedef struct CSVParser
 
 	Source		   *source;
 	Checker			checker;
+	Filter			filter;
 	TupleFormer		former;
 
 	int64	offset;				/**< lines to skip */
@@ -114,7 +115,7 @@ static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
 static void CSVParserDumpParams(CSVParser *self);
 static void CSVParserDumpRecord(CSVParser *self, FILE *fp, char *badfile);
 
-static void	ExtractValuesFromCSV(CSVParser *self);
+static void	ExtractValuesFromCSV(CSVParser *self, int parsed_field);
 
 /*
  * @brief Copies specified area in the record buffer to the field buffer.
@@ -208,6 +209,11 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg
 				 ("QUOTE must not appear in the NULL specification")));
+	if (list_length(self->fnn_name) > 0 && self->filter.funcstr)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg
+				 ("when specified FILTER, cannot specified FORCE_NOT_NULL")));
 
 	/* open relation without any relation locks */
 	rel = heap_open(relid, NoLock);
@@ -215,7 +221,8 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 
 	self->source = CreateSource(infile, desc);
 	CheckerInit(&self->checker, rel);
-	TupleFormerInit(&self->former, desc);
+	FilterInit(&self->filter, desc);
+	TupleFormerInit(&self->former, &self->filter, desc);
 
 	/*
 	 * set not NULL column information
@@ -225,7 +232,7 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 		int			i;
 		ListCell   *name;
 
-		self->fnn = palloc0(sizeof(bool) * self->former.nfields);
+		self->fnn = palloc0(sizeof(bool) * self->former.maxfields);
 		foreach(name, self->fnn_name)
 		{
 			for (i = 0; i < desc->natts; i++)
@@ -259,7 +266,7 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 	self->used_len = 0;
 	self->field_buf = palloc(self->buf_len);
 	self->next = self->rec_buf;
-	self->fields = palloc(self->former.nfields * sizeof(char *));
+	self->fields = palloc(self->former.maxfields * sizeof(char *));
 	self->fields[0] = NULL;
 	self->null_len = strlen(self->null);
 	self->eof = false;
@@ -293,6 +300,7 @@ CSVParserTerm(CSVParser *self)
 	if (self->field_buf)
 		pfree(self->field_buf);
 	CheckerTerm(&self->checker);
+	FilterTerm(&self->filter);
 	TupleFormerTerm(&self->former);
 	pfree(self);
 
@@ -357,6 +365,7 @@ CSVParserRead(CSVParser *self)
 	int			dst;			/* Index to the next destination */
 	int			src;			/* Index to the next source */
 	int			field_num = 0;	/* Number of self->fields already parsed */
+	int			parsed_field;
 
 	/*
 	 * If EOF found in the previous calls, returns zero.
@@ -638,7 +647,7 @@ skip_done:
 				 * column of the table will be overwritten by extra columns in the input
 				 * data successively.
 				 */
-				if (field_num + 1 < self->former.nfields)
+				if (field_num + 1 < self->former.maxfields)
 					field_num++;
 				self->base.parsing_field++;
 
@@ -669,7 +678,7 @@ skip_done:
 	/*
 	 * It's an error if the number of self->fields exceeds the number of valid column. 
 	 */
-	if (self->base.parsing_field > self->former.nfields)
+	if (self->base.parsing_field > self->former.maxfields)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("extra data after last expected column")));
@@ -677,18 +686,26 @@ skip_done:
 	/*
 	 * Error, if the number of self->fields is less than the number of valid columns.
 	 */
-	if (self->base.parsing_field < self->former.nfields)
+	if (self->base.parsing_field < self->former.minfields)
 	{
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-						errmsg("missing data for column \"%s\"",
-							   NameStr(self->former.desc->attrs[self->former.attnum[self->base.parsing_field]]->attname)),
-						errdetail("only %d columns, required %d", self->base.parsing_field, self->former.nfields)));
+		if (self->filter.funcstr)
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("missing data for argument %d",
+								   self->base.parsing_field + 1),
+							errdetail("only %d arguments, required %d", self->base.parsing_field, self->former.maxfields)));
+		else
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("missing data for column \"%s\"",
+								   NameStr(self->former.desc->attrs[self->former.attnum[self->base.parsing_field]]->attname)),
+							errdetail("only %d columns, required %d", self->base.parsing_field, self->former.maxfields)));
+
 	}
 
 	/* Convert it to server encoding. */
+	parsed_field = self->base.parsing_field;
 	if (self->checker.check_encoding)
 	{
-		for (i = 0; i < self->former.nfields; i++)
+		for (i = 0; i < parsed_field; i++)
 		{
 			if (self->fields[i] == NULL)
 				continue;
@@ -699,10 +716,14 @@ skip_done:
 		}
 	}
 
-	ExtractValuesFromCSV(self);
+	ExtractValuesFromCSV(self, parsed_field);
 	self->base.parsing_field = -1;
 
-	tuple = TupleFormerTuple(&self->former);
+	if (self->filter.funcstr)
+		tuple = FilterTuple(&self->filter, &self->former,
+							&self->base.parsing_field);
+	else
+		tuple = TupleFormerTuple(&self->former);
 
 	if (self->checker.has_constraints)
 	{
@@ -780,6 +801,11 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 	{
 		self->checker.check_constraints = ParseBoolean(value, false);
 	}
+	else if (pg_strcasecmp(keyword, "FILTER") == 0)
+	{
+		ASSERT_ONCE(!self->filter.funcstr);
+		self->filter.funcstr = pstrdup(value);
+	}
 	else
 		return false;	/* unknown parameter */
 
@@ -821,6 +847,9 @@ CSVParserDumpParams(CSVParser *self)
 
 	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
 		self->checker.check_constraints ? "YES" : "NO");
+
+	if (self->filter.funcstr)
+		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);
 
 	foreach(name, self->fnn_name)
 	{
@@ -871,7 +900,7 @@ CSVParserDumpRecord(CSVParser *self, FILE *fp, char *badfile)
  * @note When error occurs, return to the caller with ereport().
  */
 static void
-ExtractValuesFromCSV(CSVParser *self)
+ExtractValuesFromCSV(CSVParser *self, int parsed_field)
 {
 	int					i;
 
@@ -879,7 +908,7 @@ ExtractValuesFromCSV(CSVParser *self)
 	 * Converts string data in the field array into the internal representation for
 	 * a destination column.
 	 */
-	for (i = 0; i < self->former.nfields; i++)
+	for (i = 0; i < parsed_field; i++)
 	{
 		Datum	value;
 		bool	isnull;
@@ -901,5 +930,15 @@ ExtractValuesFromCSV(CSVParser *self)
 
 		self->former.isnull[index] = isnull;
 		self->former.values[index] = value;
+	}
+
+	/* set function default value */
+	for (; i < self->former.maxfields; i++)
+	{
+		int		index;
+
+		index = i - self->former.minfields;
+		self->former.isnull[i] = self->filter.defaultIsnull[index];
+		self->former.values[i] = self->filter.defaultValues[index];
 	}
 }
