@@ -29,6 +29,7 @@ DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+ENCODING = SQL_ASCII
 CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
@@ -100,6 +101,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+ENCODING = SQL_ASCII
 CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
@@ -161,6 +163,7 @@ DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+ENCODING = SQL_ASCII
 CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 

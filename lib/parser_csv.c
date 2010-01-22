@@ -220,6 +220,10 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 	desc = RelationGetDescr(rel);
 
 	self->source = CreateSource(infile, desc);
+
+	if (self->checker.encoding == -1 && pg_strcasecmp(infile, "stdin") == 0)
+		self->checker.encoding = pg_get_client_encoding();
+
 	CheckerInit(&self->checker, rel);
 	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);

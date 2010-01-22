@@ -202,6 +202,9 @@ BinaryParserInit(BinaryParser *self, const char *infile, Oid relid)
 
 	self->source = CreateSource(infile, desc);
 
+	if (self->checker.encoding == -1 && pg_strcasecmp(infile, "stdin") == 0)
+		self->checker.encoding = pg_get_client_encoding();
+
 	CheckerInit(&self->checker, rel);
 	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);
@@ -387,10 +390,7 @@ BinaryParserRead(BinaryParser *self)
 			self->base.parsing_field = i + 1;
 
 			if (self->checker.check_encoding)
-			{
 				self->fields[i].in = CheckerConversion(&self->checker, str);
-				pfree(str);
-			}
 			else
 				self->fields[i].in = (char *) str;
 		}

@@ -773,21 +773,53 @@ CheckerTerm(Checker *checker)
 char *
 CheckerConversion(Checker *checker, char *src)
 {
-	if (checker->encoding == checker->db_encoding)
+	int	len = strlen(src);
+
+	if (checker->encoding == checker->db_encoding ||
+		checker->encoding == PG_SQL_ASCII)
 	{
-		/* Verify if the input and the database are in the same encoding. */
-		pg_verifymbstr(src, strlen(src), false);
+		/*
+		 * No conversion is needed, but we must still validate the data.
+		 */
+		pg_verify_mbstr(checker->db_encoding, src, len, false);
 		return src;
 	}
-	else
+
+	if (checker->db_encoding == PG_SQL_ASCII)
 	{
-		/* Convert the input into the database encoding. */
-		/* XXX: Do we need to verify the input before conversion? */
-		return (char *) pg_do_encoding_conversion((unsigned char *) src,
-												  strlen(src),
-												  checker->encoding,
-												  checker->db_encoding);
+		/*
+		 * No conversion is possible, but we must still validate the data,
+		 * because the client-side code might have done string escaping using
+		 * the selected client_encoding.  If the client encoding is ASCII-safe
+		 * then we just do a straight validation under that encoding.  For an
+		 * ASCII-unsafe encoding we have a problem: we dare not pass such data
+		 * to the parser but we have no way to convert it.	We compromise by
+		 * rejecting the data if it contains any non-ASCII characters.
+		 */
+		if (PG_VALID_BE_ENCODING(checker->encoding))
+			pg_verify_mbstr(checker->encoding, src, len, false);
+		else
+		{
+			int			i;
+
+			for (i = 0; i < len; i++)
+			{
+				if (src[i] == '\0' || IS_HIGHBIT_SET(src[i]))
+					ereport(ERROR,
+							(errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
+					 errmsg("invalid byte value for encoding \"%s\": 0x%02x",
+							pg_enc2name_tbl[PG_SQL_ASCII].name,
+							(unsigned char) src[i])));
+			}
+		}
+		return src;
 	}
+
+	/* Convert the input into the database encoding. */
+	return (char *) pg_do_encoding_conversion((unsigned char *) src,
+											  len,
+											  checker->encoding,
+											  checker->db_encoding);
 }
 
 void
