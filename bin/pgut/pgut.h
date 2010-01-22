@@ -140,7 +140,7 @@ extern char *strdup_trim(const char *str);
  * file operations
  */
 extern FILE *pgut_fopen(const char *path, const char *mode, bool missing_ok);
-extern void pgut_mkdir(const char *dirpath, mode_t omode);
+extern void pgut_mkdir(const char *path);
 
 /*
  * elog

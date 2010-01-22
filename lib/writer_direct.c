@@ -368,9 +368,17 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
-	if (ls->ls.create_cnt == 0)
+	if (ls->ls.create_cnt == 0 && !loader->rel->rd_istemp)
 	{
 		XLogRecPtr	recptr;
+
+#if PG_VERSION_NUM >= 80500
+		char		reason[NAMEDATALEN + 30];
+
+		snprintf(reason, sizeof(reason), "pg_bulkload on \"%s\"",
+				 RelationGetRelationName(loader->rel));
+		XLogReportUnloggedStatement(reason);
+#endif
 
 		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
 			ls->ls.exist_cnt, loader->blocks);

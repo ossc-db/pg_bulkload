@@ -1558,7 +1558,7 @@ retry:
 
 				strlcpy(dir, path, MAXPGPATH);
 				get_parent_directory(dir);
-				pgut_mkdir(dir, S_IRWXU);
+				pgut_mkdir(dir);
 				goto retry;
 			}
 		}
@@ -1575,11 +1575,9 @@ retry:
  * we assume the path is in canonical form, i.e. uses / as the separator.
  */
 void
-pgut_mkdir(const char *dirpath, mode_t omode)
+pgut_mkdir(const char *dirpath)
 {
 	struct stat sb;
-	mode_t		numask,
-				oumask;
 	int			first,
 				last,
 				retval;
@@ -1589,7 +1587,6 @@ pgut_mkdir(const char *dirpath, mode_t omode)
 	Assert(dirpath != NULL);
 
 	p = path = pgut_strdup(dirpath);
-	oumask = 0;
 	retval = 0;
 
 #ifdef WIN32
@@ -1625,25 +1622,7 @@ pgut_mkdir(const char *dirpath, mode_t omode)
 		if (!last && p[1] == '\0')
 			last = 1;
 		if (first)
-		{
-			/*
-			 * POSIX 1003.2: For each dir operand that does not name an
-			 * existing directory, effects equivalent to those caused by the
-			 * following command shall occcur:
-			 *
-			 * mkdir -p -m $(umask -S),u+wx $(dirname dir) && mkdir [-m mode]
-			 * dir
-			 *
-			 * We change the user's umask and then restore it, instead of
-			 * doing chmod's.
-			 */
-			oumask = umask(0);
-			numask = oumask & ~(S_IWUSR | S_IXUSR);
-			(void) umask(numask);
 			first = 0;
-		}
-		if (last)
-			(void) umask(oumask);
 
 retry:
 		/* check for pre-existing directory; ok if it's a parent */
@@ -1659,7 +1638,7 @@ retry:
 				break;
 			}
 		}
-		else if (mkdir(path, last ? omode : S_IRWXU | S_IRWXG | S_IRWXO) < 0)
+		else if (mkdir(path, S_IRWXU) < 0)
 		{
 			if (errno == EEXIST)
 				goto retry;	/* another thread might create the directory. */
@@ -1669,8 +1648,6 @@ retry:
 		if (!last)
 			*p = '/';
 	}
-	if (!first && !last)
-		(void) umask(oumask);
 
 	if (retval != 0)
 		elog(ERROR_SYSTEM, "could not create directory \"%s\": %s",
