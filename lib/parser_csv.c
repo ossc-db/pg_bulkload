@@ -761,37 +761,37 @@ skip_done:
 static bool
 CSVParserParam(CSVParser *self, const char *keyword, char *value)
 {
-	if (pg_strcasecmp(keyword, "DELIMITER") == 0)
+	if (CompareKeyword(keyword, "DELIMITER"))
 	{
 		ASSERT_ONCE(!self->delim);
 		self->delim = ParseSingleChar(value);
 	}
-	else if (pg_strcasecmp(keyword, "QUOTE") == 0)
+	else if (CompareKeyword(keyword, "QUOTE"))
 	{
 		ASSERT_ONCE(!self->quote);
 		self->quote = ParseSingleChar(value);
 	}
-	else if (pg_strcasecmp(keyword, "ESCAPE") == 0)
+	else if (CompareKeyword(keyword, "ESCAPE"))
 	{
 		ASSERT_ONCE(!self->escape);
 		self->escape = ParseSingleChar(value);
 	}
-	else if (pg_strcasecmp(keyword, "NULL") == 0)
+	else if (CompareKeyword(keyword, "NULL"))
 	{
 		ASSERT_ONCE(!self->null);
 		self->null = pstrdup(value);
 	}
-	else if (pg_strcasecmp(keyword, "FORCE_NOT_NULL") == 0)
+	else if (CompareKeyword(keyword, "FORCE_NOT_NULL"))
 	{
 		self->fnn_name = lappend(self->fnn_name, pstrdup(value));
 	}
-	else if (pg_strcasecmp(keyword, "SKIP") == 0 ||
-			 pg_strcasecmp(keyword, "OFFSET") == 0)
+	else if (CompareKeyword(keyword, "SKIP") ||
+			 CompareKeyword(keyword, "OFFSET"))
 	{
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
 	}
-	else if (pg_strcasecmp(keyword, "ENCODING") == 0)
+	else if (CompareKeyword(keyword, "ENCODING"))
 	{
 		ASSERT_ONCE(self->checker.encoding < 0);
 		self->checker.encoding = pg_valid_client_encoding(value);
@@ -801,11 +801,11 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
 						value)));
 	}
-	else if (pg_strcasecmp(keyword, "CHECK_CONSTRAINTS") == 0)
+	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
 	{
 		self->checker.check_constraints = ParseBoolean(value, false);
 	}
-	else if (pg_strcasecmp(keyword, "FILTER") == 0)
+	else if (CompareKeyword(keyword, "FILTER"))
 	{
 		ASSERT_ONCE(!self->filter.funcstr);
 		self->filter.funcstr = pstrdup(value);

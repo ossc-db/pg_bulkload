@@ -723,7 +723,7 @@ ParseFormat(const char *value, Field *field)
 static bool
 BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 {
-	if (pg_strcasecmp(keyword, "COL") == 0)
+	if (CompareKeyword(keyword, "COL"))
 	{
 		Field  *field;
 
@@ -754,22 +754,22 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 
 		self->nfield++;
 	}
-	else if (pg_strcasecmp(keyword, "PRESERVE_BLANKS") == 0)
+	else if (CompareKeyword(keyword, "PRESERVE_BLANKS"))
 	{
 		self->preserve_blanks = ParseBoolean(value, false);
 	}
-	else if (pg_strcasecmp(keyword, "STRIDE") == 0)
+	else if (CompareKeyword(keyword, "STRIDE"))
 	{
 		ASSERT_ONCE(self->rec_len == 0);
 		self->rec_len = ParseInt32(value, 1);
 	}
-	else if (pg_strcasecmp(keyword, "SKIP") == 0 ||
-			 pg_strcasecmp(keyword, "OFFSET") == 0)
+	else if (CompareKeyword(keyword, "SKIP") ||
+			 CompareKeyword(keyword, "OFFSET"))
 	{
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
 	}
-	else if (pg_strcasecmp(keyword, "ENCODING") == 0)
+	else if (CompareKeyword(keyword, "ENCODING"))
 	{
 		ASSERT_ONCE(self->checker.encoding < 0);
 		self->checker.encoding = pg_valid_client_encoding(value);
@@ -779,11 +779,11 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
 						value)));
 	}
-	else if (pg_strcasecmp(keyword, "CHECK_CONSTRAINTS") == 0)
+	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
 	{
 		self->checker.check_constraints = ParseBoolean(value, false);
 	}
-	else if (pg_strcasecmp(keyword, "FILTER") == 0)
+	else if (CompareKeyword(keyword, "FILTER"))
 	{
 		ASSERT_ONCE(!self->filter.funcstr);
 		self->filter.funcstr = pstrdup(value);

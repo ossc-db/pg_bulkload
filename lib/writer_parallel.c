@@ -107,7 +107,14 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors,
 	params[5] = "remote";
 
 	if (1 != PQsendQueryParams(self->conn,
-		"SELECT * FROM pg_bulkload(NULL, 'TYPE=TUPLE\nINFILE=' || $1 || '\nTABLE=' || $2 || '\nON_DUPLICATE=' || $3 || '\nDUPLICATE_ERRORS=' || $4 || '\nDUPLICATE_BADFILE=' || $5 || '\nLOGFILE=' || $6 || '\n')",
+			"SELECT * FROM pg_bulkload(ARRAY["
+			"'TYPE=TUPLE',"
+			"'INFILE=' || $1,"
+			"'TABLE=' || $2,"
+			"'ON_DUPLICATE=' || $3,"
+			"'DUPLICATE_ERRORS=' || $4,"
+			"'DUPLICATE_BADFILE=' || $5,"
+			"'LOGFILE=' || $6])",
 		6, NULL, params, NULL, NULL, 0))
 	{
 		ereport(ERROR,

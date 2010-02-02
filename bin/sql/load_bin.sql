@@ -34,7 +34,7 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 UPDATE customer SET c_data = 'OLD1';
-\! pg_bulkload -d contrib_regression data/bin2.ctl -i data/data2.bin -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin3.log -P results/bin3.prs -u results/bin3.dup
+\! pg_bulkload -d contrib_regression data/bin2.ctl -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES"
 \! awk -f data/adjust.awk results/bin3.log
 
 SET enable_seqscan = on;

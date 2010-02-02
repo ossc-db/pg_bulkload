@@ -129,10 +129,6 @@ BULKLOAD_PROFILE_PRINT()
  * Implementation
  * ========================================================================*/
 
-#define GETARG_CSTRING(n) \
-	((PG_NARGS() <= (n) || PG_ARGISNULL(n)) \
-	? NULL : text_to_cstring(PG_GETARG_TEXT_PP(n)))
-
 #define diffTime(t1, t2) \
 	(((t1).tv_sec - (t2).tv_sec) * 1.0 + \
 	((t1).tv_usec - (t2).tv_usec) / 1000000.0)
@@ -147,8 +143,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 {
 	Reader		   *rd = NULL;
 	Writer		   *wt = NULL;
-	char		   *path;
-	char		   *options;
+	Datum			options;
 	MemoryContext	ctx;
 	MemoryContext	ccxt;
 	PGRUsage		ru0;
@@ -180,16 +175,10 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 	pg_rusage_init(&ru0);
 
-	path = GETARG_CSTRING(0);
-	options = GETARG_CSTRING(1);
-	if (path && !is_absolute_path(path) && options == NULL)
-	{
-		options = path;
-		path = NULL;
-	}
+	options = PG_GETARG_DATUM(0);
 
 	/* TODO: split reader and controlfile parser. */
-	rd = ReaderCreate(path, options, ru0.tv.tv_sec);
+	rd = ReaderCreate(options, ru0.tv.tv_sec);
 	on_shmem_exit(AtExit_ReaderClose, PointerGetDatum(rd));
 
 	/* TODO: pass relid and on_duplicate from parser is ugly. */
@@ -202,9 +191,8 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	PG_TRY();
 	{
 		start = timeval_to_cstring(ru0.tv);
-		LoggerLog(INFO, "\npg_bulkload %s on %s\n\nControl File: %s\n\n",
-				   PROGRAM_VERSION, start,
-				   path && path[0] ? path : "none specified");
+		LoggerLog(INFO, "\npg_bulkload %s on %s\n\n",
+				   PROGRAM_VERSION, start);
 
 		ReaderDumpParams(rd);
 		WriterDumpParams(wt);

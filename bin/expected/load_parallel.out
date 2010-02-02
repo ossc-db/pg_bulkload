@@ -12,8 +12,6 @@ NOTICE: BULK LOAD END
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
 
-Control File: .../csv1.ctl
-
 INFILE = .../data1.csv
 PARSE_BADFILE = .../parallel1.prs
 DUPLICATE_BADFILE = .../parallel1.dup
@@ -78,12 +76,10 @@ SELECT * FROM customer ORDER BY c_id;
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
 DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
-query was: SELECT * FROM pg_bulkload($1, $2)
+query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel2.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
-
-Control File: .../csv1.ctl
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel2.prs
@@ -143,8 +139,6 @@ NOTICE: BULK LOAD END
 \! awk -f data/adjust.awk results/parallel3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
-
-Control File: .../csv1.ctl
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel3.prs
@@ -216,12 +210,10 @@ SELECT * FROM customer ORDER BY c_id;
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
 DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
-query was: SELECT * FROM pg_bulkload($1, $2)
+query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel4.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
-
-Control File: .../csv1.ctl
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel4.prs

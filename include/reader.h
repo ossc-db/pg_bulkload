@@ -107,7 +107,7 @@ struct Reader
 	FILE		   *parse_fp;
 };
 
-extern Reader *ReaderCreate(const char *fname, const char *options, time_t tm);
+extern Reader *ReaderCreate(Datum options, time_t tm);
 extern HeapTuple ReaderNext(Reader *rd);
 extern void ReaderDumpParams(Reader *rd);
 extern int64 ReaderClose(Reader *rd, bool onError);

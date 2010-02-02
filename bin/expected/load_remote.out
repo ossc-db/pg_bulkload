@@ -11,8 +11,6 @@ NOTICE: BULK LOAD END
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
 
-Control File: .../csv1.ctl
-
 INFILE = stdin
 PARSE_BADFILE = .../remote1.prs
 DUPLICATE_BADFILE = .../remote1.dup
@@ -83,8 +81,6 @@ DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
 
-Control File: .../csv1.ctl
-
 INFILE = stdin
 PARSE_BADFILE = .../remote2.prs
 DUPLICATE_BADFILE = .../remote2.dup
@@ -144,8 +140,6 @@ NOTICE: BULK LOAD END
 \! awk -f data/adjust.awk results/remote3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
-
-Control File: .../csv1.ctl
 
 INFILE = stdin
 PARSE_BADFILE = .../remote3.prs

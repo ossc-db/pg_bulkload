@@ -16,6 +16,7 @@
 #include "postgres_fe.h"
 #include <unistd.h>
 #include "pgut/pgut.h"
+#include "pgut/pgut-list.h"
 
 const char *PROGRAM_VERSION	= "3.0alpha2";
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
@@ -35,8 +36,7 @@ static char *infile = NULL;				/* INFILE */
 static char *logfile = NULL;			/* LOGFILE */
 static char *parse_badfile = NULL;		/* PARSE_BADFILE */
 static char *duplicate_badfile = NULL;	/* DUPLICATE_BADFILE */
-
-static char	   *additional_options = NULL;
+static List *bulkload_options = NIL;
 
 /*
  * The length of the database cluster directory name should be short enough
@@ -51,17 +51,18 @@ static char	   *additional_options = NULL;
  * Prototypes
  */
 
-static int LoaderLoadMain(const char *control_file);
+static int LoaderLoadMain(List *options);
+static List *ParseControlFile(const char *path);
 extern int LoaderRecoveryMain(void);
-static void make_absolute_path(char dst[], const char *key, const char *relpath);
-static void add_option(const char *option);
 static PGresult *RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary);
 
 static void
-parse_option(pgut_option *opt, const char *arg)
+parse_option(pgut_option *opt, char *arg)
 {
 	opt->source = SOURCE_DEFAULT;	/* -o can be specified many times */
-	add_option(arg);
+
+	if (arg && arg[0])
+		bulkload_options = lappend(bulkload_options, arg);
 }
 
 static pgut_option options[] =
@@ -80,6 +81,8 @@ static pgut_option options[] =
 	{ 0 }
 };
 
+#define NUM_PATH_OPTIONS		4
+
 /**
  * @brief Entry point for pg_bulkload command.
  *
@@ -97,8 +100,12 @@ static pgut_option options[] =
 int
 main(int argc, char *argv[])
 {
+	char	cwd[MAXPGPATH];
 	char	control_file[MAXPGPATH] = "";
 	int		i;
+
+	if (getcwd(cwd, MAXPGPATH) == NULL)
+		elog(ERROR_SYSTEM, "cannot read current directory");
 
 	i = pgut_getopt(argc, argv, options);
 
@@ -106,7 +113,13 @@ main(int argc, char *argv[])
 	{
 		if (control_file[0])
 			elog(ERROR_ARGS, "too many arguments");
-		make_absolute_path(control_file, NULL, argv[i]);
+
+		/* make absolute control file path */
+		if (is_absolute_path(argv[i]))
+			strlcpy(control_file, argv[i], MAXPGPATH);
+		else
+			join_path_components(control_file, cwd, argv[i]);
+		canonicalize_path(control_file);
 	}
 
 	/*
@@ -126,38 +139,55 @@ main(int argc, char *argv[])
 	}
 	else
 	{
-		char	path[MAXPGPATH];
-
 		/* verify arguments */
 		if (DataDir)
 			elog(ERROR, "invalid option '-D' for data load");
 
-		/* add file options */
-		if (infile)
+		if (control_file[0])
+			bulkload_options = list_concat(
+				ParseControlFile(control_file), bulkload_options);
+
+		/* chdir control_file to the parent directory */
+		get_parent_directory(control_file);
+
+		/* add path options */
+		for (i = 0; i < NUM_PATH_OPTIONS; i++)
 		{
-			if (pg_strcasecmp(infile, "stdin") == 0)
-				strlcpy(path, "INFILE = stdin", lengthof(path));
+			const pgut_option  *opt = &options[i];
+			const char		   *path = *(const char **) opt->var;
+			char				abspath[MAXPGPATH];
+			char				item[MAXPGPATH + 32];
+
+			if (path == NULL)
+				continue;
+
+			if (i == 0 && pg_strcasecmp(path, "stdin") == 0)
+			{
+				/* special case for stdin */
+				strlcpy(abspath, path, lengthof(abspath));
+			}
+			else if (is_absolute_path(path))
+			{
+				/* absolute path */
+				strlcpy(abspath, path, lengthof(abspath));
+			}
+			else if (opt->source == SOURCE_FILE)
+			{
+				/* control file relative path */
+				join_path_components(abspath, control_file, path);
+			}
 			else
-				make_absolute_path(path, "INFILE = ", infile);
-			add_option(path);
-		}
-		if (logfile)
-		{
-			make_absolute_path(path, "LOGFILE = ", logfile);
-			add_option(path);
-		}
-		if (parse_badfile)
-		{
-			make_absolute_path(path, "PARSE_BADFILE = ", parse_badfile);
-			add_option(path);
-		}
-		if (duplicate_badfile)
-		{
-			make_absolute_path(path, "DUPLICATE_BADFILE = ", duplicate_badfile);
-			add_option(path);
+			{
+				/* current working directory relative path */
+				join_path_components(abspath, cwd, path);
+			}
+
+			canonicalize_path(abspath);
+			snprintf(item, lengthof(item), "%s=%s", opt->lname, abspath);
+			bulkload_options = lappend(bulkload_options, pgut_strdup(item));
 		}
 
-		return LoaderLoadMain(control_file);
+		return LoaderLoadMain(bulkload_options);
 	}
 }
 
@@ -192,20 +222,56 @@ pgut_help(bool details)
  * @return exitcode (always 0).
  */
 static int
-LoaderLoadMain(const char *control_file)
+LoaderLoadMain(List *options)
 {
 	PGresult	   *res;
-	const char	   *params[2];
+	const char	   *params[1];
+	StringInfoData	buf;
+	int				encoding;
+	ListCell	   *cell;
 
-	params[0] = control_file;
-	params[1] = additional_options;
-
+	initStringInfo(&buf);
 	reconnect();
+	encoding = PQclientEncoding(connection);
 
 	elog(NOTICE, "BULK LOAD START");
 
+	/* form options as text[] */
+	appendStringInfoString(&buf, "{\"");
+	foreach (cell, options)
+	{
+		const char *item = lfirst(cell);
+
+		if (buf.len > 2)
+			appendStringInfoString(&buf, "\",\"");
+
+		/* escape " and \ */
+		while (*item)
+		{
+			if (*item == '"' || *item == '\\')
+			{
+				appendStringInfoChar(&buf, *item);
+				appendStringInfoChar(&buf, *item);
+				item++;
+			}
+			else if (!IS_HIGHBIT_SET(*item))
+			{
+				appendStringInfoChar(&buf, *item);
+				item++;
+			}
+			else
+			{
+				int	n = PQmblen(item, encoding);
+				appendBinaryStringInfo(&buf, item, n);
+				item += n;
+			}
+		}
+	}
+	appendStringInfoString(&buf, "\"}");
+
 	command("BEGIN", 0, NULL);
-	res = execute("SELECT * FROM pg_bulkload($1, $2)", 2, params);
+	params[0] = buf.data;
+	res = execute("SELECT * FROM pg_bulkload($1)", 1, params);
 	if (PQresultStatus(res) == PGRES_COPY_IN)
 	{
 		PQclear(res);
@@ -227,56 +293,9 @@ LoaderLoadMain(const char *control_file)
 	PQclear(res);
 
 	disconnect();
+	termStringInfo(&buf);
 
 	return 0;
-}
-
-/*
- * Add current working directory if path is relative.
- */
-static void
-make_absolute_path(char dst[], const char *key, const char *relpath)
-{
-	char	cwd[MAXPGPATH];
-	size_t	keylen;
-
-	if (key)
-	{
-		keylen = strlen(key);
-		memcpy(dst, key, keylen);
-	}
-	else
-		keylen = 0;
-
-	if (is_absolute_path(relpath))
-		strlcpy(dst + keylen, relpath, MAXPGPATH - keylen);
-	else
-	{
-		if (getcwd(cwd, MAXPGPATH) == NULL)
-			elog(ERROR_SYSTEM, "cannot read current directory");
-		snprintf(dst + keylen, MAXPGPATH - keylen, "%s/%s", cwd, relpath);
-	}
-}
-
-/*
- * Additional option is an array of "KEY=VALUE\n".
- */
-static void
-add_option(const char *option)
-{
-	size_t	len;
-	size_t	addlen;
-
-	if (!option || !option[0])
-		return;
-
-	len = (additional_options ? strlen(additional_options) : 0);
-	addlen = strlen(option);
-
-	additional_options = realloc(additional_options, len + addlen + 2);
-	memcpy(&additional_options[len], option, addlen);
-	additional_options[len + addlen] = '\n';
-	additional_options[len + addlen + 1] = '\0';
 }
 
 /*
@@ -391,4 +410,278 @@ RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary)
 		return NULL;
 
 	return PQgetResult(conn);
+}
+
+/*
+ * prototype declaration of internal function
+ */
+static bool ParseControlFileLine(char buf[], char **outKeyword, char **outValue);
+static char *TrimSpaces(char *str);
+static char *UnquoteString(char *str, char quote, char escape);
+static char *FindUnquotedChar(char *str, char target, char quote, char escape);
+
+static List *
+ParseControlFile(const char *path)
+{
+#define LINEBUF 1024
+	char	buf[LINEBUF];
+	int		lineno;
+	FILE   *file;
+	List   *items = NIL;
+
+	file = pgut_fopen(path, "rt", false);
+
+	for (lineno = 1; fgets(buf, LINEBUF, file); lineno++)
+	{
+		char   *keyword;
+		char   *value;
+		int		i;
+
+		if (!ParseControlFileLine(buf, &keyword, &value))
+			continue;
+
+		/* PATH_OPTIONS */
+		for (i = 0; i < NUM_PATH_OPTIONS; i++)
+		{
+			pgut_option *opt = &options[i];
+
+			if (pgut_keyeq(keyword, opt->lname))
+			{
+				pgut_setopt(opt, value, SOURCE_FILE);
+				break;
+			}
+		}
+
+		/* Other options */
+		if (i >= NUM_PATH_OPTIONS)
+		{
+			size_t	len;
+			char   *item;
+
+			len = strlen(keyword) + strlen(value) + 2;
+			item = pgut_malloc(len);
+			snprintf(item, len, "%s=%s", keyword, value);
+			items = lappend(items, item);
+		}
+	}
+
+	fclose(file);
+
+	return items;
+}
+
+/**
+ * @brief Parse a line in control file.
+ */
+static bool
+ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
+{
+	char	   *keyword = NULL;
+	char	   *value = NULL;
+	char	   *p;
+	char	   *q;
+
+	*outKeyword = NULL;
+	*outValue = NULL;
+
+	if (buf[strlen(buf) - 1] != '\n')
+		elog(ERROR_ARGS, "too long line \"%s\"", buf);
+
+	p = buf;				/* pointer to keyword */
+
+	/*
+	 * replace '\n' to '\0'
+	 */
+	q = strchr(buf, '\n');
+	if (q != NULL)
+		*q = '\0';
+
+	/*
+	 * delete strings after a comment letter outside quotations
+	 */
+	q = FindUnquotedChar(buf, '#', '"', '\\');
+	if (q != NULL)
+		*q = '\0';
+
+	/*
+	 * if result of trimming is a null string, it is treated as an empty line
+	 */
+	p = TrimSpaces(buf);
+	if (*p == '\0')
+		return false;
+
+	/*
+	 * devide after '='
+	 */
+	q = FindUnquotedChar(buf, '=', '"', '\\');
+	if (q != NULL)
+		*q = '\0';
+	else
+		elog(ERROR_ARGS, "invalid input \"%s\"", buf);
+
+	q++;					/* pointer to input value */
+
+	/*
+	 * return a value trimmed space
+	 */
+	keyword = TrimSpaces(p);
+	value = TrimSpaces(q);
+
+	if (!keyword[0] || !value[0])
+		elog(ERROR_ARGS, "invalid input \"%s\"", buf);
+
+	value = UnquoteString(value, '"', '\\');
+	if (!value)
+		elog(ERROR_ARGS, "unterminated quoted field");
+
+	*outKeyword = keyword;
+	*outValue = value;
+	return true;
+}
+
+/**
+ * @brief Trim white spaces before and after input value.
+ *
+ * Flow
+ * <ol>
+ *	 <li>Trim spaces after input value. </li>
+ *	 <li>Search the first non-space character, and return the pointer. </li>
+ * </ol>
+ * @param input		[in/out] Input character string
+ * @return The pointer for the head of the character string after triming spaces
+ * @note Input string is over written.
+ * @note The returned value points the middle of input string.
+ */
+static char *
+TrimSpaces(char *input)
+{
+	char	   *beg;
+	char	   *end;
+
+	/* trim spaces at head */
+	for (beg = input; IsSpace(*beg); beg++);
+
+	/* trim spaces at tail */
+	for (end = beg + strlen(beg); end > beg && IsSpace(end[-1]); end--);
+	*end = '\0';
+
+	return beg;
+}
+
+/**
+ * @brief Trim quotes surrounding string
+ *
+ * Quoting character(i.e. quote and escape character) is transformed as follows.
+ * <ul>
+ *	 <li>abc -> abc</li>
+ *	 <li>"abc" -> abc</li>
+ *	 <li>"abc\"123" -> abc"123</li>
+ *	 <li>"abc\\123" -> abc\123</li>
+ *	 <li>"abc\123" -> abc\123</li>
+ *	 <li>"abc"123 -> abc123</li>
+ *	 <li>"abc""123" -> abc123</li>
+ *	 <li>"abc -> NG(error occuring) </li>
+ * </ul>
+ * @param str [in/out] Proccessed string
+ * @param quote [in] Quote mark character
+ * @param escape [in] Escape character
+ * @retval !NULL String not surrounding quote mark character
+ * @retval NULL  Error(not closed by quote mark)
+ */
+static char *
+UnquoteString(char *str, char quote, char escape)
+{
+	int			i;				/* Read position */
+	int			j;				/* Write position */
+	int			in_quote = 0;
+
+
+	for (i = 0, j = 0; str[i]; i++)
+	{
+		/*
+		 * Find an opened quote mark.
+		 */
+		if (!in_quote && str[i] == quote)
+		{
+			in_quote = 1;
+			continue;
+		}
+
+		/*
+		 * Find an closing quote mark.
+		 */
+		if (in_quote && str[i] == quote)
+		{
+			in_quote = 0;
+			continue;
+		}
+
+		/*
+		 * Find an escape character.
+		 * Process if the next is meta character.
+		 */
+		if (in_quote && str[i] == escape)
+		{
+			if (str[i + 1] == quote)
+			{
+				str[j++] = quote;
+				i++;
+				continue;
+			}
+			else if (str[i + 1] == escape)
+			{
+				str[j++] = escape;
+				i++;
+				continue;
+			}
+		}
+
+		/*
+		 * If it is ordinal character, copy it without modification.
+		 */
+		str[j++] = str[i];
+	}
+	str[j] = '\0';
+
+	/*
+	 * Quote mark is not closed
+	 */
+	if (in_quote)
+		return NULL;
+
+	return str;
+}
+
+/**
+ * @brief Find the first specified character outside of quote mark
+ * @param str [in] Searched string
+ * @param target [in] Searched character
+ * @param quote [in] Quote mark
+ * @param escape [in] Escape character
+ * @return If the specified character is found outside quoted string, return the
+ * pointer. If it is not found, return NULL.
+ */
+static char *
+FindUnquotedChar(char *str, char target, char quote, char escape)
+{
+	int			i;
+	bool		in_quote = false;
+
+	for (i = 0; str[i]; i++)
+	{
+		if (str[i] == escape)
+		{
+			/*
+			 * Treat it as escape character if it is before meta character
+			 */
+			if (str[i + 1] == escape || str[i + 1] == quote)
+				i++;
+		}
+		else if (str[i] == quote)
+			in_quote = !in_quote;
+		else if (!in_quote && str[i] == target)
+			return str + i;
+	}
+
+	return NULL;
 }

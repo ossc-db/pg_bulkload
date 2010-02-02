@@ -6,5 +6,4 @@
 
 SET search_path = public;
 
-DROP FUNCTION pg_bulkload(text);
-DROP FUNCTION pg_bulkload(text, text);
+DROP FUNCTION pg_bulkload(text[]);

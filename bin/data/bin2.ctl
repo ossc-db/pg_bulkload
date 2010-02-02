@@ -1,10 +1,13 @@
-#INFILE = data.bin
+INFILE = data2.bin
 TABLE = customer
 TYPE = FIXED
 PRESERVE_BLANKS = NO
 PARSE_ERRORS = 10
 DUPLICATE_ERRORS = 10
 LOAD = INFINITE
+LOGFILE=../results/bin3.log
+PARSE_BADFILE=../results/bin3.prs
+DUPLICATE_BADFILE=../results/bin3.dup
 
 COL = CHAR(10) # c_id
 COL = CHAR(4)  # c_d_id

@@ -19,15 +19,13 @@ typedef struct ParsedFunction
 /*
  * Function prototypes
  */
-extern char *TrimSpace(char *str);
-extern char *UnquoteString(char *str, char quote, char escape);
 extern char *QuoteString(char *str);
 extern char *QuoteSingleChar(char c);
-extern char *FindUnquotedChar(char *str, char target, char quote, char escape);
 extern bool	ParseBoolean(const char *value, bool defaultValue);
 extern char	ParseSingleChar(const char *value);
 extern int	ParseInt32(char *value, int minValue);
 extern int64	ParseInt64(char *value, int64 minValue);
+extern bool	CompareKeyword(const char *lhs, const char *rhs);
 extern ParsedFunction ParseFunction(const char *value, bool argistype);
 
 #endif   /* STRUTIL_H_INCLUDED */

@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "access/heapam.h"
+#include "access/reloptions.h"
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
@@ -40,24 +41,10 @@
 #include "reader.h"
 #include "writer.h"
 
-/**
- * @brief  length of a line in control file
- */
-#define LINEBUF 1024
-
-typedef struct ControlFileLine
-{
-	const char *keyword;
-	const char *value;
-	int			line;
-} ControlFileLine;
-
 /*
  * prototype declaration of internal function
  */
-static void	ParseControlFile(Reader *rd, const char *fname, const char *options, time_t tm);
-static void ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf);
-static void ParseErrorCallback(void *arg);
+static void ParseOption(Reader *rd, DefElem *opt);
 
 /**
  * @brief Initialize Reader
@@ -73,16 +60,148 @@ static void ParseErrorCallback(void *arg);
  * @return reader.
  */
 Reader *
-ReaderCreate(const char *fname, const char *options, time_t tm)
+ReaderCreate(Datum options, time_t tm)
 {
 	Reader	   *self;
+	List	   *defs;
+	ListCell   *cell;
 
 	self = palloc0(sizeof(Reader));
 	self->max_parse_errors = -2;
 	self->max_dup_errors = -2;
 	self->limit = INT64_MAX;
 
-	ParseControlFile(self, fname, options, tm);
+	/* parse for each option */
+	defs = untransformRelOptions(options);
+	foreach (cell, defs)
+		ParseOption(self, lfirst(cell));
+
+	/*
+	 * checking necessary common setting items
+	 */
+	if (self->parser == NULL)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("no TYPE specified")));
+	if (self->relid == InvalidOid)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("no TABLE specified")));
+	if (self->infile == NULL)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("no INFILE specified")));
+
+	/*
+	 * Set defaults to unspecified parameters.
+	 */
+	if (self->writer == NULL)
+		self->writer = CreateDirectWriter;
+	if (self->max_parse_errors < -1)
+		self->max_parse_errors = 50;
+	if (self->max_dup_errors < -1)
+		self->max_dup_errors = 50;
+
+	if (self->logfile == NULL ||
+		self->parse_badfile == NULL ||
+		self->dup_badfile == NULL)
+	{
+		struct tm  *tp;
+		char		path[MAXPGPATH];
+		int			len;
+		int			elen;
+		char	   *dbname;
+		char	   *nspname;
+		char	   *relname;
+
+		len = snprintf(path, MAXPGPATH, BULKLOAD_LSF_DIR "/");
+
+		tp = localtime(&tm);
+		len += strftime(path + len, MAXPGPATH - len, "%Y%m%d%H%M%S_", tp);
+
+		dbname = get_database_name(MyDatabaseId);
+		nspname = get_namespace_name(get_rel_namespace(self->relid));
+		relname = get_rel_name(self->relid);
+		len += snprintf(path + len, MAXPGPATH - len, "%s_%s_%s.",
+						dbname, nspname, relname);
+		pfree(dbname);
+		pfree(nspname);
+		pfree(relname);
+
+		if (len >= MAXPGPATH)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("default loader output file name is too long")));
+
+		if (self->logfile == NULL)
+		{
+			char   *str;
+
+			elen = snprintf(path + len, MAXPGPATH - len, "log");
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default loader log file name is too long")));
+
+			str = make_absolute_path(path);
+			self->logfile = pstrdup(str);
+			free(str);
+		}
+
+		if (self->parse_badfile == NULL)
+		{
+			char   *filename;
+			char   *extension;
+			char   *str;
+
+			filename = strrchr(self->infile, '/');
+			extension = strrchr(self->infile, '.');
+			if (filename && extension && filename < extension)
+				extension++;
+			else
+				extension = "";
+
+			elen = snprintf(path + len, MAXPGPATH - len, "prs.%s", extension);
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default parse bad file name is too long")));
+
+			str = make_absolute_path(path);
+			self->parse_badfile = pstrdup(str);
+			free(str);
+		}
+
+		if (self->dup_badfile == NULL)
+		{
+			char   *str;
+
+			elen = snprintf(path + len, MAXPGPATH - len, "dup.csv");
+			if (elen + len >= MAXPGPATH)
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("default duplicate bad file name is too long")));
+
+			str = make_absolute_path(path);
+			self->dup_badfile = pstrdup(str);
+			free(str);
+		}
+	}
+
+	/*
+	 * check it whether there is not the same file name.
+	 */
+	if (strcmp(self->infile, self->logfile) == 0 ||
+		strcmp(self->infile, self->parse_badfile) == 0 ||
+		strcmp(self->infile, self->dup_badfile) == 0 ||
+		strcmp(self->logfile, self->parse_badfile) == 0 ||
+		strcmp(self->logfile, self->dup_badfile) == 0 ||
+		strcmp(self->parse_badfile, self->dup_badfile) == 0)
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")
+#ifdef NOT_USED
+			 , errdetail("INFILE = %s\nPARSE_BADFILE = %s\nDUPLICATE_BADFILE = %s\nLOGFILE = %s",
+				self->infile, self->parse_badfile, self->dup_badfile, self->logfile)
+#endif
+			));
 
 	/* initialize parser */
 	ParserInit(self->parser, self->infile, self->relid);
@@ -113,116 +232,60 @@ choice(const char *name, const char *key, const char *keys[], size_t nkeys)
 	return 0;	/* keep compiler quiet */
 }
 
-
 /**
  * @brief Parse a line in control file.
  * @param rd   [in] reader
- * @param line [in] current line
- * @param buf  [in] line buffer
+ * @param opt  [in] option
  * @return None
  */
 static void
-ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
+ParseOption(Reader *rd, DefElem *opt)
 {
-	char	   *keyword = NULL;
-	char	   *target = NULL;
-	char	   *p;
-	char	   *q;
+	char	   *keyword;
+	char	   *target;
 
-	line->line++;
-	line->keyword = NULL;
-	line->value = NULL;
+	if (opt->arg == NULL)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("option %s has no value", opt->defname)));
 
-	if (buf[strlen(buf) - 1] != '\n')
-		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-						errmsg("too long line \"%s\"", buf)));
-
-	p = buf;				/* pointer to keyword */
-
-	/*
-	 * replace '\n' to '\0'
-	 */
-	q = strchr(buf, '\n');
-	if (q != NULL)
-		*q = '\0';
-
-	/*
-	 * delete strings after a comment letter outside quotations
-	 */
-	q = FindUnquotedChar(buf, '#', '"', '\\');
-	if (q != NULL)
-		*q = '\0';
-
-	/*
-	 * if result of trimming is a null string, it is treated as an empty line
-	 */
-	p = TrimSpace(buf);
-	if (*p == '\0')
-		return;
-
-	/*
-	 * devide after '='
-	 */
-	q = FindUnquotedChar(buf, '=', '"', '\\');
-	if (q != NULL)
-		*q = '\0';
-	else
-		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-						errmsg("invalid input \"%s\"", buf)));
-
-	q++;					/* pointer to input value */
-
-	/*
-	 * return a value trimmed space
-	 */
-	keyword = TrimSpace(p);
-	target = TrimSpace(q);
-	if (target)
-	{
-		target = UnquoteString(target, '"', '\\');
-		if (!target)
-			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-							errmsg("unterminated quoted field")));
-	}
-
-	line->keyword = keyword;
-	line->value = target;
+	keyword = opt->defname;
+	target = strVal(opt->arg);
 
 	/*
 	 * result
 	 */
-	if (pg_strcasecmp(keyword, "TABLE") == 0)
+	if (CompareKeyword(keyword, "TABLE"))
 	{
 		ASSERT_ONCE(rd->relid == InvalidOid);
 
 		rd->relid = RangeVarGetRelid(makeRangeVarFromNameList(
 						stringToQualifiedNameList(target)), false);
 	}
-	else if (pg_strcasecmp(keyword, "INFILE") == 0)
+	else if (CompareKeyword(keyword, "INFILE"))
 	{
 		ASSERT_ONCE(rd->infile == NULL);
 
 		rd->infile = pstrdup(target);
 	}
-	else if (pg_strcasecmp(keyword, "LOGFILE") == 0)
+	else if (CompareKeyword(keyword, "LOGFILE"))
 	{
 		ASSERT_ONCE(rd->logfile == NULL);
 
 		rd->logfile = pstrdup(target);
 	}
-	else if (pg_strcasecmp(keyword, "PARSE_BADFILE") == 0)
+	else if (CompareKeyword(keyword, "PARSE_BADFILE"))
 	{
 		ASSERT_ONCE(rd->parse_badfile == NULL);
 
 		rd->parse_badfile = pstrdup(target);
 	}
-	else if (pg_strcasecmp(keyword, "DUPLICATE_BADFILE") == 0)
+	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
 	{
 		ASSERT_ONCE(rd->dup_badfile == NULL);
 
 		rd->dup_badfile = pstrdup(target);
 	}
-	else if (pg_strcasecmp(keyword, "TYPE") == 0)
+	else if (CompareKeyword(keyword, "TYPE"))
 	{
 		const char *keys[] =
 		{
@@ -244,8 +307,8 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 		ASSERT_ONCE(rd->parser == NULL);
 		rd->parser = values[choice(keyword, target, keys, lengthof(keys))]();
 	}
-	else if (pg_strcasecmp(keyword, "WRITER") == 0 ||
-			 pg_strcasecmp(keyword, "LOADER") == 0)
+	else if (CompareKeyword(keyword, "WRITER") ||
+			 CompareKeyword(keyword, "LOADER"))
 	{
 		const char *keys[] =
 		{
@@ -263,28 +326,28 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 		ASSERT_ONCE(rd->writer == NULL);
 		rd->writer = values[choice(keyword, target, keys, lengthof(keys))];
 	}
-	else if (pg_strcasecmp(keyword, "PARSE_ERRORS") == 0 ||
-			 pg_strcasecmp(keyword, "MAX_ERR_CNT") == 0)
+	else if (CompareKeyword(keyword, "PARSE_ERRORS") ||
+			 CompareKeyword(keyword, "MAX_ERR_CNT"))
 	{
 		ASSERT_ONCE(rd->max_parse_errors < -1);
 		rd->max_parse_errors = ParseInt64(target, -1);
 		if (rd->max_parse_errors == -1)
 			rd->max_parse_errors = INT64_MAX;
 	}
-	else if (pg_strcasecmp(keyword, "DUPLICATE_ERRORS") == 0)
+	else if (CompareKeyword(keyword, "DUPLICATE_ERRORS"))
 	{
 		ASSERT_ONCE(rd->max_dup_errors < -1);
 		rd->max_dup_errors = ParseInt64(target, -1);
 		if (rd->max_dup_errors == -1)
 			rd->max_dup_errors = INT64_MAX;
 	}
-	else if (pg_strcasecmp(keyword, "LOAD") == 0 ||
-			 pg_strcasecmp(keyword, "LIMIT") == 0)
+	else if (CompareKeyword(keyword, "LOAD") ||
+			 CompareKeyword(keyword, "LIMIT"))
 	{
 		ASSERT_ONCE(rd->limit == INT64_MAX);
 		rd->limit = ParseInt64(target, 0);
 	}
-	else if (pg_strcasecmp(keyword, "ON_DUPLICATE") == 0)
+	else if (CompareKeyword(keyword, "ON_DUPLICATE"))
 	{
 		const ON_DUPLICATE values[] =
 		{
@@ -295,7 +358,7 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 
 		rd->on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
 	}
-	else if (pg_strcasecmp(keyword, "VERBOSE") == 0)
+	else if (CompareKeyword(keyword, "VERBOSE"))
 	{
 		rd->verbose = ParseBoolean(target, false);
 	}
@@ -306,191 +369,6 @@ ParseControlFileLine(Reader *rd, ControlFileLine *line, char *buf)
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
 			 errmsg("invalid keyword \"%s\"", keyword)));
 	}
-}
-
-/**
- * @brief Reading information from control file
- *
- * Processing flow
- * -# reading one line from control file
- * -# executing the following processes with looping
- *	 -# getting a keyword and an input string
- *	 -# copy information from the control file to structures
- *	 -# checking necessary items
- * @return void
- */
-static void
-ParseControlFile(Reader *rd, const char *fname, const char *options,
-				 time_t tm)
-{
-	char					buf[LINEBUF];
-	ControlFileLine			line = { 0 };
-	ErrorContextCallback	errcontext;
-
-	errcontext.callback = ParseErrorCallback;
-	errcontext.arg = &line;
-	errcontext.previous = error_context_stack;
-	error_context_stack = &errcontext;
-
-	/* extract keywords and values from control file */
-	if (fname && fname[0])
-	{
-		FILE	   *file;
-
-		if (!is_absolute_path(fname))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_NAME),
-					 errmsg("control file name must be absolute path")));
-
-		if ((file = AllocateFile(fname, "rt")) == NULL)
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open \"%s\" %m", fname)));
-
-		while (fgets(buf, LINEBUF, file) != NULL)
-			ParseControlFileLine(rd, &line, buf);
-
-		FreeFile(file);
-	}
-
-	/* extract keywords and values from text options */
-	if (options && options[0])
-	{
-		char *r;
-		for (r = strchr(options, '\n'); r; r = strchr(options, '\n'))
-		{
-			size_t	len = Min(r - options + 1, LINEBUF);
-			memcpy(buf, options, len);
-			buf[len] = '\0';
-			ParseControlFileLine(rd, &line, buf);
-			options = r + 1;
-		}
-	}
-
-	error_context_stack = errcontext.previous;
-
-	/*
-	 * checking necessary common setting items
-	 */
-	if (rd->parser == NULL)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no TYPE specified")));
-	if (rd->relid == InvalidOid)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no TABLE specified")));
-	if (rd->infile == NULL)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no INFILE specified")));
-
-	/*
-	 * Set defaults to unspecified parameters.
-	 */
-	if (rd->logfile == NULL || rd->parse_badfile == NULL ||
-		rd->dup_badfile == NULL)
-	{
-		struct tm  *tp;
-		char		path[MAXPGPATH];
-		int			len;
-		int			elen;
-		char	   *dbname;
-		char	   *nspname;
-		char	   *relname;
-
-		len = snprintf(path, MAXPGPATH, BULKLOAD_LSF_DIR "/");
-
-		tp = localtime(&tm);
-		len += strftime(path + len, MAXPGPATH - len, "%Y%m%d%H%M%S_", tp);
-
-		dbname = get_database_name(MyDatabaseId);
-		nspname = get_namespace_name(get_rel_namespace(rd->relid));
-		relname = get_rel_name(rd->relid);
-		len += snprintf(path + len, MAXPGPATH - len, "%s_%s_%s.",dbname,
-						nspname, relname);
-		pfree(dbname);
-		pfree(nspname);
-		pfree(relname);
-
-		if (len >= MAXPGPATH)
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("default loader output file name is too long")));
-
-		if (rd->logfile == NULL)
-		{
-			char   *str;
-
-			elen = snprintf(path + len, MAXPGPATH - len, "log");
-			if (elen + len >= MAXPGPATH)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("default loader log file name is too long")));
-
-			str = make_absolute_path(path);
-			rd->logfile = pstrdup(str);
-			free(str);
-		}
-		if (rd->parse_badfile == NULL)
-		{
-			char   *filename;
-			char   *extension;
-			char   *str;
-
-			filename = strrchr(rd->infile, '/');
-			extension = strrchr(rd->infile, '.');
-			if (filename && extension && filename < extension)
-				extension++;
-			else
-				extension = "";
-
-			elen = snprintf(path + len, MAXPGPATH - len, "prs.%s", extension);
-			if (elen + len >= MAXPGPATH)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("default parse bad file name is too long")));
-
-			str = make_absolute_path(path);
-			rd->parse_badfile = pstrdup(str);
-			free(str);
-		}
-		if (rd->dup_badfile == NULL)
-		{
-			char   *str;
-
-			elen = snprintf(path + len, MAXPGPATH - len, "dup.csv");
-			if (elen + len >= MAXPGPATH)
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("default duplicate bad file name is too long")));
-
-			str = make_absolute_path(path);
-			rd->dup_badfile = pstrdup(str);
-			free(str);
-		}
-	}
-
-	if (rd->writer == NULL)
-		rd->writer = CreateDirectWriter;
-	if (rd->max_parse_errors < -1)
-		rd->max_parse_errors = 50;
-	if (rd->max_dup_errors < -1)
-		rd->max_dup_errors = 50;
-
-	/*
-	 * check it whether there is not the same file name.
-	 */
-	if (strcmp(rd->infile, rd->logfile) == 0 ||
-		strcmp(rd->infile, rd->parse_badfile) == 0 ||
-		strcmp(rd->infile, rd->dup_badfile) == 0 ||
-		strcmp(rd->logfile, rd->parse_badfile) == 0 ||
-		strcmp(rd->logfile, rd->dup_badfile) == 0 ||
-		strcmp(rd->parse_badfile, rd->dup_badfile) == 0)
-		ereport(ERROR,
-			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")
-#ifdef NOT_USED
-			 , errdetail("INFILE = %s\nPARSE_BADFILE = %s\nDUPLICATE_BADFILE = %s\nLOGFILE = %s",
-				rd->infile, rd->parse_badfile, rd->dup_badfile, rd->logfile)
-#endif
-			));
 }
 
 /**
@@ -528,21 +406,6 @@ ReaderClose(Reader *rd, bool onError)
 	}
 
 	return skip;
-}
-
-/**
- * @brief log extra information during parsing control file.
- */
-static void
-ParseErrorCallback(void *arg)
-{
-	ControlFileLine *line = (ControlFileLine *) arg;
-
-	if (line->keyword && line->value)
-		errcontext("line %d: \"%s = %s\"",
-			line->line, line->keyword, line->value);
-	else
-		errcontext("line %d", line->line);
 }
 
 /**
