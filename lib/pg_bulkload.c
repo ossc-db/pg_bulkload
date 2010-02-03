@@ -11,12 +11,14 @@
 #include "postgres.h"
 
 #include "access/heapam.h"
+#include "commands/tablecmds.h"
 #include "funcapi.h"
 #include "miscadmin.h"
-#include "storage/ipc.h"
+#include "nodes/makefuncs.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 
@@ -36,8 +38,6 @@ Datum	pg_bulkload(PG_FUNCTION_ARGS);
 const char *PROGRAM_VERSION = "3.0alpha2";
 
 static char *timeval_to_cstring(struct timeval tp);
-static void AtExit_ReaderClose(int code, Datum arg);
-static void AtExit_WriterClose(int code, Datum arg);
 
 #ifdef ENABLE_BULKLOAD_PROFILE
 static instr_time prof_init;
@@ -152,7 +152,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	int64			parse_errors;
 	int64			skip;
 	WriterResult	ret;
-	ON_DUPLICATE	on_duplicate;
 	char		   *start;
 	char		   *end;
 	float8			system;
@@ -161,15 +160,12 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	TupleDesc		tupdesc;
 	Datum			values[PG_BULKLOAD_COLS];
 	bool			nulls[PG_BULKLOAD_COLS];
+	char		   *messages;
 	HeapTuple		result;
 
 	/* Build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		elog(ERROR, "return type must be a row type");
-
-	/*
-	 * STEP 1: Initialization
-	 */
 
 	BULKLOAD_PROFILE_PUSH();
 
@@ -177,19 +173,47 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 	options = PG_GETARG_DATUM(0);
 
-	/* TODO: split reader and controlfile parser. */
-	rd = ReaderCreate(options, ru0.tv.tv_sec);
-	on_shmem_exit(AtExit_ReaderClose, PointerGetDatum(rd));
-
-	/* TODO: pass relid and on_duplicate from parser is ugly. */
-	wt = rd->writer(rd->relid, rd->on_duplicate, rd->max_dup_errors, rd->dup_badfile);
-	on_shmem_exit(AtExit_WriterClose, PointerGetDatum(wt));
-
-	CreateLogger(rd->logfile, rd->verbose);
-
 	ccxt = CurrentMemoryContext;
+
+	/*
+	 * STEP 1: Initialization
+	 */
+
+	/* parse options and create reader */
+	rd = ReaderCreate(options, ru0.tv.tv_sec);
+
+	/*
+	 * We need to split PG_TRY block because gcc optimizes if-branches with
+	 * longjmp codes too much. Local variables initialized in either branch
+	 * cannot be handled another branch.
+	 */
 	PG_TRY();
 	{
+		/* truncate heap if not parallel writer */
+		if (rd->wo.truncate && rd->writer != CreateParallelWriter)
+			TruncateTable(rd->relid);
+
+		/* initialize parser */
+		ParserInit(rd->parser, rd->infile, rd->relid);
+
+		/* create writer */
+		wt = rd->writer(rd->relid, &rd->wo);
+	}
+	PG_CATCH();
+	{
+		if (rd)
+			ReaderClose(rd, true);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	/* No throwable codes here! */
+
+	PG_TRY();
+	{
+		/* create logger */
+		CreateLogger(rd->logfile, rd->verbose);
+
 		start = timeval_to_cstring(ru0.tv);
 		LoggerLog(INFO, "\npg_bulkload %s on %s\n\n",
 				   PROGRAM_VERSION, start);
@@ -240,16 +264,13 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		count = wt->count;
 		parse_errors = rd->parse_errors;
-		on_duplicate = rd->on_duplicate;
 
 		/*
 		 * close writer first and reader second because shmem_exit callback
 		 * is managed by a simple stack.
 		 */
-		cancel_shmem_exit(AtExit_WriterClose, PointerGetDatum(wt));
 		ret = WriterClose(wt, false);
 		wt = NULL;
-		cancel_shmem_exit(AtExit_ReaderClose, PointerGetDatum(rd));
 		skip = ReaderClose(rd, false);
 		rd = NULL;
 	}
@@ -265,15 +286,9 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		/* close writer first, and reader second */
 		if (wt)
-		{
-			cancel_shmem_exit(AtExit_WriterClose, PointerGetDatum(wt));
 			WriterClose(wt, true);
-		}
 		if (rd)
-		{
-			cancel_shmem_exit(AtExit_ReaderClose, PointerGetDatum(rd));
 			ReaderClose(rd, true);
-		}
 
 		MemoryContextSwitchTo(ecxt);
 		PG_RE_THROW();
@@ -312,7 +327,10 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		"CPU %.2fs/%.2fu sec elapsed %.2f sec\n",
 		start, end, system, user, duration);
 
-	values[8] = CStringGetTextDatum(LoggerClose());
+	if ((messages = LoggerClose()) != NULL)
+		values[8] = CStringGetTextDatum(messages);
+	else
+		nulls[8] = true;
 
 	result = heap_form_tuple(tupdesc, values, nulls);
 
@@ -357,6 +375,29 @@ VerifyTarget(Relation rel)
 					   RelationGetRelationName(rel));
 }
 
+/*
+ * truncate relation
+ */
+void
+TruncateTable(Oid relid)
+{
+	TruncateStmt	stmt;
+	RangeVar	   *heap;
+
+	Assert(OidIsValid(relid));
+
+	heap = makeRangeVar(get_namespace_name(get_rel_namespace(relid)),
+						get_rel_name(relid), -1);
+
+	stmt.type = T_TruncateStmt;
+	stmt.relations = list_make1(heap);
+	stmt.restart_seqs = false;
+	stmt.behavior = DROP_RESTRICT;
+	ExecuteTruncate(&stmt);
+
+	CommandCounterIncrement();
+}
+
 static char *
 timeval_to_cstring(struct timeval tp)
 {
@@ -375,16 +416,4 @@ timeval_to_cstring(struct timeval tp)
 	str = DatumGetCString(DirectFunctionCall1(timestamptz_out,
 				TimestampTzGetDatum(tz)));
 	return str;
-}
-
-static void
-AtExit_ReaderClose(int code, Datum arg)
-{
-	ReaderClose((Reader *) DatumGetPointer(arg), true);
-}
-
-static void
-AtExit_WriterClose(int code, Datum arg)
-{
-	WriterClose((Writer *) DatumGetPointer(arg), true);
 }

@@ -51,16 +51,15 @@ static PGconn *connect_to_localhost(void);
 #define MAXINT8LEN		25
 
 Writer *
-CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
+CreateParallelWriter(Oid relid, const WriterOptions *options)
 {
 	ParallelWriter *self;
 	unsigned	queryKey;
 	char		queueName[MAXPGPATH];
 	char	   *relname;
 	PGresult   *res;
-	const char *params[6];
-	char		buf[MAXINT8LEN + 1];
-	int			len;
+	const char *params[7];
+	char		max_dup_errors[MAXINT8LEN + 1];
  
 	self = palloc0(sizeof(ParallelWriter));
 	self->base.insert = (WriterInsertProc) ParallelWriterInsert,
@@ -76,8 +75,7 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors,
 
 	relname = get_relation_name(relid);
 
-	if ((len = snprintf(buf, MAXINT8LEN, INT64_FORMAT, max_dup_errors)) < 0)
-		elog(ERROR, "could not format int8");
+	snprintf(max_dup_errors, MAXINT8LEN, INT64_FORMAT, options->max_dup_errors);
 
 	/* create queue */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
@@ -101,21 +99,23 @@ CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors,
 	/* async query send */
 	params[0] = queueName;
 	params[1] = relname;
-	params[2] = ON_DUPLICATE_NAMES[on_duplicate];
-	params[3] = buf;
-	params[4] = dup_badfile;
-	params[5] = "remote";
+	params[2] = (options->truncate ? "true" : "no");
+	params[3] = ON_DUPLICATE_NAMES[options->on_duplicate];
+	params[4] = max_dup_errors;
+	params[5] = options->dup_badfile;
+	params[6] = "remote";
 
 	if (1 != PQsendQueryParams(self->conn,
 			"SELECT * FROM pg_bulkload(ARRAY["
 			"'TYPE=TUPLE',"
 			"'INFILE=' || $1,"
 			"'TABLE=' || $2,"
-			"'ON_DUPLICATE=' || $3,"
-			"'DUPLICATE_ERRORS=' || $4,"
-			"'DUPLICATE_BADFILE=' || $5,"
-			"'LOGFILE=' || $6])",
-		6, NULL, params, NULL, NULL, 0))
+			"'TRUNCATE=' || $3,"
+			"'ON_DUPLICATE=' || $4,"
+			"'DUPLICATE_ERRORS=' || $5,"
+			"'DUPLICATE_BADFILE=' || $6,"
+			"'LOGFILE=' || $7])",
+		7, NULL, params, NULL, NULL, 0))
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),

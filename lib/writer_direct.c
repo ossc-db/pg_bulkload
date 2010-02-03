@@ -130,7 +130,7 @@ static void ValidateLSFDirectory(const char *path);
  * @param rel [in] Relation for loading
  */
 Writer *
-CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
+CreateDirectWriter(Oid relid, const WriterOptions *options)
 {
 	DirectWriter	   *self;
 	LoadStatus		   *ls;
@@ -148,8 +148,7 @@ CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, c
 	self->rel = heap_open(relid, AccessExclusiveLock);
 	VerifyTarget(self->rel);
 
-	SpoolerOpen(&self->spooler, self->rel, on_duplicate, false, max_dup_errors,
-				dup_badfile);
+	SpoolerOpen(&self->spooler, self->rel, false, options);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	/* Verify DataDir/pg_bulkload directory */

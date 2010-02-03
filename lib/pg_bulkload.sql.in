@@ -9,7 +9,8 @@ SET search_path = public;
 
 BEGIN;
 
-CREATE FUNCTION pg_bulkload(IN options text[],
+CREATE FUNCTION pg_bulkload(
+	IN options text[],
 	OUT skip bigint,
 	OUT count bigint,
 	OUT parse_errors bigint,
@@ -18,7 +19,8 @@ CREATE FUNCTION pg_bulkload(IN options text[],
 	OUT system_time float8,
 	OUT user_time float8,
 	OUT duration float8,
-	OUT messages text)
-	AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C;
+	OUT messages text
+)
+AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C VOLATILE STRICT;
 
 COMMIT;

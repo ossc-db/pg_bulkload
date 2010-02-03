@@ -13,10 +13,9 @@
 
 struct Logger
 {
-	bool	remote;
-	bool	verbose;
-	char   *logfile;
-	FILE   *fp;
+	bool			verbose;
+	char		   *logfile;
+	FILE		   *fp;
 	StringInfoData	buf;
 };
 
@@ -29,29 +28,29 @@ static Logger logger;
 void
 CreateLogger(const char *path, bool verbose)
 {
-	initStringInfo(&logger.buf);
+	memset(&logger, 0, sizeof(logger));
+
 	logger.verbose = verbose;
 
 	if (pg_strcasecmp(path, "remote") == 0)
 	{
-		logger.remote = true;
-		return;
+		initStringInfo(&logger.buf);
 	}
+	else
+	{
+		if (!is_absolute_path(path))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("relative path not allowed for LOGFILE: %s", path)));
 
-	logger.remote = false;
-
-	if (!is_absolute_path(path))
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("relative path not allowed for LOGFILE: %s", path)));
-
-	logger.logfile = pstrdup(path);
-	logger.fp = AllocateFile(logger.logfile, "at");
-	if (logger.fp == NULL)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not open loader log file \"%s\": %m",
-						logger.logfile)));
+		logger.logfile = pstrdup(path);
+		logger.fp = AllocateFile(logger.logfile, "at");
+		if (logger.fp == NULL)
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not open loader log file \"%s\": %m",
+							logger.logfile)));
+	}
 }
 
 void
@@ -60,7 +59,19 @@ LoggerLog(int elevel, const char *fmt,...)
 	int			len;
 	va_list		args;
 
-	if (logger.remote)
+	if (logger.fp)
+	{
+		va_start(args, fmt);
+		len = vfprintf(logger.fp, fmt, args);
+		va_end(args);
+
+		if (fflush(logger.fp))
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not write loader log file \"%s\": %m",
+							logger.logfile)));
+	}
+	else if (logger.buf.data)
 	{
 		if (elevel <= INFO)
 			return;
@@ -87,15 +98,7 @@ LoggerLog(int elevel, const char *fmt,...)
 	}
 	else
 	{
-		va_start(args, fmt);
-		len = vfprintf(logger.fp, fmt, args);
-		va_end(args);
-
-		if (fflush(logger.fp))
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not write loader log file \"%s\": %m",
-							logger.logfile)));
+		return;		/* logger is not ready */
 	}
 
 	if (elevel >= ERROR || (logger.verbose && elevel >= WARNING))
@@ -120,20 +123,20 @@ LoggerLog(int elevel, const char *fmt,...)
 char *
 LoggerClose(void)
 {
+	char *messages;
+
 	if (logger.fp != NULL && FreeFile(logger.fp) < 0)
 		ereport(WARNING,
 				(errcode_for_file_access(),
 				 errmsg("could not close loader log file \"%s\": %m",
 						logger.logfile)));
 
-	logger.remote = false;
-	logger.fp = NULL;
-	logger.verbose = false;
 	if (logger.logfile != NULL)
-	{
 		pfree(logger.logfile);
-		logger.logfile = NULL;
-	}
 
-	return logger.buf.data;
+	messages = logger.buf.data;
+
+	memset(&logger, 0, sizeof(logger));
+
+	return messages;
 }

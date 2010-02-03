@@ -1,6 +1,4 @@
-TRUNCATE customer;
-
-\! pg_bulkload -d contrib_regression data/csv1.ctl -o"delimiter=|" -i data/data1.csv -l results/csv1.log -P results/csv1.prs -u results/csv1.dup -o "PARSE_ERRORS=3" -o "VERBOSE=YES"
+\! pg_bulkload -d contrib_regression data/csv1.ctl -o"delimiter=|" -i data/data1.csv -l results/csv1.log -P results/csv1.prs -u results/csv1.dup -o "PARSE_ERRORS=3" -o "VERBOSE=YES" -o "TRUNCATE=TRUE"
 \! awk -f data/adjust.awk results/csv1.log
 
 SET enable_seqscan = on;

@@ -32,7 +32,10 @@ typedef struct Spooler
 } Spooler;
 
 /* External declarations */
-extern void SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal, int64 max_dup_errors, char *dup_badfile);
+extern void SpoolerOpen(Spooler *self,
+						Relation rel,
+						bool use_wal,
+						const WriterOptions *options);
 extern void SpoolerClose(Spooler *self);
 extern void SpoolerInsert(Spooler *self, HeapTuple tuple);
 

@@ -80,19 +80,18 @@ struct Reader
 {
 	/*
 	 * Information from control file.
-	 *	XXX: writer and on_duplicate should be another place?
+	 *	XXX: writer and logger options should be moved to another place?
 	 */
-	Oid				relid;			/**< target relation id */
-	char		   *infile;			/**< input file name */
-	char		   *logfile;		/**< log file name */
-	char		   *parse_badfile;	/**< parse error file name */
-	char		   *dup_badfile;	/**< duplicate error file name */
-	int64			limit;			/**< max input lines */
-	int64			max_parse_errors;	/**< max error admissible number by parse */
-	int64			max_dup_errors;	/**< max error admissible number by duplicate */
+	Oid			relid;				/**< target relation id */
+	char	   *infile;				/**< input file name */
+	char	   *logfile;			/**< log file name */
+	char	   *parse_badfile;		/**< parse error file name */
+	int64		limit;				/**< max input lines */
+	int64		max_parse_errors;	/**< max ignorable errors in parse */
 
 	WriterCreate	writer;			/**< writer factory */
-	ON_DUPLICATE	on_duplicate;	/**< writer options */
+	WriterOptions	wo;				/**< writer options */
+
 	bool			verbose;		/**< logger options */
 
 	/*

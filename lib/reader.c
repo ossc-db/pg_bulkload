@@ -41,6 +41,9 @@
 #include "reader.h"
 #include "writer.h"
 
+#define DEFAULT_MAX_PARSE_ERRORS		50
+#define DEFAULT_MAX_DUP_ERRORS			50
+
 /*
  * prototype declaration of internal function
  */
@@ -68,7 +71,7 @@ ReaderCreate(Datum options, time_t tm)
 
 	self = palloc0(sizeof(Reader));
 	self->max_parse_errors = -2;
-	self->max_dup_errors = -2;
+	self->wo.max_dup_errors = -2;
 	self->limit = INT64_MAX;
 
 	/* parse for each option */
@@ -81,13 +84,13 @@ ReaderCreate(Datum options, time_t tm)
 	 */
 	if (self->parser == NULL)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no TYPE specified")));
+						errmsg("TYPE option required")));
 	if (self->relid == InvalidOid)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no TABLE specified")));
+						errmsg("TABLE option required")));
 	if (self->infile == NULL)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no INFILE specified")));
+						errmsg("INFILE option required")));
 
 	/*
 	 * Set defaults to unspecified parameters.
@@ -95,27 +98,36 @@ ReaderCreate(Datum options, time_t tm)
 	if (self->writer == NULL)
 		self->writer = CreateDirectWriter;
 	if (self->max_parse_errors < -1)
-		self->max_parse_errors = 50;
-	if (self->max_dup_errors < -1)
-		self->max_dup_errors = 50;
+		self->max_parse_errors = DEFAULT_MAX_PARSE_ERRORS;
+	if (self->wo.max_dup_errors < -1)
+		self->wo.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
 
+	/*
+	 * If log paths are not specified, generate them with the following rules:
+	 *   {basename}        : $PGDATA/pg_bulkload/YYYYMMDDHHMISS_{db}_{nsp}_{tbl}
+	 *   LOGFILE           : {basename}.log
+	 *   PARSE_BADFILE     : {basename}.prs.{extension-of-infile}
+	 *   DUPLICATE_BADFILE : {basename}.dup.csv
+	 */
 	if (self->logfile == NULL ||
 		self->parse_badfile == NULL ||
-		self->dup_badfile == NULL)
+		self->wo.dup_badfile == NULL)
 	{
-		struct tm  *tp;
-		char		path[MAXPGPATH];
+		char		path[MAXPGPATH] = BULKLOAD_LSF_DIR "/";
 		int			len;
 		int			elen;
 		char	   *dbname;
 		char	   *nspname;
 		char	   *relname;
 
-		len = snprintf(path, MAXPGPATH, BULKLOAD_LSF_DIR "/");
+		if (getcwd(path, MAXPGPATH) == NULL)
+			elog(ERROR, "could not get current working directory: %m");
+		len = strlen(path);
+		len += snprintf(path + len, MAXPGPATH - len, "/%s/", BULKLOAD_LSF_DIR);
+		len += strftime(path + len, MAXPGPATH - len, "%Y%m%d%H%M%S_",
+						localtime(&tm));
 
-		tp = localtime(&tm);
-		len += strftime(path + len, MAXPGPATH - len, "%Y%m%d%H%M%S_", tp);
-
+		/* TODO: cleanup characters in object names, ex. ?, *, etc. */
 		dbname = get_database_name(MyDatabaseId);
 		nspname = get_namespace_name(get_rel_namespace(self->relid));
 		relname = get_rel_name(self->relid);
@@ -130,58 +142,48 @@ ReaderCreate(Datum options, time_t tm)
 					(errcode(ERRCODE_INTERNAL_ERROR),
 					 errmsg("default loader output file name is too long")));
 
+		canonicalize_path(path);
+
 		if (self->logfile == NULL)
 		{
-			char   *str;
-
 			elen = snprintf(path + len, MAXPGPATH - len, "log");
 			if (elen + len >= MAXPGPATH)
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("default loader log file name is too long")));
 
-			str = make_absolute_path(path);
-			self->logfile = pstrdup(str);
-			free(str);
+			self->logfile = pstrdup(path);
 		}
 
 		if (self->parse_badfile == NULL)
 		{
 			char   *filename;
 			char   *extension;
-			char   *str;
 
+			/* find the extension of infile */
 			filename = strrchr(self->infile, '/');
 			extension = strrchr(self->infile, '.');
-			if (filename && extension && filename < extension)
-				extension++;
-			else
+			if (!filename || !extension || filename >= extension)
 				extension = "";
 
-			elen = snprintf(path + len, MAXPGPATH - len, "prs.%s", extension);
+			elen = snprintf(path + len, MAXPGPATH - len, "prs%s", extension);
 			if (elen + len >= MAXPGPATH)
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("default parse bad file name is too long")));
 
-			str = make_absolute_path(path);
-			self->parse_badfile = pstrdup(str);
-			free(str);
+			self->parse_badfile = pstrdup(path);
 		}
 
-		if (self->dup_badfile == NULL)
+		if (self->wo.dup_badfile == NULL)
 		{
-			char   *str;
-
 			elen = snprintf(path + len, MAXPGPATH - len, "dup.csv");
 			if (elen + len >= MAXPGPATH)
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("default duplicate bad file name is too long")));
 
-			str = make_absolute_path(path);
-			self->dup_badfile = pstrdup(str);
-			free(str);
+			self->wo.dup_badfile = pstrdup(path);
 		}
 	}
 
@@ -190,21 +192,18 @@ ReaderCreate(Datum options, time_t tm)
 	 */
 	if (strcmp(self->infile, self->logfile) == 0 ||
 		strcmp(self->infile, self->parse_badfile) == 0 ||
-		strcmp(self->infile, self->dup_badfile) == 0 ||
+		strcmp(self->infile, self->wo.dup_badfile) == 0 ||
 		strcmp(self->logfile, self->parse_badfile) == 0 ||
-		strcmp(self->logfile, self->dup_badfile) == 0 ||
-		strcmp(self->parse_badfile, self->dup_badfile) == 0)
+		strcmp(self->logfile, self->wo.dup_badfile) == 0 ||
+		strcmp(self->parse_badfile, self->wo.dup_badfile) == 0)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")
 #ifdef NOT_USED
 			 , errdetail("INFILE = %s\nPARSE_BADFILE = %s\nDUPLICATE_BADFILE = %s\nLOGFILE = %s",
-				self->infile, self->parse_badfile, self->dup_badfile, self->logfile)
+				self->infile, self->parse_badfile, self->wo.dup_badfile, self->logfile)
 #endif
 			));
-
-	/* initialize parser */
-	ParserInit(self->parser, self->infile, self->relid);
 
 	return self;
 }
@@ -281,9 +280,9 @@ ParseOption(Reader *rd, DefElem *opt)
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
 	{
-		ASSERT_ONCE(rd->dup_badfile == NULL);
+		ASSERT_ONCE(rd->wo.dup_badfile == NULL);
 
-		rd->dup_badfile = pstrdup(target);
+		rd->wo.dup_badfile = pstrdup(target);
 	}
 	else if (CompareKeyword(keyword, "TYPE"))
 	{
@@ -336,10 +335,10 @@ ParseOption(Reader *rd, DefElem *opt)
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_ERRORS"))
 	{
-		ASSERT_ONCE(rd->max_dup_errors < -1);
-		rd->max_dup_errors = ParseInt64(target, -1);
-		if (rd->max_dup_errors == -1)
-			rd->max_dup_errors = INT64_MAX;
+		ASSERT_ONCE(rd->wo.max_dup_errors < -1);
+		rd->wo.max_dup_errors = ParseInt64(target, -1);
+		if (rd->wo.max_dup_errors == -1)
+			rd->wo.max_dup_errors = INT64_MAX;
 	}
 	else if (CompareKeyword(keyword, "LOAD") ||
 			 CompareKeyword(keyword, "LIMIT"))
@@ -356,11 +355,15 @@ ParseOption(Reader *rd, DefElem *opt)
 			ON_DUPLICATE_REMOVE_OLD
 		};
 
-		rd->on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
+		rd->wo.on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
 	}
 	else if (CompareKeyword(keyword, "VERBOSE"))
 	{
 		rd->verbose = ParseBoolean(target, false);
+	}
+	else if (CompareKeyword(keyword, "TRUNCATE"))
+	{
+		rd->wo.truncate = ParseBoolean(target, false);
 	}
 	else if (rd->parser == NULL ||
 			!ParserParam(rd->parser, keyword, target))
@@ -399,8 +402,8 @@ ReaderClose(Reader *rd, bool onError)
 			pfree(rd->logfile);
 		if (rd->parse_badfile != NULL)
 			pfree(rd->parse_badfile);
-		if (rd->dup_badfile != NULL)
-			pfree(rd->dup_badfile);
+		if (rd->wo.dup_badfile != NULL)
+			pfree(rd->wo.dup_badfile);
 
 		pfree(rd);
 	}
@@ -525,7 +528,7 @@ ReaderDumpParams(Reader *self)
 	appendStringInfo(&buf, "PARSE_BADFILE = %s\n", str);
 	pfree(str);
 
-	str = QuoteString(self->dup_badfile);
+	str = QuoteString(self->wo.dup_badfile);
 	appendStringInfo(&buf, "DUPLICATE_BADFILE = %s\n", str);
 	pfree(str);
 
@@ -543,23 +546,25 @@ ReaderDumpParams(Reader *self)
 	pfree(nspname);
 	pfree(relname);
 
+	appendStringInfo(&buf, "TRUNCATE = %s\n", self->wo.truncate ? "YES" : "NO");
+	if (self->limit == INT64_MAX)
+		appendStringInfo(&buf, "LIMIT = INFINITE\n");
+	else
+		appendStringInfo(&buf, "LIMIT = " int64_FMT "\n", self->limit);
+
 	if (self->max_parse_errors == INT64_MAX)
 		appendStringInfo(&buf, "PARSE_ERRORS = INFINITE\n");
 	else
 		appendStringInfo(&buf, "PARSE_ERRORS = " int64_FMT "\n",
 						 self->max_parse_errors);
-	if (self->max_dup_errors == INT64_MAX)
+	if (self->wo.max_dup_errors == INT64_MAX)
 		appendStringInfo(&buf, "DUPLICATE_ERRORS = INFINITE\n");
 	else
 		appendStringInfo(&buf, "DUPLICATE_ERRORS = " int64_FMT "\n",
-						 self->max_dup_errors);
+						 self->wo.max_dup_errors);
 	appendStringInfo(&buf, "ON_DUPLICATE = %s\n",
-					 ON_DUPLICATE_NAMES[self->on_duplicate]);
+					 ON_DUPLICATE_NAMES[self->wo.on_duplicate]);
 	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
-	if (self->limit == INT64_MAX)
-		appendStringInfo(&buf, "LOAD = INFINITE\n");
-	else
-		appendStringInfo(&buf, "LOAD = " int64_FMT "\n", self->limit);
 
 	LoggerLog(INFO, buf.data);
 	pfree(buf.data);

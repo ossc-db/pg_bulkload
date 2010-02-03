@@ -42,9 +42,9 @@ struct Writer
 	int64				count;
 };
 
-extern Writer *CreateDirectWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
-extern Writer *CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
-extern Writer *CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile);
+extern Writer *CreateDirectWriter(Oid relid, const WriterOptions *options);
+extern Writer *CreateBufferedWriter(Oid relid, const WriterOptions *options);
+extern Writer *CreateParallelWriter(Oid relid, const WriterOptions *options);
 
 #define WriterInsert(self, tuple)	((self)->insert((self), (tuple)))
 #define WriterClose(self, onError)	((self)->close((self), (onError)))
@@ -55,5 +55,6 @@ extern Writer *CreateParallelWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 
  */
 
 extern void VerifyTarget(Relation rel);
+extern void TruncateTable(Oid relid);
 
 #endif   /* WRITER_H_INCLUDED */

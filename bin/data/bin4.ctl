@@ -1,6 +1,6 @@
 TABLE = customer
 TYPE = FIXED
-LOAD = 0
+LIMIT = 0
 
 COL = CHAR(10) # c_id
 COL = CHAR(4)  # c_d_id

@@ -55,6 +55,10 @@ static int LoaderLoadMain(List *options);
 static List *ParseControlFile(const char *path);
 extern int LoaderRecoveryMain(void);
 static PGresult *RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary);
+static bool ParseControlFileLine(char buf[], char **outKeyword, char **outValue);
+static char *TrimSpaces(char *str);
+static char *UnquoteString(char *str, char quote, char escape);
+static char *FindUnquotedChar(char *str, char target, char quote, char escape);
 
 static void
 parse_option(pgut_option *opt, char *arg)
@@ -74,10 +78,10 @@ static pgut_option options[] =
 	{ 's', 'u', "duplicate-badfile"	, &duplicate_badfile },
 	{ 'f', 'o', "option"			, parse_option },
 	/* Recovery options */
-	{ 's', 'D', "pgdata"	, &DataDir },
-	{ 'b', 'r', "recovery"	, &recovery },
+	{ 's', 'D', "pgdata"			, &DataDir },
+	{ 'b', 'r', "recovery"			, &recovery },
 	/* Common options */
-	{ 'b', 's', "silent", &quiet },	/* same as 'q'.*/
+	{ 'b', 's', "silent"			, &quiet },	/* same as 'q'.*/
 	{ 0 }
 };
 
@@ -411,14 +415,6 @@ RemoteLoad(PGconn *conn, FILE *copystream, bool isbinary)
 
 	return PQgetResult(conn);
 }
-
-/*
- * prototype declaration of internal function
- */
-static bool ParseControlFileLine(char buf[], char **outKeyword, char **outValue);
-static char *TrimSpaces(char *str);
-static char *UnquoteString(char *str, char quote, char escape);
-static char *FindUnquotedChar(char *str, char target, char quote, char escape);
 
 static List *
 ParseControlFile(const char *path)

@@ -85,16 +85,19 @@ static void remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, cons
 
 
 void
-SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal, int64 max_dup_errors, char *dup_badfile)
+SpoolerOpen(Spooler *self,
+			Relation rel,
+			bool use_wal,
+			const WriterOptions *options)
 {
 	memset(self, 0, sizeof(Spooler));
 
-	self->on_duplicate = on_duplicate;
+	self->on_duplicate = options->on_duplicate;
 	self->use_wal = use_wal;
-	self->max_dup_errors = max_dup_errors;
+	self->max_dup_errors = options->max_dup_errors;
 	self->dup_old = 0;
 	self->dup_new = 0;
-	self->dup_badfile = pstrdup(dup_badfile);
+	self->dup_badfile = pstrdup(options->dup_badfile);
 	self->dup_fp = NULL;
 
 	self->relinfo = makeNode(ResultRelInfo);
@@ -113,7 +116,7 @@ SpoolerOpen(Spooler *self, Relation rel, ON_DUPLICATE on_duplicate, bool use_wal
 	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
 
 	self->spools = IndexSpoolBegin(self->relinfo,
-								   on_duplicate == ON_DUPLICATE_ERROR);
+								   options->on_duplicate == ON_DUPLICATE_ERROR);
 }
 
 void

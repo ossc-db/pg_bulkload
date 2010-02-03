@@ -16,7 +16,7 @@
 
 typedef struct BufferedWriter
 {
-	Writer	base;
+	Writer			base;
 
 	Relation		rel;
 	Spooler			spooler;
@@ -37,7 +37,7 @@ static void	BufferedWriterDumpParams(BufferedWriter *self);
  * @brief Create a new BufferedWriter
  */
 Writer *
-CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors, char *dup_badfile)
+CreateBufferedWriter(Oid relid, const WriterOptions *options)
 {
 	BufferedWriter *self = palloc0(sizeof(BufferedWriter));
 	self->base.insert = (WriterInsertProc) BufferedWriterInsert;
@@ -47,8 +47,7 @@ CreateBufferedWriter(Oid relid, ON_DUPLICATE on_duplicate, int64 max_dup_errors,
 	self->rel = heap_open(relid, AccessExclusiveLock);
 	VerifyTarget(self->rel);
 
-	SpoolerOpen(&self->spooler, self->rel, on_duplicate, true, max_dup_errors,
-				dup_badfile);
+	SpoolerOpen(&self->spooler, self->rel, true, options);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	self->bistate = GetBulkInsertState();
@@ -82,7 +81,8 @@ BufferedWriterClose(BufferedWriter *self, bool onError)
 		ret.num_dup_new = self->spooler.dup_new;
 		ret.num_dup_old = self->spooler.dup_old;
 
-		heap_close(self->rel, AccessExclusiveLock);
+		if (self->rel)
+			heap_close(self->rel, AccessExclusiveLock);
 
 		pfree(self);
 	}

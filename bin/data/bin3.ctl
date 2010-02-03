@@ -1,7 +1,7 @@
 TABLE = customer
 TYPE = FIXED
 PRESERVE_BLANKS = NO
-LOAD = INFINITE
+LIMIT = INFINITE
 
 COL = CHAR(2) # c_id
 COL = CHAR(3)  # c_d_id
