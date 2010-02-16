@@ -73,6 +73,7 @@ ReaderCreate(Datum options, time_t tm)
 	self->max_parse_errors = -2;
 	self->wo.max_dup_errors = -2;
 	self->limit = INT64_MAX;
+	self->checker.encoding = -1;
 
 	/* parse for each option */
 	defs = untransformRelOptions(options);
@@ -101,6 +102,14 @@ ReaderCreate(Datum options, time_t tm)
 		self->max_parse_errors = DEFAULT_MAX_PARSE_ERRORS;
 	if (self->wo.max_dup_errors < -1)
 		self->wo.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
+
+	/*
+	 * Use the client_encoding case of ENCODING is not specified and INFILE is
+	 * STDIN.
+	 */
+	if (self->checker.encoding == -1 &&
+		pg_strcasecmp(self->infile, "stdin") == 0)
+		self->checker.encoding = pg_get_client_encoding();
 
 	/*
 	 * If log paths are not specified, generate them with the following rules:
@@ -365,6 +374,20 @@ ParseOption(Reader *rd, DefElem *opt)
 	{
 		rd->wo.truncate = ParseBoolean(target, false);
 	}
+	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
+	{
+		rd->checker.check_constraints = ParseBoolean(target, false);
+	}
+	else if (CompareKeyword(keyword, "ENCODING"))
+	{
+		ASSERT_ONCE(rd->checker.encoding < 0);
+		rd->checker.encoding = pg_valid_client_encoding(target);
+		if (rd->checker.encoding < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
+						target)));
+	}
 	else if (rd->parser == NULL ||
 			!ParserParam(rd->parser, keyword, target))
 	{
@@ -388,6 +411,11 @@ ReaderClose(Reader *rd, bool onError)
 	/* Close and release members. */
 	if (rd->parser)
 		skip = ParserTerm(rd->parser);
+
+	CheckerTerm(&rd->checker);
+
+	if (rd->rel)
+		heap_close(rd->rel, NoLock);
 
 	if (!onError)
 	{
@@ -434,9 +462,11 @@ ReaderNext(Reader *rd)
 
 		PG_TRY();
 		{
-			tuple = ParserRead(parser);
+			tuple = ParserRead(parser, &rd->checker);
 			if (tuple == NULL)
 				eof = true;
+			else
+				CheckerConstraints(&rd->checker, tuple, &parser->parsing_field);
 		}
 		PG_CATCH();
 		{
@@ -565,6 +595,11 @@ ReaderDumpParams(Reader *self)
 	appendStringInfo(&buf, "ON_DUPLICATE = %s\n",
 					 ON_DUPLICATE_NAMES[self->wo.on_duplicate]);
 	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
+	if (PG_VALID_FE_ENCODING(self->checker.encoding))
+		appendStringInfo(&buf, "ENCODING = %s\n",
+						 pg_encoding_to_char(self->checker.encoding));
+	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
+		self->checker.check_constraints ? "YES" : "NO");
 
 	LoggerLog(INFO, buf.data);
 	pfree(buf.data);
@@ -576,8 +611,6 @@ void
 CheckerInit(Checker *checker, Relation rel)
 {
 	TupleDesc	desc;
-
-	checker->rel = rel;
 
 	/*
 	 * When specify ENCODING, we check the input data encoding.
@@ -618,19 +651,19 @@ CheckerInit(Checker *checker, Relation rel)
 		checker->slot = MakeSingleTupleTableSlot(desc);
 	}
 
-	if (!checker->has_constraints && !checker->has_not_null)
+	if (!checker->has_constraints && checker->has_not_null)
 	{
-		heap_close(rel, NoLock);
-		checker->rel = NULL;
+		int	i;
+
+		checker->desc = CreateTupleDescCopy(desc);
+		for (i = 0; i < desc->natts; i++)
+			checker->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
 	}
 }
 
 void
 CheckerTerm(Checker *checker)
 {
-	if (checker->rel)
-		heap_close(checker->rel, NoLock);
-
 	if (checker->slot)
 		ExecDropSingleTupleTableSlot(checker->slot);
 
@@ -641,7 +674,12 @@ CheckerTerm(Checker *checker)
 char *
 CheckerConversion(Checker *checker, char *src)
 {
-	int	len = strlen(src);
+	int	len;
+
+	if (!checker->check_encoding)
+		return src;
+
+	len = strlen(src);
 
 	if (checker->encoding == checker->db_encoding ||
 		checker->encoding == PG_SQL_ASCII)
@@ -691,13 +729,39 @@ CheckerConversion(Checker *checker, char *src)
 }
 
 void
-CheckerConstraints(Checker *checker, HeapTuple tuple)
+CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 {
-	/* Place tuple in tuple slot */
-	ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
+	if (checker->has_constraints)
+	{
+		*parsing_field = 0;
 
-	/* Check the constraints of the tuple */
-	ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
+		/* Place tuple in tuple slot */
+		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
+
+		/* Check the constraints of the tuple */
+		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
+	}
+	else if (checker->has_not_null && HeapTupleHasNulls(tuple))
+	{
+		/*
+		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
+		 */
+		TupleDesc	desc = checker->desc;
+		int			i;
+
+		for (i = 0; i < desc->natts; i++)
+		{
+			if (desc->attrs[i]->attnotnull &&
+				att_isnull(i, tuple->t_data->t_bits))
+			{
+				*parsing_field = i + 1;	/* 1 origin */
+				ereport(ERROR,
+						(errcode(ERRCODE_NOT_NULL_VIOLATION),
+						 errmsg("null value in column \"%s\" violates not-null constraint",
+						NameStr(desc->attrs[i]->attname))));
+			}
+		}
+	}
 }
 
 void

@@ -37,12 +37,14 @@ extern Source *CreateSource(const char *path, TupleDesc desc);
 #define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))
 #define SourceClose(self)				((self)->close((self)))
 
+typedef struct Checker	Checker;
+
 /*
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, const char *infile, Oid relid);
-typedef HeapTuple (*ParserReadProc)(Parser *self);
+typedef void (*ParserInitProc)(Parser *self, Checker *checker, const char *infile, TupleDesc desc);
+typedef HeapTuple (*ParserReadProc)(Parser *self, Checker *checker);
 typedef int64 (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
 typedef void (*ParserDumpParamsProc)(Parser *self);
@@ -66,12 +68,36 @@ extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
 extern Parser *CreateFunctionParser(void);
 
-#define ParserInit(self, infile, relid)		((self)->init((self), (infile), (relid)))
-#define ParserRead(self)					((self)->read((self)))
+#define ParserInit(self, checker, infile, relid)		((self)->init((self), (checker), (infile), (relid)))
+#define ParserRead(self, checker)					((self)->read((self), (checker)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
 #define ParserDumpParams(self)				((self)->dumpParams((self)))
 #define ParserDumpRecord(self, fp, fname)	((self)->dumpRecord((self), (fp), (fname)))
+
+/* Checker */
+
+struct Checker
+{
+	/* Check the encoding */
+	bool			check_encoding;	/**< encoding check needed? */
+	int				encoding;		/**< input data encoding */
+	int				db_encoding;	/**< database encoding */
+
+	/* Check the constraints */
+	bool			check_constraints;
+	bool			has_constraints;	/**< constraints check needed? */
+	bool			has_not_null;		/**< not nulls check needed? */
+	ResultRelInfo  *resultRelInfo;
+	EState		   *estate;
+	TupleTableSlot *slot;
+	TupleDesc		desc;
+};
+
+extern void CheckerInit(Checker *checker, Relation rel);
+extern void CheckerTerm(Checker *checker);
+extern char *CheckerConversion(Checker *checker, char *src);
+extern void CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field);
 
 /**
  * @brief Reader
@@ -100,6 +126,12 @@ struct Reader
 	Parser		   *parser;			/**< source stream parser */
 
 	/*
+	 * Checker
+	 */
+	Checker			checker;		/**< load data checker */
+	Relation		rel;
+
+	/*
 	 * Internal status
 	 */
 	int64			parse_errors;	/**< number of parse errors ignored */
@@ -110,31 +142,6 @@ extern Reader *ReaderCreate(Datum options, time_t tm);
 extern HeapTuple ReaderNext(Reader *rd);
 extern void ReaderDumpParams(Reader *rd);
 extern int64 ReaderClose(Reader *rd, bool onError);
-
-/* Checker */
-
-typedef struct Checker
-{
-	Relation		rel;
-
-	/* Check the encoding */
-	bool			check_encoding;	/**< encoding check needed? */
-	int				encoding;		/**< input data encoding */
-	int				db_encoding;	/**< database encoding */
-
-	/* Check the constraints */
-	bool			check_constraints;
-	bool			has_constraints;	/**< constraints check needed? */
-	bool			has_not_null;		/**< not nulls check needed? */
-	ResultRelInfo  *resultRelInfo;
-	EState		   *estate;
-	TupleTableSlot *slot;
-} Checker;
-
-extern void CheckerInit(Checker *checker, Relation rel);
-extern void CheckerTerm(Checker *checker);
-extern char *CheckerConversion(Checker *checker, char *src);
-extern void CheckerConstraints(Checker *checker, HeapTuple tuple);
 
 /* TupleFormer */
 

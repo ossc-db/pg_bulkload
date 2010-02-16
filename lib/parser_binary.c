@@ -114,7 +114,6 @@ typedef struct BinaryParser
 	Parser	base;
 
 	Source		   *source;
-	Checker			checker;
 	Filter			filter;
 	TupleFormer		former;
 
@@ -135,8 +134,8 @@ typedef struct BinaryParser
 /*
  * Prototype declaration for local functions
  */
-static void	BinaryParserInit(BinaryParser *self, const char *infile, Oid relid);
-static HeapTuple BinaryParserRead(BinaryParser *self);
+static void	BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static HeapTuple BinaryParserRead(BinaryParser *self, Checker *checker);
 static int64	BinaryParserTerm(BinaryParser *self);
 static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
 static void BinaryParserDumpParams(BinaryParser *self);
@@ -158,7 +157,6 @@ CreateBinaryParser(void)
 	self->base.dumpParams = (ParserDumpParamsProc) BinaryParserDumpParams;
 	self->base.dumpRecord = (ParserDumpRecordProc) BinaryParserDumpRecord;
 	self->offset = -1;
-	self->checker.encoding = -1;
 	return (Parser *)self;
 }
 
@@ -177,12 +175,10 @@ CreateBinaryParser(void)
  * function.
  */
 static void
-BinaryParserInit(BinaryParser *self, const char *infile, Oid relid)
+BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc)
 {
 	int			i;
 	size_t		maxlen;
-	Relation	rel;
-	TupleDesc	desc;
 
 	/*
 	 * set default values
@@ -196,16 +192,8 @@ BinaryParserInit(BinaryParser *self, const char *infile, Oid relid)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no COL specified")));
 
-	/* open relation without any relation locks */
-	rel = heap_open(relid, NoLock);
-	desc = RelationGetDescr(rel);
-
 	self->source = CreateSource(infile, desc);
 
-	if (self->checker.encoding == -1 && pg_strcasecmp(infile, "stdin") == 0)
-		self->checker.encoding = pg_get_client_encoding();
-
-	CheckerInit(&self->checker, rel);
 	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);
 
@@ -268,7 +256,6 @@ BinaryParserTerm(BinaryParser *self)
 		pfree(self->buffer);
 	if (self->fields)
 		pfree(self->fields);
-	CheckerTerm(&self->checker);
 	FilterTerm(&self->filter);
 	TupleFormerTerm(&self->former);
 	pfree(self);
@@ -296,7 +283,7 @@ BinaryParserTerm(BinaryParser *self)
  * @return	Return true if there is a next record, or false if EOF.
  */
 static HeapTuple
-BinaryParserRead(BinaryParser *self)
+BinaryParserRead(BinaryParser *self, Checker *checker)
 {
 	HeapTuple	tuple;
 	char	   *record;
@@ -389,10 +376,7 @@ BinaryParserRead(BinaryParser *self)
 			str[len] = '\0';
 			self->base.parsing_field = i + 1;
 
-			if (self->checker.check_encoding)
-				self->fields[i].in = CheckerConversion(&self->checker, str);
-			else
-				self->fields[i].in = (char *) str;
+			self->fields[i].in = CheckerConversion(checker, str);
 		}
 		else
 		{
@@ -408,33 +392,6 @@ BinaryParserRead(BinaryParser *self)
 							&self->base.parsing_field);
 	else
 		tuple = TupleFormerTuple(&self->former);
-
-	if (self->checker.has_constraints)
-	{
-		self->base.parsing_field = 0;
-		CheckerConstraints(&self->checker, tuple);
-	}
-	else if (self->checker.has_not_null && HeapTupleHasNulls(tuple))
-	{
-		/*
-		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
-		 */
-		TupleDesc	desc = self->former.desc;
-		int			i;
-
-		for (i = 0; i < desc->natts; i++)
-		{
-			if (desc->attrs[i]->attnotnull &&
-				att_isnull(i, tuple->t_data->t_bits))
-			{
-				self->base.parsing_field = i + 1;	/* 1 origin */
-				ereport(ERROR,
-						(errcode(ERRCODE_NOT_NULL_VIOLATION),
-						 errmsg("null value in column \"%s\" violates not-null constraint",
-						NameStr(desc->attrs[i]->attname))));
-			}
-		}
-	}
 
 	return tuple;
 }
@@ -769,20 +726,6 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
 	}
-	else if (CompareKeyword(keyword, "ENCODING"))
-	{
-		ASSERT_ONCE(self->checker.encoding < 0);
-		self->checker.encoding = pg_valid_client_encoding(value);
-		if (self->checker.encoding < 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
-						value)));
-	}
-	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
-	{
-		self->checker.check_constraints = ParseBoolean(value, false);
-	}
 	else if (CompareKeyword(keyword, "FILTER"))
 	{
 		ASSERT_ONCE(!self->filter.funcstr);
@@ -807,11 +750,6 @@ BinaryParserDumpParams(BinaryParser *self)
 	appendStringInfo(&buf, "PRESERVE_BLANKS = %s\n",
 			   self->preserve_blanks ? "YES" : "NO");
 	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);
-	if (PG_VALID_FE_ENCODING(self->checker.encoding))
-		appendStringInfo(&buf, "ENCODING = %s\n",
-						 pg_encoding_to_char(self->checker.encoding));
-	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
-					 self->checker.check_constraints ? "YES" : "NO");
 	if (self->filter.funcstr)
 		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);
 

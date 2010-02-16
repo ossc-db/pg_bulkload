@@ -29,8 +29,8 @@ typedef struct TupleParser
 	uint32			buflen;
 } TupleParser;
 
-static void	TupleParserInit(TupleParser *self, const char *infile, Oid relid);
-static HeapTuple TupleParserRead(TupleParser *self);
+static void	TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static HeapTuple TupleParserRead(TupleParser *self, Checker *checker);
 static int64 TupleParserTerm(TupleParser *self);
 static bool TupleParserParam(TupleParser *self, const char *keyword, char *value);
 static void TupleParserDumpParams(TupleParser *self);
@@ -54,10 +54,18 @@ CreateTupleParser(void)
 }
 
 static void
-TupleParserInit(TupleParser *self, const char *infile, Oid relid)
+TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc)
 {
 	unsigned		key;
 	char			junk[2];
+
+	if (checker->check_constraints)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("does not support parameter \"CHECK_CONSTRAINTS\" in \"TYPE = TUPLE\"")));
+
+	if (checker->encoding != -1)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("does not support parameter \"ENCODING\" in \"TYPE = TUPLE\"")));
 
 	if (sscanf(infile, ":%u%1s", &key, junk) != 1)
 		elog(ERROR, "invalid shmem key format: %s", infile);
@@ -80,7 +88,7 @@ TupleParserTerm(TupleParser *self)
 }
 
 static HeapTuple
-TupleParserRead(TupleParser *self)
+TupleParserRead(TupleParser *self, Checker *checker)
 {
 	uint32		len;
 

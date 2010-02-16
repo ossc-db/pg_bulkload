@@ -22,14 +22,14 @@ PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
 ON_DUPLICATE = ERROR
 VERBOSE = NO
+ENCODING = SQL_ASCII
+CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
 DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
-ENCODING = SQL_ASCII
-CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
@@ -93,14 +93,14 @@ PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
 ON_DUPLICATE = ERROR
 VERBOSE = NO
+ENCODING = SQL_ASCII
+CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
-ENCODING = SQL_ASCII
-CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
@@ -154,14 +154,14 @@ PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
 ON_DUPLICATE = REMOVE_OLD
 VERBOSE = NO
+ENCODING = SQL_ASCII
+CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
-ENCODING = SQL_ASCII
-CHECK_CONSTRAINTS = NO
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"

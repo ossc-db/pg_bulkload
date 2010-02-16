@@ -19,7 +19,6 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 #include "utils/syscache.h"
 
 #include "logger.h"
@@ -41,8 +40,8 @@ typedef struct FunctionParser
 	HeapTupleData			tuple;
 } FunctionParser;
 
-static void	FunctionParserInit(FunctionParser *self, const char *infile, Oid relid);
-static HeapTuple FunctionParserRead(FunctionParser *self);
+static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static HeapTuple FunctionParserRead(FunctionParser *self, Checker *checker);
 static int64	FunctionParserTerm(FunctionParser *self);
 static bool FunctionParserParam(FunctionParser *self, const char *keyword, char *value);
 static void FunctionParserDumpParams(FunctionParser *self);
@@ -70,7 +69,7 @@ CreateFunctionParser(void)
 }
 
 static void
-FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
+FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc)
 {
 	int					i;
 	ParsedFunction		function;
@@ -79,8 +78,10 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	Oid					funcid;
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
-	Relation			rel;
-	TupleDesc			desc;
+
+	if (checker->encoding != -1)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("does not support parameter \"ENCODING\" in \"TYPE = FUNCTION\"")));
 
 	function = ParseFunction(infile, false);
 
@@ -241,15 +242,9 @@ FunctionParserInit(FunctionParser *self, const char *infile, Oid relid)
 	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs, NULL,
 							 (Node *) &self->rsinfo);
 
-	/* create tuple descriptor without any relation locks */
-	rel = heap_open(relid, NoLock);
-	desc = RelationGetDescr(rel);
-
 	self->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)
 		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
-
-	heap_close(rel, NoLock);
 
 	self->estate = CreateExecutorState();
 	self->econtext = GetPerTupleExprContext(self->estate);
@@ -278,7 +273,7 @@ FunctionParserTerm(FunctionParser *self)
 }
 
 static HeapTuple
-FunctionParserRead(FunctionParser *self)
+FunctionParserRead(FunctionParser *self, Checker *checker)
 {
 	Datum		datum;
 

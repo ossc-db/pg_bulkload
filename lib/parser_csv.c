@@ -35,7 +35,6 @@ typedef struct CSVParser
 	Parser	base;
 
 	Source		   *source;
-	Checker			checker;
 	Filter			filter;
 	TupleFormer		former;
 
@@ -108,8 +107,8 @@ typedef struct CSVParser
 	bool	   *fnn;			/**< array of NOT NULL column flag */
 } CSVParser;
 
-static void	CSVParserInit(CSVParser *self, const char *infile, Oid relid);
-static HeapTuple	CSVParserRead(CSVParser *self);
+static void	CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static HeapTuple	CSVParserRead(CSVParser *self, Checker *checker);
 static int64	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
 static void CSVParserDumpParams(CSVParser *self);
@@ -166,7 +165,6 @@ CreateCSVParser(void)
 	self->base.dumpParams = (ParserDumpParamsProc) CSVParserDumpParams;
 	self->base.dumpRecord = (ParserDumpRecordProc) CSVParserDumpRecord;
 	self->offset = -1;
-	self->checker.encoding = -1;
 	return (Parser *)self;
 }
 
@@ -182,11 +180,8 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser *self, const char *infile, Oid relid)
+CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc)
 {
-	Relation	rel;
-	TupleDesc	desc;
-
 	/*
 	 * set default values
 	 */
@@ -215,16 +210,8 @@ CSVParserInit(CSVParser *self, const char *infile, Oid relid)
 				 errmsg
 				 ("when specified FILTER, cannot specified FORCE_NOT_NULL")));
 
-	/* open relation without any relation locks */
-	rel = heap_open(relid, NoLock);
-	desc = RelationGetDescr(rel);
-
 	self->source = CreateSource(infile, desc);
 
-	if (self->checker.encoding == -1 && pg_strcasecmp(infile, "stdin") == 0)
-		self->checker.encoding = pg_get_client_encoding();
-
-	CheckerInit(&self->checker, rel);
 	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);
 
@@ -303,7 +290,6 @@ CSVParserTerm(CSVParser *self)
 		pfree(self->rec_buf);
 	if (self->field_buf)
 		pfree(self->field_buf);
-	CheckerTerm(&self->checker);
 	FilterTerm(&self->filter);
 	TupleFormerTerm(&self->former);
 	pfree(self);
@@ -349,7 +335,7 @@ checkFieldIsNull(CSVParser *self, int field_num, int len)
  * @note When an error is found, it returns to the caller through ereport().
  */
 static HeapTuple
-CSVParserRead(CSVParser *self)
+CSVParserRead(CSVParser *self, Checker *checker)
 {
 	HeapTuple	tuple;			/* return tuple */
 	int			i = 0;			/* Index of the scanned character */
@@ -707,17 +693,13 @@ skip_done:
 
 	/* Convert it to server encoding. */
 	parsed_field = self->base.parsing_field;
-	if (self->checker.check_encoding)
+	for (i = 0; i < parsed_field; i++)
 	{
-		for (i = 0; i < parsed_field; i++)
-		{
-			if (self->fields[i] == NULL)
-				continue;
+		if (self->fields[i] == NULL)
+			continue;
 
-			self->base.parsing_field = i + 1;
-			self->fields[i] = CheckerConversion(&self->checker,
-												self->fields[i]);
-		}
+		self->base.parsing_field = i + 1;
+		self->fields[i] = CheckerConversion(checker, self->fields[i]);
 	}
 
 	ExtractValuesFromCSV(self, parsed_field);
@@ -728,32 +710,6 @@ skip_done:
 							&self->base.parsing_field);
 	else
 		tuple = TupleFormerTuple(&self->former);
-
-	if (self->checker.has_constraints)
-	{
-		self->base.parsing_field = 0;
-		CheckerConstraints(&self->checker, tuple);
-	}
-	else if (self->checker.has_not_null && HeapTupleHasNulls(tuple))
-	{
-		/*
-		 * Even if CHECK_CONSTRAINTS is not specified, check NOT NULL constraint
-		 */
-		TupleDesc	desc = self->former.desc;
-		int			i;
-
-		for (i = 0; i < desc->natts; i++)
-		{
-			if (desc->attrs[i]->attnotnull &&
-				att_isnull(i, tuple->t_data->t_bits)) {
-				self->base.parsing_field = i + 1;	/* 1 origin */
-				ereport(ERROR,
-						(errcode(ERRCODE_NOT_NULL_VIOLATION),
-						 errmsg("null value in column \"%s\" violates not-null constraint",
-						NameStr(desc->attrs[i]->attname))));
-			}
-		}
-	}
 
 	return tuple;
 }
@@ -790,20 +746,6 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 	{
 		ASSERT_ONCE(self->offset < 0);
 		self->offset = ParseInt64(value, 0);
-	}
-	else if (CompareKeyword(keyword, "ENCODING"))
-	{
-		ASSERT_ONCE(self->checker.encoding < 0);
-		self->checker.encoding = pg_valid_client_encoding(value);
-		if (self->checker.encoding < 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("invalid encoding for parameter \"ENCODING\": \"%s\"",
-						value)));
-	}
-	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
-	{
-		self->checker.check_constraints = ParseBoolean(value, false);
 	}
 	else if (CompareKeyword(keyword, "FILTER"))
 	{
@@ -844,13 +786,6 @@ CSVParserDumpParams(CSVParser *self)
 	str = QuoteString(self->null);
 	appendStringInfo(&buf, "NULL = %s\n", str);
 	pfree(str);
-
-	if (PG_VALID_FE_ENCODING(self->checker.encoding))
-		appendStringInfo(&buf, "ENCODING = %s\n",
-						 pg_encoding_to_char(self->checker.encoding));
-
-	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
-		self->checker.check_constraints ? "YES" : "NO");
 
 	if (self->filter.funcstr)
 		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);

@@ -193,8 +193,14 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		if (rd->wo.truncate && rd->writer != CreateParallelWriter)
 			TruncateTable(rd->relid);
 
+		/* open relation without any relation locks */
+		rd->rel = heap_open(rd->relid, NoLock);
+
 		/* initialize parser */
-		ParserInit(rd->parser, rd->infile, rd->relid);
+		ParserInit(rd->parser, &rd->checker, rd->infile, RelationGetDescr(rd->rel));
+
+		/* initialize checker */
+		CheckerInit(&rd->checker, rd->rel);
 
 		/* create writer */
 		wt = rd->writer(rd->relid, &rd->wo);
