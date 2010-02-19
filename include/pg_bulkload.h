@@ -7,6 +7,11 @@
 #define BULKLOAD_H_INCLUDED
 
 #include "postgres.h"
+
+#if PG_VERSION_NUM < 80300
+#error pg_bulkload does not support PostgreSQL 8.2 or earlier versions.
+#endif
+
 #include "access/tupdesc.h"
 #include "pgut/pgut-be.h"
 

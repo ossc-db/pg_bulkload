@@ -909,10 +909,8 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 		ereport(ERROR,
 				(errcode(ERRCODE_DATATYPE_MISMATCH),
 				 errmsg("function return row and target table row do not match"),
-				 errdetail_plural("Returned row contains %d attribute, but target table expects %d.",
-				"Returned row contains %d attributes, but query expects %d.",
-								  src_tupdesc->natts,
-								  src_tupdesc->natts, dst_tupdesc->natts)));
+				 errdetail("Returned row contains %d attribute(s), but target table expects %d.",
+						   src_tupdesc->natts, dst_tupdesc->natts)));
 
 	for (i = 0; i < dst_tupdesc->natts; i++)
 	{

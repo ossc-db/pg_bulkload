@@ -395,9 +395,9 @@ TruncateTable(Oid relid)
 	heap = makeRangeVar(get_namespace_name(get_rel_namespace(relid)),
 						get_rel_name(relid), -1);
 
+	memset(&stmt, 0, sizeof(stmt));
 	stmt.type = T_TruncateStmt;
 	stmt.relations = list_make1(heap);
-	stmt.restart_seqs = false;
 	stmt.behavior = DROP_RESTRICT;
 	ExecuteTruncate(&stmt);
 

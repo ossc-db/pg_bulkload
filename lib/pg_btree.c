@@ -210,7 +210,7 @@ IndexSpoolEnd(Spooler *self, bool reindex)
 			/* Close index before reindex to pass CheckTableNotInUse. */
 			relation_close(indices[i], NoLock);
 			indices[i] = NULL;
-			reindex_index(indexOid);
+			reindex_index(indexOid, false);
 			CommandCounterIncrement();
 			BULKLOAD_PROFILE(&prof_reindex);
 		}
@@ -365,7 +365,7 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	if (merge || (btspool->isunique && self->on_duplicate != ON_DUPLICATE_ERROR))
 	{
 		/* Assign a new file node and merge two streams into it. */
-		setNewRelfilenode(wstate.index, RecentXmin);
+		RelationSetNewRelfilenode(wstate.index, RecentXmin);
 		BULKLOAD_PROFILE_PUSH();
 		_bt_mergeload(self, &wstate, btspool, &reader, heapRel);
 		BULKLOAD_PROFILE_POP();
@@ -645,7 +645,7 @@ BTReaderInit(BTReader *reader, Relation rel)
 	 * will be closed automatically when we assign a new file node.
 	 *
 	 * XXX: It might be better to open the previous relfilenode with
-	 * smgropen *after* setNewRelfilenode.
+	 * smgropen *after* RelationSetNewRelfilenode.
 	 */
 	memset(&reader->smgr, 0, sizeof(reader->smgr));
 	reader->smgr.smgr_rnode = rel->rd_node;

@@ -33,8 +33,6 @@
 #define GetCurrentCommandId(used)	GetCurrentCommandId()
 #define stringToQualifiedNameList(str) \
     stringToQualifiedNameList((str), "pg_bulkload")
-#define setNewRelfilenode(rel, xid) \
-	setNewRelfilenode((rel))
 #define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
 	PageAddItem((page), (item), (size), (offnum), LP_USED)
 
@@ -56,10 +54,10 @@
 #define GetBulkInsertState()			(NULL)
 #define FreeBulkInsertState(bistate)	((void)0)
 #define FreeExprContext(econtext, isCommit)		FreeExprContext((econtext))
-#define FuncnameGetCandidates(names, nargs, argnames, variadic, defaults) \
-	FuncnameGetCandidates((names), (nargs))
 #define pgstat_init_function_usage(fcinfo, fcu)		((void)0)
 #define pgstat_end_function_usage(fcu, finalize)	((void)0)
+#define makeRangeVar(schemaname, relname, location) \
+	makeRangeVar((schemaname), (relname))
 
 typedef void *BulkInsertState;
 
@@ -69,19 +67,32 @@ extern text *cstring_to_text(const char *s);
 #define CStringGetTextDatum(s)		PointerGetDatum(cstring_to_text(s))
 #define TextDatumGetCString(d)		text_to_cstring((text *) DatumGetPointer(d))
 
-#elif PG_VERSION_NUM < 80500
-
-#define FuncnameGetCandidates(names, nargs, argnames, variadic, defaults) \
-	FuncnameGetCandidates((names), (nargs), (variadic), (defaults))
-
 #endif
 
 #if PG_VERSION_NUM < 80500
 
+#define reindex_index(indexId, skip_constraint_checks) \
+	reindex_index((indexId))
 #define func_signature_string(funcname, nargs, argnames, argtypes) \
 	func_signature_string((funcname), (nargs), (argtypes))
 #define GetConfigOption(name, restrict_superuser)	GetConfigOption((name))
 
+#endif
+
+#if PG_VERSION_NUM < 80300
+#define RelationSetNewRelfilenode(rel, xid) \
+	setNewRelfilenode((rel))
+#elif PG_VERSION_NUM < 80500
+#define RelationSetNewRelfilenode(rel, xid) \
+	setNewRelfilenode((rel), (xid))
+#endif
+
+#if PG_VERSION_NUM < 80400
+#define FuncnameGetCandidates(names, nargs, argnames, variadic, defaults) \
+	FuncnameGetCandidates((names), (nargs))
+#elif PG_VERSION_NUM < 80500
+#define FuncnameGetCandidates(names, nargs, argnames, variadic, defaults) \
+	FuncnameGetCandidates((names), (nargs), (variadic), (defaults))
 #endif
 
 #endif   /* PGUT_BE_H */

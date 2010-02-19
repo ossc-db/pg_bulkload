@@ -73,7 +73,6 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 {
 	int					i;
 	ParsedFunction		function;
-	ListCell		   *l;
 	int					nargs;
 	Oid					funcid;
 	HeapTuple			ftup;
@@ -189,6 +188,7 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 		char	   *str;
 		List	   *defaults;
 		int			ndelete;
+		ListCell   *l;
 
 		/* shouldn't happen, FuncnameGetCandidates messed up */
 		if (function.ndargs > pp->pronargdefaults)

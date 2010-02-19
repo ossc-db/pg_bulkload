@@ -177,9 +177,8 @@ lcons(void *datum, List *list)
  * input pointer may or may not be the same as the returned pointer.
  *
  * The nodes in list2 are merely appended to the end of list1 in-place
- * (i.e. they aren't copied; the two lists will share some of the same
- * storage). Therefore, invoking list_free() on list2 will also
- * invalidate a portion of list1.
+ * (i.e. they aren't copied), and the list2 handle is free-ed. This is
+ * an incopatible change from backend codes.
  */
 List *
 list_concat(List *list1, List *list2)
@@ -196,6 +195,9 @@ list_concat(List *list1, List *list2)
 	list1->length += list2->length;
 	list1->tail->next = list2->head;
 	list1->tail = list2->tail;
+
+	/* Note: free list2 handle but keep items in it */
+	free(list2);
 
 	return list1;
 }
