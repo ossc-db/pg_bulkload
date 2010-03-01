@@ -179,6 +179,7 @@ struct Filter
 	ExprContext	   *econtext;
 	HeapTupleData	tuple;
 	bool			tupledesc_matched;
+	Oid				fn_rettype;
 };
 
 extern void FilterInit(Filter *filter, TupleDesc desc);

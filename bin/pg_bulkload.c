@@ -254,7 +254,7 @@ LoaderLoadMain(List *options)
 		{
 			if (*item == '"' || *item == '\\')
 			{
-				appendStringInfoChar(&buf, *item);
+				appendStringInfoChar(&buf, '\\');
 				appendStringInfoChar(&buf, *item);
 				item++;
 			}

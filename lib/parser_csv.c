@@ -257,7 +257,7 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 	self->used_len = 0;
 	self->field_buf = palloc(self->buf_len);
 	self->next = self->rec_buf;
-	self->fields = palloc(self->former.maxfields * sizeof(char *));
+	self->fields = palloc(Max(self->former.maxfields, 1) * sizeof(char *));
 	self->fields[0] = NULL;
 	self->null_len = strlen(self->null);
 	self->eof = false;
@@ -664,6 +664,13 @@ skip_done:
 	if (in_quote)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("unterminated CSV quoted field")));
+
+	/*
+	 * We accept a record only for new lines as input of the functions without
+	 * the arguments.
+	 */
+	if (self->former.maxfields == 0 && strlen(self->cur) == 0)
+		self->base.parsing_field = 0;
 
 	/*
 	 * It's an error if the number of self->fields exceeds the number of valid column. 

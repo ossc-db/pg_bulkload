@@ -194,6 +194,21 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 	while (isspace((unsigned char) *p))
 		p++;
 
+	if (first_arg && *p == ')')
+	{
+		p++;
+		while (isspace((unsigned char) *p))
+			p++;
+
+		if (*p != '\0')
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("function call syntax error: %s", path)));
+
+		*endptr = p;
+		return false;
+	}
+
 	*argtype = UNKNOWNOID;
 	if (argistype)
 	{
@@ -308,32 +323,9 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 
 		len = p - startptr;
 		if (len == 0)
-		{
-			if (first_arg)
-			{
-				while (isspace((unsigned char) *p))
-					p++;
-
-				if (*p == ')')
-				{
-					p++;
-					while (isspace((unsigned char) *p))
-						p++;
-
-					if (*p != '\0')
-						ereport(ERROR,
-							(errcode(ERRCODE_SYNTAX_ERROR),
-				 			errmsg("function call syntax error: %s", path)));
-
-					*endptr = p;
-					return false;
-				}
-			}
-
 			ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("function call syntax error: %s", path)));
-		}
 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);

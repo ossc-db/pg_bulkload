@@ -618,8 +618,8 @@ CheckerInit(Checker *checker, Relation rel)
 	 */
 	checker->db_encoding = GetDatabaseEncoding();
 	if (checker->encoding != -1 &&
-		checker->encoding != PG_SQL_ASCII &&
-		checker->db_encoding != PG_SQL_ASCII)
+		(checker->encoding != PG_SQL_ASCII ||
+		checker->db_encoding != PG_SQL_ASCII))
 		checker->check_encoding = true;
 
 	/* When specify CHECK_CONSTRAINTS, we check the constraints */
@@ -989,6 +989,7 @@ FilterInit(Filter *filter, TupleDesc desc)
 		{
 			tupledesc_match(desc, resultDesc);
 			filter->tupledesc_matched = true;
+			FreeTupleDesc(resultDesc);
 		}
 	}
 	else if (get_typtype(pp->prorettype) != TYPTYPE_COMPOSITE)
@@ -1053,6 +1054,7 @@ FilterInit(Filter *filter, TupleDesc desc)
 #endif
 
 	filter->fn_strict = pp->proisstrict;
+	filter->fn_rettype = pp->prorettype;
 
 	ReleaseSysCache(ftup);
 }
@@ -1162,12 +1164,28 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 		resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
 											HeapTupleHeaderGetTypMod(td));
-		tupledesc_match(former->desc, resultDesc);
+#ifdef ALL_RESULTDESC_CHECK
+		PG_TRY();
+		{
+#endif
+			tupledesc_match(former->desc, resultDesc);
+#ifdef ALL_RESULTDESC_CHECK
+		}
+		PG_CATCH();
+		{
+			ReleaseTupleDesc(resultDesc);
+			if (filter->fn_rettype == RECORDOID)
+				*parsing_field = 0;
+
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		if (filter->fn_rettype != RECORDOID)
+#endif
+			filter->tupledesc_matched = true;
 
 		ReleaseTupleDesc(resultDesc);
-
-		if (HeapTupleHeaderGetTypeId(td) != RECORDOID)
-			filter->tupledesc_matched = true;
 	}
 
 	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);

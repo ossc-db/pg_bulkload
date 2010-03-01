@@ -301,23 +301,6 @@ FunctionParserRead(FunctionParser *self, Checker *checker)
 	self->tuple.t_len = HeapTupleHeaderGetDatumLength(self->tuple.t_data);
 	self->base.count++;
 
-	/* Check NOT NULL constraint. */
-	if (HeapTupleHasNulls(&self->tuple))
-	{
-		int		i;
-		bits8  *bp = self->tuple.t_data->t_bits;
-
-		for (i = 0; i < self->desc->natts; i++)
-		{
-			self->base.parsing_field = i + 1;	/* 1 origin */
-			if (att_isnull(i, bp) && self->desc->attrs[i]->attnotnull)
-				ereport(ERROR,
-					(errcode(ERRCODE_NOT_NULL_VIOLATION),
-					 errmsg("null value in column \"%s\" violates not-null constraint",
-						  NameStr(self->desc->attrs[i]->attname))));
-		}
-	}
-
 	self->base.parsing_field = -1;
 
 	return &self->tuple;
