@@ -9,7 +9,9 @@
 
 #include "postgres.h"
 
+#ifndef WIN32
 #include <unistd.h>
+#endif
 
 #ifdef HAVE_SYS_IPC_H
 #include <sys/ipc.h>
@@ -80,7 +82,7 @@ retry:
 #ifdef WIN32
 	win32_shmemName(shmemName, lengthof(shmemName), shmemKey);
 
-	handle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
+	handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
 							   offsetof(QueueHeader, data) + size, shmemName);
 	if (handle == NULL)
 	{
@@ -141,7 +143,7 @@ QueueOpen(unsigned key)
 
 	win32_shmemName(shmemName, lengthof(shmemName), key);
 
-	handle = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, shmemName);
+	handle = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, shmemName);
 	if (handle == NULL)
 		elog(ERROR, "OpenFileMapping(%s) failed: errcode=%lu", shmemName, GetLastError());
 

@@ -14,14 +14,15 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #ifndef WIN32
 #include <sys/shm.h>
+#include <unistd.h>
 #endif
 
 #include "pg_loadstatus.h"
 #include "pgut/pgut.h"
+#include "pgut/pgut-port.h"
 
 #include "catalog/pg_control.h"
 #include "catalog/pg_tablespace.h"
@@ -39,7 +40,7 @@
  * Global variables
  */
 
-extern const char  *DataDir;
+extern char  *DataDir;
 
 /*
  * Prototypes
@@ -396,7 +397,7 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	char		segpath[MAXPGPATH];	/* data file name to open */
 	char	   *page;				/* area to read blocks */
 	Page		zeropage;			/* blank page */
-	int			blknum;				/* block no currently procesing */
+	BlockNumber	blknum;				/* block no currently procesing */
 	int			fd;					/* file descriptor */
 	off_t		seekpos;			/* position of block to recovery */
 	ssize_t		ret;				/* return value of read()  */

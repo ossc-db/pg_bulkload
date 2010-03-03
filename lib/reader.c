@@ -8,11 +8,10 @@
  * @file
  * @brief Implementation of reader module
  */
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include <fcntl.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "access/heapam.h"
 #include "access/reloptions.h"
@@ -207,12 +206,7 @@ ReaderCreate(Datum options, time_t tm)
 		strcmp(self->parse_badfile, self->wo.dup_badfile) == 0)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")
-#ifdef NOT_USED
-			 , errdetail("INFILE = %s\nPARSE_BADFILE = %s\nDUPLICATE_BADFILE = %s\nLOGFILE = %s",
-				self->infile, self->parse_badfile, self->wo.dup_badfile, self->logfile)
-#endif
-			));
+			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")));
 
 	return self;
 }

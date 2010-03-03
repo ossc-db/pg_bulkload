@@ -8,9 +8,7 @@
  * @file
  * @brief CSV format file handling module implementation.
  */
-#include "postgres.h"
-
-#include <unistd.h>
+#include "pg_bulkload.h"
 
 #include "access/heapam.h"
 #include "access/htup.h"

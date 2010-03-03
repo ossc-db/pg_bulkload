@@ -8,9 +8,7 @@
  * @file
  * @brief Binary HeapTuple format handling module implementation.
  */
-#include "postgres.h"
-
-#include <unistd.h>
+#include "pg_bulkload.h"
 
 #include "access/htup.h"
 #include "utils/rel.h"

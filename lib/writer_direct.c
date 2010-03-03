@@ -4,10 +4,9 @@
  *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 
 #include "access/heapam.h"
 #include "access/transam.h"

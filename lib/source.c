@@ -4,10 +4,9 @@
  *	  Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 
 #include "access/htup.h"
 #include "catalog/pg_type.h"
@@ -15,13 +14,14 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
-#include "storage/fd.h"
 #include "tcop/dest.h"
 
 #include "reader.h"
-#include "pg_bulkload.h"
 
-extern PGDLLIMPORT ProtocolVersion	FrontendProtocol;
+#include "pgut/pgut-be.h"
+
+#include "storage/fd.h"
+
 extern PGDLLIMPORT CommandDest		whereToSendOutput;
 
 /* ========================================================================

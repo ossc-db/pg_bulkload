@@ -8,12 +8,20 @@
 
 #include "postgres.h"
 
+#undef ENABLE_GSS
+#undef USE_SSL
+
 #if PG_VERSION_NUM < 80300
 #error pg_bulkload does not support PostgreSQL 8.2 or earlier versions.
 #endif
 
 #include "access/tupdesc.h"
-#include "pgut/pgut-be.h"
+
+#ifndef WIN32
+#include <unistd.h>
+#endif
+
+#include "pgut/pgut-port.h"
 
 /**
  * @file
@@ -87,8 +95,6 @@ typedef Writer *(*WriterCreate)(Oid relid, const WriterOptions *options);
 #else
 #define int64_FMT		"%lld"
 #endif
-
-#include "pg_bulkload_win32.h"
 
 #if !defined(__GNUC__) || (__GNUC__ == 2 && __GNUC_MINOR__ < 96)
 #define __builtin_expect(x, expected_value) (x)

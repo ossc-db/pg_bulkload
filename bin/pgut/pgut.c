@@ -11,13 +11,23 @@
 #include "postgres_fe.h"
 #include "libpq/pqsignal.h"
 
-#include <getopt.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "pgut.h"
+
+#ifdef PGUT_MULTI_THREADED
+#include "pgut-pthread.h"
+static pthread_mutex_t				pgut_connections_lock;
+#define pgut_connections_init()		pthread_mutex_init(&pgut_connections_lock, NULL)
+#define pgut_connections_lock()		pthread_mutex_lock(&pgut_connections_lock)
+#define pgut_connections_unlock()	pthread_mutex_unlock(&pgut_connections_lock)
+#else
+#define pgut_connections_init()		((void) 0)
+#define pgut_connections_lock()		((void) 0)
+#define pgut_connections_unlock()	((void) 0)
+#endif
 
 /* old gcc doesn't have LLONG_MAX. */
 #ifndef LLONG_MAX
@@ -30,224 +40,44 @@
 
 const char *PROGRAM_NAME = NULL;
 
-const char	   *dbname = NULL;
-const char	   *host = NULL;
-const char	   *port = NULL;
-const char	   *username = NULL;
-char		   *password = NULL;
 bool			debug = false;
 bool			quiet = false;
-
-#ifndef PGUT_NO_PROMPT
-YesNo	prompt_password = DEFAULT;
-#endif
-
-/* Database connections */
-PGconn	   *connection = NULL;
-static PGcancel *volatile cancel_conn = NULL;
 
 /* Interrupted by SIGINT (Ctrl+C) ? */
 bool			interrupted = false;
 static bool		in_cleanup = false;
 
-static bool parse_pair(const char buffer[], char key[], char value[]);
+/* Database connections */
+typedef struct pgutConn	pgutConn;
+struct pgutConn
+{
+	PGconn	   *conn;
+	PGcancel   *cancel;
+	pgutConn   *next;
+};
+
+static pgutConn *pgut_connections;
 
 /* Connection routines */
 static void init_cancel_handler(void);
-static void on_before_exec(PGconn *conn);
-static void on_after_exec(void);
+static void on_before_exec(pgutConn *conn);
+static void on_after_exec(pgutConn *conn);
 static void on_interrupt(void);
 static void on_cleanup(void);
 static void exit_or_abort(int exitcode);
-static const char *get_username(void);
-
-static pgut_option default_options[] =
-{
-	{ 'b', '!', "debug"		, &debug },
-	{ 's', 'd', "dbname"	, &dbname },
-	{ 's', 'h', "host"		, &host },
-	{ 's', 'p', "port"		, &port },
-	{ 'b', 'q', "quiet"		, &quiet },
-	{ 's', 'U', "username"	, &username },
-#ifndef PGUT_NO_PROMPT
-	{ 'y', 'w', "no-password"	, &prompt_password },
-	{ 'Y', 'W', "password"		, &prompt_password },
-#endif
-	{ 0 }
-};
-
-static size_t
-option_length(const pgut_option opts[])
-{
-	size_t	len;
-	for (len = 0; opts && opts[len].type; len++) { }
-	return len;
-}
-
-static int
-option_has_arg(char type)
-{
-	switch (type)
-	{
-		case 'b':
-		case 'B':
-		case 'y':
-		case 'Y':
-			return no_argument;
-		default:
-			return required_argument;
-	}
-}
-
-static void
-option_copy(struct option dst[], const pgut_option opts[], size_t len)
-{
-	size_t	i;
-
-	for (i = 0; i < len; i++)
-	{
-		dst[i].name = opts[i].lname;
-		dst[i].has_arg = option_has_arg(opts[i].type);
-		dst[i].flag = NULL;
-		dst[i].val = opts[i].sname;
-	}
-}
-
-static struct option *
-option_merge(const pgut_option opts1[], const pgut_option opts2[])
-{
-	struct option *result;
-	size_t	len1 = option_length(opts1);
-	size_t	len2 = option_length(opts2);
-	size_t	n = len1 + len2;
-
-	result = pgut_newarray(struct option, n + 1);
-	option_copy(result, opts1, len1);
-	option_copy(result + len1, opts2, len2);
-	memset(&result[n], 0, sizeof(pgut_option));
-
-	return result;
-}
-
-static pgut_option *
-option_find(int c, pgut_option opts1[], pgut_option opts2[])
-{
-	size_t	i;
-
-	for (i = 0; opts1 && opts1[i].type; i++)
-		if (opts1[i].sname == c)
-			return &opts1[i];
-	for (i = 0; opts2 && opts2[i].type; i++)
-		if (opts2[i].sname == c)
-			return &opts2[i];
-
-	return NULL;	/* not found */
-}
 
 void
-pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
+pgut_init(int argc, char **argv)
 {
-	const char	  *message;
-
-	if (opt == NULL)
+	if (PROGRAM_NAME == NULL)
 	{
-		fprintf(stderr, "Try \"%s --help\" for more information.\n", PROGRAM_NAME);
-		exit_or_abort(ERROR_ARGS);
-	}
+		PROGRAM_NAME = get_progname(argv[0]);
+		set_pglocale_pgservice(argv[0], "pgscripts");
 
-	if (opt->source > src)
-	{
-		/* high prior value has been set already. */
-		return;
+		pgut_connections_init();
+		init_cancel_handler();
+		atexit(on_cleanup);
 	}
-	else if (src >= SOURCE_CMDLINE && opt->source >= src)
-	{
-		/* duplicated option in command line */
-		message = "specified only once";
-	}
-	else
-	{
-		/* can be overwritten if non-command line source */
-		opt->source = src;
-
-		switch (opt->type)
-		{
-			case 'b':
-			case 'B':
-				if (optarg == NULL)
-				{
-					*((bool *) opt->var) = (opt->type == 'b');
-					return;
-				}
-				else if (parse_bool(optarg, (bool *) opt->var))
-				{
-					return;
-				}
-				message = "a boolean";
-				break;
-			case 'f':
-				((pgut_optfn) opt->var)(opt, optarg);
-				return;
-			case 'i':
-				if (parse_int32(optarg, opt->var))
-					return;
-				message = "a 32bit signed integer";
-				break;
-			case 'u':
-				if (parse_uint32(optarg, opt->var))
-					return;
-				message = "a 32bit unsigned integer";
-				break;
-			case 'I':
-				if (parse_int64(optarg, opt->var))
-					return;
-				message = "a 64bit signed integer";
-				break;
-			case 'U':
-				if (parse_uint64(optarg, opt->var))
-					return;
-				message = "a 64bit unsigned integer";
-				break;
-			case 's':
-				if (opt->source != SOURCE_DEFAULT)
-					free(*(char **) opt->var);
-				*(char **) opt->var = pgut_strdup(optarg);
-				return;
-			case 't':
-				if (parse_time(optarg, opt->var))
-					return;
-				message = "a time";
-				break;
-			case 'y':
-			case 'Y':
-				if (optarg == NULL)
-				{
-					*(YesNo *) opt->var = (opt->type == 'y' ? YES : NO);
-					return;
-				}
-				else
-				{
-					bool	value;
-					if (parse_bool(optarg, &value))
-					{
-						*(YesNo *) opt->var = (value ? YES : NO);
-						return;
-					}
-				}
-				message = "a boolean";
-				break;
-			default:
-				elog(ERROR, "invalid option type: %c", opt->type);
-				return;	/* keep compiler quiet */
-		}
-	}
-
-	if (isprint(opt->sname))
-		elog(ERROR_ARGS, "option -%c, --%s should be %s: '%s'",
-			opt->sname, opt->lname, message, optarg);
-	else
-		elog(ERROR_ARGS, "option --%s should be %s: '%s'",
-			opt->lname, message, optarg);
 }
 
 /*
@@ -368,7 +198,7 @@ parse_int32(const char *value, int32 *result)
 	if (errno == ERANGE || val != (int64) ((int32) val))
 		return false;
 
-	*result = val;
+	*result = (int32) val;
 
 	return true;
 }
@@ -397,7 +227,7 @@ parse_uint32(const char *value, uint32 *result)
 	if (errno == ERANGE || val != (uint64) ((uint32) val))
 		return false;
 
-	*result = val;
+	*result = (uint32) val;
 
 	return true;
 }
@@ -419,10 +249,11 @@ parse_int64(const char *value, int64 *result)
 	}
 
 	errno = 0;
-#if defined(HAVE_LONG_INT_64)
+#ifdef WIN32
+	val = _strtoi64(value, &endptr, 0);
+#elif defined(HAVE_LONG_INT_64)
 	val = strtol(value, &endptr, 0);
 #elif defined(HAVE_LONG_LONG_INT_64)
-	val = strtoll(value, &endptr, 0);
 #else
 	val = strtol(value, &endptr, 0);
 #endif
@@ -460,7 +291,9 @@ parse_uint64(const char *value, uint64 *result)
 	}
 
 	errno = 0;
-#if defined(HAVE_LONG_INT_64)
+#ifdef WIN32
+	val = _strtoui64(value, &endptr, 0);
+#elif defined(HAVE_LONG_INT_64)
 	val = strtoul(value, &endptr, 0);
 #elif defined(HAVE_LONG_LONG_INT_64)
 	val = strtoull(value, &endptr, 0);
@@ -528,350 +361,10 @@ parse_time(const char *value, time_t *time)
 }
 
 static char *
-longopts_to_optstring(const struct option opts[])
+prompt_for_password(void)
 {
-	size_t	len;
-	char   *result;
-	char   *s;
-
-	for (len = 0; opts[len].name; len++) { }
-	result = pgut_malloc(len * 2 + 1);
-
-	s = result;
-	for (len = 0; opts[len].name; len++)
-	{
-		if (!isprint(opts[len].val))
-			continue;
-		*s++ = opts[len].val;
-		if (opts[len].has_arg != no_argument)
-			*s++ = ':';
-	}
-	*s = '\0';
-
-	return result;
+	return simple_prompt("Password: ", 100, false);
 }
-
-static void
-option_from_env(pgut_option options[])
-{
-	size_t	i;
-
-	for (i = 0; options && options[i].type; i++)
-	{
-		pgut_option	   *opt = &options[i];
-		char			name[256];
-		size_t			j;
-		const char	   *s;
-		const char	   *value;
-
-		if (opt->source > SOURCE_ENV ||
-			opt->allowed == SOURCE_DEFAULT || opt->allowed > SOURCE_ENV)
-			continue;
-
-		for (s = opt->lname, j = 0; *s && j < lengthof(name) - 1; s++, j++)
-		{
-			if (strchr("-_ ", *s))
-				name[j] = '_';	/* - to _ */
-			else
-				name[j] = toupper(*s);
-		}
-		name[j] = '\0';
-
-		if ((value = getenv(name)) != NULL)
-			pgut_setopt(opt, value, SOURCE_ENV);
-	}
-}
-
-int
-pgut_getopt(int argc, char **argv, pgut_option options[])
-{
-	int					c;
-	int					optindex = 0;
-	char			   *optstring;
-	struct option	   *longopts;
-	pgut_option		   *opt;
-
-	if (PROGRAM_NAME == NULL)
-	{
-		PROGRAM_NAME = get_progname(argv[0]);
-		set_pglocale_pgservice(argv[0], "pgscripts");
-	}
-
-	/* Help message and version are handled at first. */
-	if (argc > 1)
-	{
-		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
-		{
-			help(true);
-			exit_or_abort(HELP);
-		}
-		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
-		{
-			fprintf(stderr, "%s %s\n", PROGRAM_NAME, PROGRAM_VERSION);
-			exit_or_abort(HELP);
-		}
-	}
-
-	/* Merge default and user options. */
-	longopts = option_merge(default_options, options);
-	optstring = longopts_to_optstring(longopts);
-
-	/* Assign named options */
-	while ((c = getopt_long(argc, argv, optstring, longopts, &optindex)) != -1)
-	{
-		opt = option_find(c, default_options, options);
-		pgut_setopt(opt, optarg, SOURCE_CMDLINE);
-	}
-
-	/* Read environment variables */
-	option_from_env(options);
-	(void) (dbname ||
-	(dbname = getenv("PGDATABASE")) ||
-	(dbname = getenv("PGUSER")) ||
-	(dbname = get_username()));
-
-	init_cancel_handler();
-	atexit(on_cleanup);
-
-	return optind;
-}
-
-/* compare two strings ignore cases and ignore -_ */
-bool
-pgut_keyeq(const char *lhs, const char *rhs)
-{
-	for (; *lhs && *rhs; lhs++, rhs++)
-	{
-		if (strchr("-_ ", *lhs))
-		{
-			if (!strchr("-_ ", *rhs))
-				return false;
-		}
-		else if (ToLower(*lhs) != ToLower(*rhs))
-			return false;
-	}
-
-	return *lhs == '\0' && *rhs == '\0';
-}
-
-/*
- * Get configuration from configuration file.
- */
-void
-pgut_readopt(const char *path, pgut_option options[], int elevel)
-{
-	FILE   *fp;
-	char	buf[1024];
-	char	key[1024];
-	char	value[1024];
-
-	if (!options)
-		return;
-
-	if ((fp = pgut_fopen(path, "rt", true)) == NULL)
-		return;
-
-	while (fgets(buf, lengthof(buf), fp))
-	{
-		size_t		i;
-
-		for (i = strlen(buf); i > 0 && IsSpace(buf[i - 1]); i--)
-			buf[i - 1] = '\0';
-
-		if (parse_pair(buf, key, value))
-		{
-			for (i = 0; options[i].type; i++)
-			{
-				pgut_option *opt = &options[i];
-
-				if (pgut_keyeq(key, opt->lname))
-				{
-					if (opt->allowed == SOURCE_DEFAULT ||
-						opt->allowed > SOURCE_FILE)
-						elog(elevel, "option %s cannot specified in file", opt->lname);
-					else if (opt->source <= SOURCE_FILE)
-						pgut_setopt(opt, value, SOURCE_FILE);
-					break;
-				}
-			}
-			if (!options[i].type)
-				elog(elevel, "invalid option \"%s\"", key);
-		}
-	}
-
-	fclose(fp);
-}
-
-static const char *
-skip_space(const char *str, const char *line)
-{
-	while (IsSpace(*str)) { str++; }
-	return str;
-}
-
-static const char *
-get_next_token(const char *src, char *dst, const char *line)
-{
-	const char   *s;
-	int		i;
-	int		j;
-
-	if ((s = skip_space(src, line)) == NULL)
-		return NULL;
-
-	/* parse quoted string */
-	if (*s == '\'')
-	{
-		s++;
-		for (i = 0, j = 0; s[i] != '\0'; i++)
-		{
-			if (s[i] == '\\')
-			{
-				i++;
-				switch (s[i])
-				{
-					case 'b':
-						dst[j] = '\b';
-						break;
-					case 'f':
-						dst[j] = '\f';
-						break;
-					case 'n':
-						dst[j] = '\n';
-						break;
-					case 'r':
-						dst[j] = '\r';
-						break;
-					case 't':
-						dst[j] = '\t';
-						break;
-					case '0':
-					case '1':
-					case '2':
-					case '3':
-					case '4':
-					case '5':
-					case '6':
-					case '7':
-						{
-							int			k;
-							long		octVal = 0;
-
-							for (k = 0;
-								 s[i + k] >= '0' && s[i + k] <= '7' && k < 3;
-									 k++)
-								octVal = (octVal << 3) + (s[i + k] - '0');
-							i += k - 1;
-							dst[j] = ((char) octVal);
-						}
-						break;
-					default:
-						dst[j] = s[i];
-						break;
-				}
-			}
-			else if (s[i] == '\'')
-			{
-				i++;
-				/* doubled quote becomes just one quote */
-				if (s[i] == '\'')
-					dst[j] = s[i];
-				else
-					break;
-			}
-			else
-				dst[j] = s[i];
-			j++;
-		}
-	}
-	else
-	{
-		i = j = strcspn(s, "# \n\r\t\v");
-		memcpy(dst, s, j);
-	}
-
-	dst[j] = '\0';
-	return s + i;
-}
-
-static bool
-parse_pair(const char buffer[], char key[], char value[])
-{
-	const char *start;
-	const char *end;
-
-	key[0] = value[0] = '\0';
-
-	/*
-	 * parse key
-	 */
-	start = buffer;
-	if ((start = skip_space(start, buffer)) == NULL)
-		return false;
-
-	end = start + strcspn(start, "=# \n\r\t\v");
-
-	/* skip blank buffer */
-	if (end - start <= 0)
-	{
-		if (*start == '=')
-			elog(WARNING, "syntax error in \"%s\"", buffer);
-		return false;
-	}
-
-	/* key found */
-	strncpy(key, start, end - start);
-	key[end - start] = '\0';
-
-	/* find key and value split char */
-	if ((start = skip_space(end, buffer)) == NULL)
-		return false;
-
-	if (*start != '=')
-	{
-		elog(WARNING, "syntax error in \"%s\"", buffer);
-		return false;
-	}
-
-	start++;
-
-	/*
-	 * parse value
-	 */
-	if ((end = get_next_token(start, value, buffer)) == NULL)
-		return false;
-
-	if ((start = skip_space(end, buffer)) == NULL)
-		return false;
-
-	if (*start != '\0' && *start != '#')
-	{
-		elog(WARNING, "syntax error in \"%s\"", buffer);
-		return false;
-	}
-
-	return true;
-}
-
-#ifndef PGUT_NO_PROMPT
-/*
- * Ask the user for a password; 'username' is the username the
- * password is for, if one has been explicitly specified.
- * Set malloc'd string to the global variable 'password'.
- */
-static char *
-prompt_for_password(const char *username)
-{
-	if (username == NULL)
-		return simple_prompt("Password: ", 100, false);
-	else
-	{
-		char	message[256];
-		snprintf(message, lengthof(message), "Password for user %s: ", username);
-		return simple_prompt(message, 100, false);
-	}
-}
-#endif
 
 #if PG_VERSION_NUM < 80300
 static bool
@@ -881,174 +374,99 @@ PQconnectionNeedsPassword(PGconn *conn)
 }
 #endif
 
-static PGconn *
-do_connect(int elevel,
-		   const char *my_host,
-		   const char *my_port,
-		   const char *my_dbname,
-		   const char *my_username,
-		   const char *my_password,
-		   char **new_password)
+PGconn *
+pgut_connect(const char *info, YesNo prompt, int elevel)
 {
 	char	   *passwd;
 
 	CHECK_FOR_INTERRUPTS();
 
-	if (new_password)
-		*new_password = NULL;
-
-#ifndef PGUT_NO_PROMPT
-	if (prompt_password == YES)
-		passwd = prompt_for_password(my_username);
+	if (prompt == YES)
+		passwd = prompt_for_password();
 	else
-#endif
-		passwd = (char *) my_password;
+		passwd = NULL;
 
 	/* Start the connection. Loop until we have a password if requested by backend. */
 	for (;;)
 	{
 		PGconn	   *conn;
 
-		conn = PQsetdbLogin(my_host, my_port, NULL, NULL, my_dbname, my_username, passwd);
+		conn = PQconnectdb(info);
 
 		if (PQstatus(conn) == CONNECTION_OK)
 		{
-			if (new_password)
-				*new_password = passwd;
-			else
-				free(passwd);
+			pgutConn *c;
+
+			free(passwd);
+
+			c = pgut_new(pgutConn);
+			c->conn = conn;
+			c->cancel = NULL;
+
+			pgut_connections_lock();
+			c->next = pgut_connections;
+			pgut_connections = c;
+			pgut_connections_unlock();
+
 			return conn;
 		}
 
-		if (passwd != my_password)
-			free(passwd);
-
-#ifndef PGUT_NO_PROMPT
-		if (conn && PQconnectionNeedsPassword(conn) && prompt_password != NO)
+		if (conn && PQconnectionNeedsPassword(conn) && prompt != NO)
 		{
 			PQfinish(conn);
-			passwd = prompt_for_password(username);
+			free(passwd);
+			passwd = prompt_for_password();
 			continue;
 		}
-#endif
-		elog(elevel, "could not connect to database %s: %s",
-			(dbname ? dbname : "(default)"), PQerrorMessage(conn));
+		elog(elevel, "could not connect to database with %s: %s",
+			 info, PQerrorMessage(conn));
 		PQfinish(conn);
 		return NULL;
 	}
 }
-
-PGconn *
-pgut_connect(int elevel)
-{
-	PGconn	   *conn;
-	char	   *new_password;
-	
-	conn = do_connect(elevel, host, port, dbname, username, password, &new_password);
-
-	/* update password if a new one is supplied */
-	if (password != new_password)
-	{
-		free(password);
-		password = new_password;
-	}
-
-	return conn;
-}
-
-#if PG_VERSION_NUM >= 80400
-PGconn *
-pgut_connectdb(const char *conninfo, int elevel)
-{
-	PGconn			   *conn;
-	const char		   *my_host = NULL;
-	const char		   *my_port = NULL;
-	const char		   *my_dbname = NULL;
-	const char		   *my_username = NULL;
-	const char		   *my_password = NULL;
-	PQconninfoOption   *options;
-	char			   *message = NULL;
-
-	options = PQconninfoParse(conninfo, &message);
-	if (message != NULL)
-	{
-		elog(elevel, "%s", message);
-		PQfreemem(message);
-		return NULL;
-	}
-	else if (options)
-	{
-		PQconninfoOption *option;
-
-		for (option = options; option->keyword != NULL; option++)
-		{
-			if (!option->val || !option->val[0])
-				continue;
-			if (strcmp(option->keyword, "host") == 0)
-				my_host = option->val;
-			else if (strcmp(option->keyword, "port") == 0)
-				my_port = option->val;
-			else if (strcmp(option->keyword, "dbname") == 0)
-				my_dbname = option->val;
-			else if (strcmp(option->keyword, "user") == 0)
-				my_username = option->val;
-			else if (strcmp(option->keyword, "password") == 0)
-				my_password = option->val;
-			else
-				elog(WARNING, "unsupported connection option: %s = %s",
-					option->keyword, option->val);
-		}
-	}
-
-	conn = do_connect(elevel, my_host, my_port, my_dbname, my_username, my_password, NULL);
-
-	PQconninfoFree(options);
-
-	return conn;
-}
-#endif
 
 void
 pgut_disconnect(PGconn *conn)
 {
 	if (conn)
 	{
+		pgutConn	   *c;
+		pgutConn	  **prev;
+
+		pgut_connections_lock();
+		prev = &pgut_connections;
+		for (c = pgut_connections; c; c = c->next)
+		{
+			if (c->conn == conn)
+			{
+				*prev = c->next;
+				break;
+			}
+			prev = &c->next;
+		}
+		pgut_connections_unlock();
+
 		PQfinish(conn);
-		if (conn == connection)
-			connection = NULL;
 	}
 }
 
-/*
- * the result is also available with the global variable 'connection'.
- */
-PGconn *
-reconnect_elevel(int elevel)
-{
-	disconnect();
-	return connection = pgut_connect(elevel);
-}
-
 void
-reconnect(void)
+pgut_disconnect_all(void)
 {
-	reconnect_elevel(ERROR_PG_CONNECT);
-}
-
-void
-disconnect(void)
-{
-	if (connection)
+	pgut_connections_lock();
+	while (pgut_connections)
 	{
-		PQfinish(connection);
-		connection = NULL;
+		PQfinish(pgut_connections->conn);
+		pgut_connections = pgut_connections->next;
 	}
+	pgut_connections_unlock();
 }
 
 PGresult *
 pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, int elevel)
 {
 	PGresult   *res;
+	pgutConn	   *c;
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -1071,12 +489,21 @@ pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, 
 		return NULL;
 	}
 
-	on_before_exec(conn);
+	/* find connection */
+	pgut_connections_lock();
+	for (c = pgut_connections; c; c = c->next)
+		if (c->conn == conn)
+			break;
+	pgut_connections_unlock();
+
+	if (c)
+		on_before_exec(c);
 	if (nParams == 0)
 		res = PQexec(conn, query);
 	else
 		res = PQexecParams(conn, query, nParams, NULL, params, NULL, NULL, 0);
-	on_after_exec();
+	if (c)
+		on_after_exec(c);
 
 	switch (PQresultStatus(res))
 	{
@@ -1201,30 +628,6 @@ pgut_wait(int num, PGconn *connections[], struct timeval *timeout)
 	return -1;
 }
 
-PGresult *
-execute_elevel(const char *query, int nParams, const char **params, int elevel)
-{
-	return pgut_execute(connection, query, nParams, params, elevel);
-}
-
-/*
- * execute - Execute a SQL and return the result, or exit_or_abort() if failed.
- */
-PGresult *
-execute(const char *query, int nParams, const char **params)
-{
-	return execute_elevel(query, nParams, params, ERROR_PG_COMMAND);
-}
-
-/*
- * command - Execute a SQL and discard the result, or exit_or_abort() if failed.
- */
-void
-command(const char *query, int nParams, const char **params)
-{
-	PQclear(execute(query, nParams, params));
-}
-
 /*
  * CHECK_FOR_INTERRUPTS - Ctrl+C pressed?
  */
@@ -1262,6 +665,9 @@ elog(int elevel, const char *fmt, ...)
 	case WARNING:
 		fputs("WARNING: ", stderr);
 		break;
+	case ALERT:
+		fputs("ALERT: ", stderr);
+		break;
 	case FATAL:
 		fputs("FATAL: ", stderr);
 		break;
@@ -1291,10 +697,10 @@ static CRITICAL_SECTION cancelConnLock;
 /*
  * on_before_exec
  *
- * Set cancel_conn to point to the current database connection.
+ * Set cancel to point to the current database connection.
  */
 static void
-on_before_exec(PGconn *conn)
+on_before_exec(pgutConn *conn)
 {
 	PGcancel   *old;
 
@@ -1306,15 +712,15 @@ on_before_exec(PGconn *conn)
 #endif
 
 	/* Free the old one if we have one */
-	old = cancel_conn;
+	old = conn->cancel;
 
 	/* be sure handle_sigint doesn't use pointer while freeing */
-	cancel_conn = NULL;
+	conn->cancel = NULL;
 
 	if (old != NULL)
 		PQfreeCancel(old);
 
-	cancel_conn = PQgetCancel(conn);
+	conn->cancel = PQgetCancel(conn->conn);
 
 #ifdef WIN32
 	LeaveCriticalSection(&cancelConnLock);
@@ -1327,7 +733,7 @@ on_before_exec(PGconn *conn)
  * Free the current cancel connection, if any, and set to NULL.
  */
 static void
-on_after_exec(void)
+on_after_exec(pgutConn *conn)
 {
 	PGcancel   *old;
 
@@ -1338,10 +744,10 @@ on_after_exec(void)
 	EnterCriticalSection(&cancelConnLock);
 #endif
 
-	old = cancel_conn;
+	old = conn->cancel;
 
 	/* be sure handle_sigint doesn't use pointer while freeing */
-	cancel_conn = NULL;
+	conn->cancel = NULL;
 
 	if (old != NULL)
 		PQfreeCancel(old);
@@ -1357,18 +763,25 @@ on_after_exec(void)
 static void
 on_interrupt(void)
 {
+	pgutConn	   *c;
 	int			save_errno = errno;
-	char		errbuf[256];
 
 	/* Set interruped flag */
 	interrupted = true;
 
+	if (in_cleanup)
+		return;
+
 	/* Send QueryCancel if we are processing a database query */
-	if (!in_cleanup && cancel_conn != NULL &&
-		PQcancel(cancel_conn, errbuf, sizeof(errbuf)))
+	pgut_connections_lock();
+	for (c = pgut_connections; c; c = c->next)
 	{
-		elog(WARNING, "Cancel request sent");
+		char		buf[256];
+
+		if (c->cancel != NULL && PQcancel(c->cancel, buf, sizeof(buf)))
+			elog(WARNING, "Cancel request sent");
 	}
+	pgut_connections_unlock();
 
 	errno = save_errno;			/* just in case the write changed it */
 }
@@ -1432,7 +845,7 @@ on_cleanup(void)
 	in_cleanup = true;
 	interrupted = false;
 	call_atexit_callbacks(false);
-	disconnect();
+	pgut_disconnect_all();
 }
 
 static void
@@ -1449,75 +862,6 @@ exit_or_abort(int exitcode)
 		/* normal exit */
 		exit(exitcode);
 	}
-}
-
-void
-help(bool details)
-{
-	pgut_help(details);
-
-	if (details)
-	{
-		printf("\nConnection options:\n");
-		printf("  -d, --dbname=DBNAME       database to connect\n");
-		printf("  -h, --host=HOSTNAME       database server host or socket directory\n");
-		printf("  -p, --port=PORT           database server port\n");
-		printf("  -U, --username=USERNAME   user name to connect as\n");
-#ifndef PGUT_NO_PROMPT
-		printf("  -w, --no-password         never prompt for password\n");
-		printf("  -W, --password            force password prompt\n");
-#endif
-	}
-
-	printf("\nGeneric options:\n");
-	if (details)
-	{
-		printf("  -q, --quiet               don't write any messages\n");
-		printf("  --debug                   debug mode\n");
-	}
-	printf("  --help                    show this help, then exit\n");
-	printf("  --version                 output version information, then exit\n");
-
-	if (details && (PROGRAM_URL || PROGRAM_EMAIL))
-	{
-		printf("\n");
-		if (PROGRAM_URL)
-			printf("Read the website for details. <%s>\n", PROGRAM_URL);
-		if (PROGRAM_EMAIL)
-			printf("Report bugs to <%s>.\n", PROGRAM_EMAIL);
-	}
-}
-
-/*
- * Returns the current user name.
- */
-static const char *
-get_username(void)
-{
-	const char *ret;
-
-#ifndef WIN32
-	struct passwd *pw;
-
-	pw = getpwuid(geteuid());
-	ret = (pw ? pw->pw_name : NULL);
-#else
-	static char username[128];	/* remains after function exit */
-	DWORD		len = sizeof(username) - 1;
-
-	if (GetUserName(username, &len))
-		ret = username;
-	else
-	{
-		_dosmaperr(GetLastError());
-		ret = NULL;
-	}
-#endif
-
-	if (ret == NULL)
-		elog(ERROR_SYSTEM, "%s: could not get current user name: %s",
-				PROGRAM_NAME, strerror(errno));
-	return ret;
 }
 
 int
@@ -1867,6 +1211,9 @@ select_win32(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, con
 	{
 		int				ret;
 		struct timeval	onesec;
+		fd_set			save_readfds;
+		fd_set			save_writefds;
+		fd_set			save_exceptfds;
 
 		if (remain.tv_sec > 0)
 		{
@@ -1881,17 +1228,36 @@ select_win32(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, con
 			remain.tv_usec = 0;
 		}
 
+		/* save fds */
+		if (readfds)
+			memcpy(&save_readfds, readfds, sizeof(fd_set));
+		if (writefds)
+			memcpy(&save_writefds, writefds, sizeof(fd_set));
+		if (exceptfds)
+			memcpy(&save_exceptfds, exceptfds, sizeof(fd_set));
+
 		ret = select(nfds, readfds, writefds, exceptfds, &onesec);
-		if (ret != 0)
+		if (ret > 0)
+			return ret;	/* succeeded */
+		else if (ret < 0)
 		{
-			/* succeeded or error */
+			/* error */
+			_dosmaperr(WSAGetLastError());
 			return ret;
 		}
 		else if (interrupted)
 		{
 			errno = EINTR;
-			return 0;
+			return -1;
 		}
+
+		/* restore fds */
+		if (readfds)
+			memcpy(readfds, &save_readfds, sizeof(fd_set));
+		if (writefds)
+			memcpy(writefds, &save_writefds, sizeof(fd_set));
+		if (exceptfds)
+			memcpy(exceptfds, &save_exceptfds, sizeof(fd_set));
 	}
 
 	return 0;	/* timeout */

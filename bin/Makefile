@@ -3,7 +3,7 @@
 #
 #    Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
-SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-list.c
+SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
 PROGRAM = pg_bulkload
 SCRIPTS = postgresql

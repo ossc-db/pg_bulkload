@@ -146,7 +146,7 @@ ParseInt64(char *value, int64 minValue)
 	int64	i;
 
 	if (pg_strcasecmp(value, "INFINITE") == 0)
-		return INT64_MAX;
+		return INT64CONST(0x7FFFFFFFFFFFFFFF);
 
 	i = DatumGetInt64(DirectFunctionCall1(int8in, CStringGetDatum(value)));
 	if (i < minValue)

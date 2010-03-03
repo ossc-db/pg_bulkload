@@ -13,12 +13,10 @@
  *	If -r option is specified, performs recovery to cancel inconveniences caused
  *	by errors in the previous loading.
  */
-#include "postgres_fe.h"
-#include <unistd.h>
-#include "pgut/pgut.h"
+#include "pgut/pgut-fe.h"
 #include "pgut/pgut-list.h"
 
-const char *PROGRAM_VERSION	= "3.0alpha2";
+const char *PROGRAM_VERSION	= "3.0alpha3";
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
@@ -27,7 +25,7 @@ const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
  */
 
 /** @brief Database cluster directory. */
-const char *DataDir = NULL;
+char *DataDir = NULL;
 
 /** @Flag do recovery, or bulkload */
 static bool		recovery = false;
@@ -107,6 +105,13 @@ main(int argc, char *argv[])
 	char	cwd[MAXPGPATH];
 	char	control_file[MAXPGPATH] = "";
 	int		i;
+
+	pgut_init(argc, argv);
+	if (argc < 2)
+	{
+		help(false);
+		return HELP;
+	}
 
 	if (getcwd(cwd, MAXPGPATH) == NULL)
 		elog(ERROR_SYSTEM, "cannot read current directory");
@@ -235,7 +240,7 @@ LoaderLoadMain(List *options)
 	ListCell	   *cell;
 
 	initStringInfo(&buf);
-	reconnect();
+	reconnect(ERROR);
 	encoding = PQclientEncoding(connection);
 
 	elog(NOTICE, "BULK LOAD START");
@@ -273,9 +278,9 @@ LoaderLoadMain(List *options)
 	}
 	appendStringInfoString(&buf, "\"}");
 
-	command("BEGIN", 0, NULL);
+	command("BEGIN", 0, NULL, ERROR);
 	params[0] = buf.data;
-	res = execute("SELECT * FROM pg_bulkload($1)", 1, params);
+	res = execute("SELECT * FROM pg_bulkload($1)", 1, params, ERROR);
 	if (PQresultStatus(res) == PGRES_COPY_IN)
 	{
 		PQclear(res);
@@ -283,7 +288,7 @@ LoaderLoadMain(List *options)
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			elog(ERROR, "copy failed: %s", PQerrorMessage(connection));
 	}
-	command("COMMIT", 0, NULL);
+	command("COMMIT", 0, NULL, ERROR);
 
 	elog(NOTICE, "BULK LOAD END\n"
 				 "\t%s Rows skipped.\n"

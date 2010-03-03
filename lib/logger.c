@@ -4,12 +4,11 @@
  *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include "storage/fd.h"
 
 #include "logger.h"
-#include "pg_bulkload.h"
 
 struct Logger
 {

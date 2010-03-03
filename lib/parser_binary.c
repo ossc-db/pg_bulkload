@@ -8,9 +8,7 @@
  * @file
  * @brief Implementation of fixed file processing module
  */
-#include "postgres.h"
-
-#include <unistd.h>
+#include "pg_bulkload.h"
 
 #include "access/heapam.h"
 #include "access/htup.h"
@@ -780,7 +778,7 @@ BinaryParserDumpParams(BinaryParser *self)
 			hex = false;
 			for (j = 0; j < field->nulllen; j++)
 			{
-				if (!isalnum(field->nullif[j]) && !isblank(field->nullif[j]))
+				if (!isalnum(field->nullif[j]) && !isspace(field->nullif[j]))
 				{
 					hex = true;
 					break;

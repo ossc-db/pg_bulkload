@@ -8,7 +8,7 @@ GetSharedMemName(void)
 	DWORD		r;
 	char	   *cp;
 
-	bufsize = GetFullPathName(DataDir, 0, NULL, NULL);
+	bufsize = GetFullPathNameA(DataDir, 0, NULL, NULL);
 	if (bufsize == 0)
 		return NULL;
 
@@ -17,7 +17,7 @@ GetSharedMemName(void)
 		return NULL;
 
 	strcpy(retptr, "Global\\PostgreSQL:");
-	r = GetFullPathName(DataDir, bufsize, retptr + 18, NULL);
+	r = GetFullPathNameA(DataDir, bufsize, retptr + 18, NULL);
 	if (r == 0 || r > bufsize)
 		return NULL;
 
@@ -41,7 +41,7 @@ PGSharedMemoryIsInUse(unsigned long id1, unsigned long id2)
 		return true;	/* if can't stat, be conservative */
 	}
 
-	hmap = OpenFileMapping(FILE_MAP_READ, FALSE, szShareMem);
+	hmap = OpenFileMappingA(FILE_MAP_READ, FALSE, szShareMem);
 
 	free(szShareMem);
 
@@ -119,8 +119,8 @@ pgwin32_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, c
 										 * different from writefds, so
 										 * 2*FD_SETSIZE sockets */
 	SOCKET		sockets[FD_SETSIZE * 2];
-	int			numevents = 0;
-	int			i;
+	unsigned	numevents = 0;
+	unsigned	i;
 	int			r;
 	FD_SET		outreadfds;
 	FD_SET		outwritefds;

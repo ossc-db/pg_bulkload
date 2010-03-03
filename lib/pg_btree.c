@@ -8,7 +8,7 @@
  * @file
  * @brief implementation of B-Tree index processing module
  */
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -18,6 +18,7 @@
 #include "executor/executor.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
+#include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/tqual.h"
@@ -27,7 +28,6 @@
 #endif
 
 #include "logger.h"
-#include "pg_bulkload_win32.h"
 
 static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
 static void unused_bt_spooldestroy(BTSpool *);
@@ -39,16 +39,28 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #define _bt_spool			unused_bt_spool
 #define _bt_leafbuild		unused_bt_leafbuild
 
-#include "nbtsort.c"
+#if PG_VERSION_NUM >= 90100
+#error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 90000
+#include "nbtree/nbtsort-9.0.c"
+#elif PG_VERSION_NUM >= 80400
+#include "nbtree/nbtsort-8.4.c"
+#elif PG_VERSION_NUM >= 80300
+#include "nbtree/nbtsort-8.3.c"
+#elif PG_VERSION_NUM >= 80200
+#include "nbtree/nbtsort-8.2.c"
+#else
+#error unsupported PostgreSQL version
+#endif
 
 #undef _bt_spoolinit
 #undef _bt_spooldestroy
 #undef _bt_spool
 #undef _bt_leafbuild
 
-#include "pg_bulkload.h"
 #include "pg_btree.h"
 #include "pg_profile.h"
+#include "pgut/pgut-be.h"
 
 /**
  * @brief Reader for existing B-Tree index

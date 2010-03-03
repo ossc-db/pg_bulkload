@@ -8,7 +8,7 @@
  * @file
  * @brief Core Modules
  */
-#include "postgres.h"
+#include "pg_bulkload.h"
 
 #include "access/heapam.h"
 #include "commands/tablecmds.h"
@@ -26,14 +26,14 @@
 #include "reader.h"
 #include "writer.h"
 #include "pg_btree.h"
-#include "pg_bulkload.h"
 #include "pg_profile.h"
+#include "pgut/pgut-be.h"
 
 PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(pg_bulkload);
 
-Datum	pg_bulkload(PG_FUNCTION_ARGS);
+Datum	PGUT_EXPORT pg_bulkload(PG_FUNCTION_ARGS);
 
 const char *PROGRAM_VERSION = "3.0alpha2";
 

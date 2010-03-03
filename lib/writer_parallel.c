@@ -18,12 +18,13 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
+#include "pgut/pgut-be.h"
+#include "pgut/pgut-port.h"
+#include "pgut/pgut-ipc.h"
+
 #include "logger.h"
 #include "writer.h"
 #include "pg_strutil.h"
-#include "pgut/pgut-ipc.h"
-
-extern PGDLLIMPORT int	PostPortNumber;
 
 #define DEFAULT_BUFFER_SIZE		(16 * 1024 * 1024)	/* 16MB */
 #define DEFAULT_TIMEOUT_MSEC	100	/* 100ms */
@@ -291,14 +292,11 @@ static PGconn *
 connect_to_localhost(void)
 {
 	PGconn *conn;
-	char	port[32];
 	char	sql[1024];
-
-	snprintf(port, lengthof(port), "%d", PostPortNumber);
 
 	conn = PQsetdbLogin(
 		"localhost",
-		port,
+		GetConfigOption("port", false),
 		NULL, NULL,
 		get_database_name(MyDatabaseId),
 		GetUserNameFromId(GetUserId()),

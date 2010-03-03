@@ -36,17 +36,11 @@ include $(PGXS)
 ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
-pg_btree.o: nbtsort.c
-nbtsort.c:
-	cp nbtree/nbtsort-$(MAJORVERSION).c ./nbtsort.c
 else
 subdir = contrib/pg_bulkload
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
-pg_btree.o: nbtsort.c
-nbtsort.c:
-	cp $(top_srcdir)/src/backend/access/nbtree/nbtsort.c .
 endif
 
 .PHONY: subclean
