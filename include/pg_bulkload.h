@@ -21,8 +21,6 @@
 #include <unistd.h>
 #endif
 
-#include "pgut/pgut-port.h"
-
 /**
  * @file
  * @brief General definition in pg_bulkload.

@@ -22,7 +22,6 @@
 
 #include "pg_loadstatus.h"
 #include "pgut/pgut.h"
-#include "pgut/pgut-port.h"
 
 #include "catalog/pg_control.h"
 #include "catalog/pg_tablespace.h"

@@ -19,7 +19,6 @@
 #include "utils/memutils.h"
 
 #include "pgut/pgut-be.h"
-#include "pgut/pgut-port.h"
 #include "pgut/pgut-ipc.h"
 
 #include "logger.h"
