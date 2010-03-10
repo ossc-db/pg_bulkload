@@ -133,7 +133,7 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 	if (opt == NULL)
 	{
 		fprintf(stderr, "Try \"%s --help\" for more information.\n", PROGRAM_NAME);
-		exit(ERROR_ARGS);
+		exit(EINVAL);
 	}
 
 	if (opt->source > src)
@@ -224,11 +224,15 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 	}
 
 	if (isprint(opt->sname))
-		elog(ERROR_ARGS, "option -%c, --%s should be %s: '%s'",
-			opt->sname, opt->lname, message, optarg);
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("option -%c, --%s should be %s: '%s'",
+				opt->sname, opt->lname, message, optarg)));
 	else
-		elog(ERROR_ARGS, "option --%s should be %s: '%s'",
-			opt->lname, message, optarg);
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("option --%s should be %s: '%s'",
+				opt->lname, message, optarg)));
 }
 
 /*
@@ -245,7 +249,7 @@ pgut_readopt(const char *path, pgut_option options[], int elevel)
 	if (!options)
 		return;
 
-	if ((fp = pgut_fopen(path, "rt", true)) == NULL)
+	if ((fp = pgut_fopen(path, "Rt")) == NULL)
 		return;
 
 	while (fgets(buf, lengthof(buf), fp))
@@ -434,28 +438,34 @@ parse_pair(const char buffer[], char key[], char value[])
  * execute - Execute a SQL and return the result.
  */
 PGresult *
-execute(const char *query, int nParams, const char **params, int elevel)
+execute(const char *query, int nParams, const char **params)
 {
-	return pgut_execute(connection, query, nParams, params, elevel);
+	return pgut_execute(connection, query, nParams, params);
 }
 
 /*
  * command - Execute a SQL and discard the result.
  */
 ExecStatusType
-command(const char *query, int nParams, const char **params, int elevel)
+command(const char *query, int nParams, const char **params)
 {
-	return pgut_command(connection, query, nParams, params, elevel);
+	return pgut_command(connection, query, nParams, params);
+}
+
+static void
+set_elevel(pgut_option *opt, const char *arg)
+{
+	pgut_log_level = parse_elevel(arg);
 }
 
 static pgut_option default_options[] =
 {
-	{ 'b', '!', "debug"		, &debug },
-	{ 's', 'd', "dbname"	, &dbname },
-	{ 's', 'h', "host"		, &host },
-	{ 's', 'p', "port"		, &port },
-	{ 'b', 'q', "quiet"		, &quiet },
-	{ 's', 'U', "username"	, &username },
+	{ 'b', 'e', "echo"			, &pgut_echo },
+	{ 'f', 'E', "elevel"		, set_elevel },
+	{ 's', 'd', "dbname"		, &dbname },
+	{ 's', 'h', "host"			, &host },
+	{ 's', 'p', "port"			, &port },
+	{ 's', 'U', "username"		, &username },
 	{ 'y', 'w', "no-password"	, &prompt_password },
 	{ 'Y', 'W', "password"		, &prompt_password },
 	{ 0 }
@@ -511,8 +521,9 @@ get_username(void)
 #endif
 
 	if (ret == NULL)
-		elog(ERROR_SYSTEM, "%s: could not get current user name: %s",
-				PROGRAM_NAME, strerror(errno));
+		ereport(ERROR,
+			(errcode_errno(),
+			 errmsg("could not get current user name: ")));
 	return ret;
 }
 
@@ -602,12 +613,12 @@ pgut_getopt(int argc, char **argv, pgut_option options[])
 		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
 		{
 			help(true);
-			exit(HELP);
+			exit(1);
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
 			fprintf(stderr, "%s %s\n", PROGRAM_NAME, PROGRAM_VERSION);
-			exit(HELP);
+			exit(1);
 		}
 	}
 
@@ -651,8 +662,8 @@ help(bool details)
 	printf("\nGeneric options:\n");
 	if (details)
 	{
-		printf("  -q, --quiet               don't write any messages\n");
-		printf("  --debug                   debug mode\n");
+		printf("  -e, --echo                echo queries\n");
+		printf("  -E, --elevel              set output message level\n");
 	}
 	printf("  --help                    show this help, then execute\n");
 	printf("  --version                 output version information, then execute\n");

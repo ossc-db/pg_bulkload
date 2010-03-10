@@ -17,10 +17,6 @@
 
 #include "access/tupdesc.h"
 
-#ifndef WIN32
-#include <unistd.h>
-#endif
-
 /**
  * @file
  * @brief General definition in pg_bulkload.
@@ -56,12 +52,11 @@ typedef struct Reader	Reader;
 
 typedef enum ON_DUPLICATE
 {
-	ON_DUPLICATE_ERROR,
-	ON_DUPLICATE_REMOVE_NEW,
-	ON_DUPLICATE_REMOVE_OLD
+	ON_DUPLICATE_KEEP_NEW,
+	ON_DUPLICATE_KEEP_OLD
 } ON_DUPLICATE;
 
-extern const char *ON_DUPLICATE_NAMES[3];
+extern const char *ON_DUPLICATE_NAMES[2];
 
 typedef struct WriterOptions
 {

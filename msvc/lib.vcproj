@@ -147,10 +147,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\lib\pgut\pgut-port.c"
-				>
-			</File>
-			<File
 				RelativePath="..\lib\reader.c"
 				>
 			</File>
@@ -206,10 +202,6 @@
 			</File>
 			<File
 				RelativePath="..\lib\pgut\pgut-ipc.h"
-				>
-			</File>
-			<File
-				RelativePath="..\lib\pgut\pgut-port.h"
 				>
 			</File>
 			<File

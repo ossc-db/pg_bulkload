@@ -9,9 +9,7 @@
 
 #include "postgres.h"
 
-#ifndef WIN32
 #include <unistd.h>
-#endif
 
 #ifdef HAVE_SYS_IPC_H
 #include <sys/ipc.h>
@@ -83,7 +81,7 @@ retry:
 	win32_shmemName(shmemName, lengthof(shmemName), shmemKey);
 
 	handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
-							   offsetof(QueueHeader, data) + size, shmemName);
+								offsetof(QueueHeader, data) + size, shmemName);
 	if (handle == NULL)
 	{
 		if (GetLastError() == ERROR_ALREADY_EXISTS)

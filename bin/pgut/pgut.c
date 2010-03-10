@@ -7,7 +7,6 @@
  *-------------------------------------------------------------------------
  */
 
-#define FRONTEND
 #include "postgres_fe.h"
 #include "libpq/pqsignal.h"
 
@@ -19,14 +18,13 @@
 
 #ifdef PGUT_MULTI_THREADED
 #include "pgut-pthread.h"
-static pthread_mutex_t				pgut_connections_lock;
-#define pgut_connections_init()		pthread_mutex_init(&pgut_connections_lock, NULL)
-#define pgut_connections_lock()		pthread_mutex_lock(&pgut_connections_lock)
-#define pgut_connections_unlock()	pthread_mutex_unlock(&pgut_connections_lock)
+static pthread_key_t		pgut_edata_key;
+static pthread_mutex_t		pgut_conn_mutex;
+#define pgut_conn_lock()	pthread_mutex_lock(&pgut_conn_mutex)
+#define pgut_conn_unlock()	pthread_mutex_unlock(&pgut_conn_mutex)
 #else
-#define pgut_connections_init()		((void) 0)
-#define pgut_connections_lock()		((void) 0)
-#define pgut_connections_unlock()	((void) 0)
+#define pgut_conn_lock()	((void) 0)
+#define pgut_conn_unlock()	((void) 0)
 #endif
 
 /* old gcc doesn't have LLONG_MAX. */
@@ -40,12 +38,14 @@ static pthread_mutex_t				pgut_connections_lock;
 
 const char *PROGRAM_NAME = NULL;
 
-bool			debug = false;
-bool			quiet = false;
-
 /* Interrupted by SIGINT (Ctrl+C) ? */
-bool			interrupted = false;
-static bool		in_cleanup = false;
+bool		interrupted = false;
+static bool	in_cleanup = false;
+
+/* log min messages */
+int			pgut_log_level = INFO;
+int			pgut_abort_level = ERROR;
+bool		pgut_echo = false;
 
 /* Database connections */
 typedef struct pgutConn	pgutConn;
@@ -74,10 +74,29 @@ pgut_init(int argc, char **argv)
 		PROGRAM_NAME = get_progname(argv[0]);
 		set_pglocale_pgservice(argv[0], "pgscripts");
 
-		pgut_connections_init();
+#ifdef PGUT_MULTI_THREADED
+		pthread_key_create(&pgut_edata_key, NULL);
+		pthread_mutex_init(&pgut_conn_mutex, NULL);
+#endif
+
+#if PG_VERSION_NUM >= 90000
+		/* application_name for 9.0 or newer versions */
+		if (getenv("PGAPPNAME") == NULL)
+			pgut_putenv("PGAPPNAME", PROGRAM_NAME);
+#endif
+
 		init_cancel_handler();
 		atexit(on_cleanup);
 	}
+}
+
+void
+pgut_putenv(const char *key, const char *value)
+{
+	char	buf[1024];
+
+	snprintf(buf, lengthof(buf), "%s=%s", key, value);
+	putenv(pgut_strdup(buf));	/* putenv requires malloc'ed buffer */
 }
 
 /*
@@ -403,10 +422,10 @@ pgut_connect(const char *info, YesNo prompt, int elevel)
 			c->conn = conn;
 			c->cancel = NULL;
 
-			pgut_connections_lock();
+			pgut_conn_lock();
 			c->next = pgut_connections;
 			pgut_connections = c;
-			pgut_connections_unlock();
+			pgut_conn_unlock();
 
 			return conn;
 		}
@@ -418,8 +437,10 @@ pgut_connect(const char *info, YesNo prompt, int elevel)
 			passwd = prompt_for_password();
 			continue;
 		}
-		elog(elevel, "could not connect to database with %s: %s",
-			 info, PQerrorMessage(conn));
+		ereport(elevel,
+			(errcode(E_PG_CONNECT),
+			 errmsg("could not connect to database with \"%s\": %s",
+				info, PQerrorMessage(conn))));
 		PQfinish(conn);
 		return NULL;
 	}
@@ -433,7 +454,7 @@ pgut_disconnect(PGconn *conn)
 		pgutConn	   *c;
 		pgutConn	  **prev;
 
-		pgut_connections_lock();
+		pgut_conn_lock();
 		prev = &pgut_connections;
 		for (c = pgut_connections; c; c = c->next)
 		{
@@ -444,7 +465,7 @@ pgut_disconnect(PGconn *conn)
 			}
 			prev = &c->next;
 		}
-		pgut_connections_unlock();
+		pgut_conn_unlock();
 
 		PQfinish(conn);
 	}
@@ -453,48 +474,54 @@ pgut_disconnect(PGconn *conn)
 void
 pgut_disconnect_all(void)
 {
-	pgut_connections_lock();
+	pgut_conn_lock();
 	while (pgut_connections)
 	{
 		PQfinish(pgut_connections->conn);
 		pgut_connections = pgut_connections->next;
 	}
-	pgut_connections_unlock();
+	pgut_conn_unlock();
+}
+
+static void
+echo_query(const char *query, int nParams, const char **params)
+{
+	int		i;
+
+	if (strchr(query, '\n'))
+		elog(LOG, "(query)\n%s", query);
+	else
+		elog(LOG, "(query) %s", query);
+	for (i = 0; i < nParams; i++)
+		elog(LOG, "\t(param:%d) = %s", i, params[i] ? params[i] : "(null)");
 }
 
 PGresult *
-pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, int elevel)
+pgut_execute(PGconn* conn, const char *query, int nParams, const char **params)
 {
 	PGresult   *res;
-	pgutConn	   *c;
+	pgutConn   *c;
 
 	CHECK_FOR_INTERRUPTS();
 
 	/* write query to elog if debug */
-	if (debug)
-	{
-		int		i;
-
-		if (strchr(query, '\n'))
-			elog(LOG, "(query)\n%s", query);
-		else
-			elog(LOG, "(query) %s", query);
-		for (i = 0; i < nParams; i++)
-			elog(LOG, "\t(param:%d) = %s", i, params[i] ? params[i] : "(null)");
-	}
+	if (pgut_echo)
+		echo_query(query, nParams, params);
 
 	if (conn == NULL)
 	{
-		elog(elevel, "not connected");
+		ereport(ERROR,
+			(errcode(E_PG_COMMAND),
+			 errmsg("not connected")));
 		return NULL;
 	}
 
 	/* find connection */
-	pgut_connections_lock();
+	pgut_conn_lock();
 	for (c = pgut_connections; c; c = c->next)
 		if (c->conn == conn)
 			break;
-	pgut_connections_unlock();
+	pgut_conn_unlock();
 
 	if (c)
 		on_before_exec(c);
@@ -512,8 +539,10 @@ pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, 
 		case PGRES_COPY_IN:
 			break;
 		default:
-			elog(elevel, "query failed: %squery was: %s",
-				PQerrorMessage(conn), query);
+			ereport(ERROR,
+				(errcode(E_PG_COMMAND),
+				 errmsg("query failed: %s", PQerrorMessage(conn)),
+				 errdetail("query was: %s", query)));
 			break;
 	}
 
@@ -521,41 +550,52 @@ pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, 
 }
 
 ExecStatusType
-pgut_command(PGconn* conn, const char *query, int nParams, const char **params, int elevel)
+pgut_command(PGconn* conn, const char *query, int nParams, const char **params)
 {
 	PGresult	   *res;
 	ExecStatusType	code;
 	
-	res = pgut_execute(conn, query, nParams, params, elevel);
+	res = pgut_execute(conn, query, nParams, params);
 	code = PQresultStatus(res);
 	PQclear(res);
 
 	return code;
 }
 
+/* commit if needed */
 bool
-pgut_send(PGconn* conn, const char *query, int nParams, const char **params, int elevel)
+pgut_commit(PGconn *conn)
+{
+	if (conn && PQtransactionStatus(conn) != PQTRANS_IDLE)
+		return pgut_command(conn, "COMMIT", 0, NULL) == PGRES_COMMAND_OK;
+
+	return true;	/* nothing to do */
+}
+
+/* rollback if needed */
+void
+pgut_rollback(PGconn *conn)
+{
+	if (conn && PQtransactionStatus(conn) != PQTRANS_IDLE)
+		pgut_command(conn, "ROLLBACK", 0, NULL);
+}
+
+bool
+pgut_send(PGconn* conn, const char *query, int nParams, const char **params)
 {
 	int			res;
 
 	CHECK_FOR_INTERRUPTS();
 
 	/* write query to elog if debug */
-	if (debug)
-	{
-		int		i;
-
-		if (strchr(query, '\n'))
-			elog(LOG, "(query)\n%s", query);
-		else
-			elog(LOG, "(query) %s", query);
-		for (i = 0; i < nParams; i++)
-			elog(LOG, "\t(param:%d) = %s", i, params[i] ? params[i] : "(null)");
-	}
+	if (pgut_echo)
+		echo_query(query, nParams, params);
 
 	if (conn == NULL)
 	{
-		elog(elevel, "not connected");
+		ereport(ERROR,
+			(errcode(E_PG_COMMAND),
+			 errmsg("not connected")));
 		return false;
 	}
 
@@ -566,8 +606,10 @@ pgut_send(PGconn* conn, const char *query, int nParams, const char **params, int
 
 	if (res != 1)
 	{
-		elog(elevel, "query failed: %squery was: %s",
-			PQerrorMessage(conn), query);
+		ereport(ERROR,
+			(errcode(E_PG_COMMAND),
+			 errmsg("query failed: %s", PQerrorMessage(conn)),
+			 errdetail("query was: %s", query)));
 		return false;
 	}
 
@@ -635,59 +677,284 @@ void
 CHECK_FOR_INTERRUPTS(void)
 {
 	if (interrupted && !in_cleanup)
-		elog(ERROR_INTERRUPTED, "interrupted");
+		ereport(FATAL, (errcode(EINTR), errmsg("interrupted")));
 }
 
 /*
- * elog - log to stderr and exit if ERROR or FATAL
+ * elog staffs
  */
+typedef struct pgutErrorData
+{
+	int				elevel;
+	int				save_errno;
+	int				code;
+	StringInfoData	msg;
+	StringInfoData	detail;
+} pgutErrorData;
+
+/* TODO: support recursive error */
+static pgutErrorData *
+getErrorData(void)
+{
+#ifdef PGUT_MULTI_THREADED
+	pgutErrorData *edata = pthread_getspecific(pgut_edata_key);
+
+	if (edata == NULL)
+	{
+		edata = pgut_new(pgutErrorData);
+		memset(edata, 0, sizeof(pgutErrorData));
+		pthread_setspecific(pgut_edata_key, edata);
+	}
+
+	return edata;
+#else
+	static pgutErrorData	edata;
+
+	return &edata;
+#endif
+}
+
+/* FIXME: support recursive call */
+static pgutErrorData *
+pgut_errinit(int elevel)
+{
+	int				save_errno = errno;
+	pgutErrorData  *edata = getErrorData();
+
+	edata->elevel = elevel;
+	edata->save_errno = save_errno;
+
+	/* reset msg */
+	if (edata->msg.data)
+		resetStringInfo(&edata->msg);
+	else
+		initStringInfo(&edata->msg);
+
+	/* reset detail */
+	if (edata->detail.data)
+		resetStringInfo(&edata->detail);
+	else
+		initStringInfo(&edata->detail);
+
+	return edata;
+}
+
+/* remove white spaces and line breaks from the end of buffer */
+static void
+trimStringBuffer(StringInfo str)
+{
+	while (str->len > 0 && IsSpace(str->data[str->len - 1]))
+		str->data[--str->len] = '\0';
+}
+
 void
 elog(int elevel, const char *fmt, ...)
 {
-	va_list		args;
+	va_list			args;
+	bool			ok;
+	size_t			len;
+	pgutErrorData  *edata;
 
-	if (!debug && elevel <= LOG)
-		return;
-	if (quiet && elevel < WARNING)
+	if (elevel < pgut_abort_level && !log_required(elevel, pgut_log_level))
 		return;
 
+	edata = pgut_errinit(elevel);
+
+	do
+	{
+		va_start(args, fmt);
+		ok = appendStringInfoVA(&edata->msg, fmt, args);
+		va_end(args);
+	} while (!ok);
+	len = strlen(fmt);
+	if (len > 2 && strcmp(fmt + len - 2, ": ") == 0)
+		appendStringInfoString(&edata->msg, strerror(edata->save_errno));
+	trimStringBuffer(&edata->msg);
+
+	pgut_errfinish(true);
+}
+
+bool
+pgut_errstart(int elevel)
+{
+	if (elevel < pgut_abort_level && !log_required(elevel, pgut_log_level))
+		return false;
+
+	pgut_errinit(elevel);
+	return true;
+}
+
+void
+pgut_errfinish(int dummy, ...)
+{
+	pgutErrorData  *edata = getErrorData();
+
+	if (log_required(edata->elevel, pgut_log_level))
+		pgut_error(edata->elevel, edata->code,
+			edata->msg.data ? edata->msg.data : "unknown",
+			edata->detail.data);
+
+	if (pgut_abort_level <= edata->elevel && edata->elevel <= PANIC)
+		exit_or_abort(edata->code);
+}
+
+#ifndef PGUT_OVERRIDE_ELOG
+void
+pgut_error(int elevel, int code, const char *msg, const char *detail)
+{
+	const char *tag = format_elevel(elevel);
+
+	if (detail && detail[0])
+		fprintf(stderr, "%s: %s\nDETAIL: %s\n", tag, msg, detail);
+	else
+		fprintf(stderr, "%s: %s\n", tag, msg);
+	fflush(stderr);
+}
+#endif
+
+/*
+ * log_required -- is elevel logically >= log_min_level?
+ *
+ * physical order:
+ *   DEBUG < LOG < INFO < NOTICE < WARNING < ERROR < FATAL < PANIC
+ * log_min_messages order:
+ *   DEBUG < INFO < NOTICE < WARNING < ERROR < LOG < FATAL < PANIC
+ */
+bool
+log_required(int elevel, int log_min_level)
+{
+	if (elevel == LOG || elevel == COMMERROR)
+	{
+		if (log_min_level == LOG || log_min_level <= ERROR)
+			return true;
+	}
+	else if (log_min_level == LOG)
+	{
+		/* elevel != LOG */
+		if (elevel >= FATAL)
+			return true;
+	}
+	/* Neither is LOG */
+	else if (elevel >= log_min_level)
+		return true;
+
+	return false;
+}
+
+const char *
+format_elevel(int elevel)
+{
 	switch (elevel)
 	{
+	case DEBUG5:
+	case DEBUG4:
+	case DEBUG3:
+	case DEBUG2:
+	case DEBUG1:
+		return "DEBUG";
 	case LOG:
-		fputs("LOG: ", stderr);
-		break;
+		return "LOG";
 	case INFO:
-		fputs("INFO: ", stderr);
-		break;
+		return "INFO";
 	case NOTICE:
-		fputs("NOTICE: ", stderr);
-		break;
+		return "NOTICE";
 	case WARNING:
-		fputs("WARNING: ", stderr);
-		break;
-	case ALERT:
-		fputs("ALERT: ", stderr);
-		break;
+		return "WARNING";
+	case COMMERROR:
+	case ERROR:
+		return "ERROR";
 	case FATAL:
-		fputs("FATAL: ", stderr);
-		break;
+		return "FATAL";
 	case PANIC:
-		fputs("PANIC: ", stderr);
-		break;
+		return "PANIC";
 	default:
-		if (elevel >= ERROR)
-			fputs("ERROR: ", stderr);
-		break;
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("invalid elevel: %d", elevel)));
+		return "";		/* unknown value; just return an empty string */
 	}
+}
 
-	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
-	fputc('\n', stderr);
-	fflush(stderr);
-	va_end(args);
+int
+parse_elevel(const char *value)
+{
+	if (pg_strcasecmp(value, "DEBUG") == 0)
+		return DEBUG2;
+	else if (pg_strcasecmp(value, "INFO") == 0)
+		return INFO;
+	else if (pg_strcasecmp(value, "NOTICE") == 0)
+		return NOTICE;
+	else if (pg_strcasecmp(value, "LOG") == 0)
+		return LOG;
+	else if (pg_strcasecmp(value, "WARNING") == 0)
+		return WARNING;
+	else if (pg_strcasecmp(value, "ERROR") == 0)
+		return ERROR;
+	else if (pg_strcasecmp(value, "FATAL") == 0)
+		return FATAL;
+	else if (pg_strcasecmp(value, "PANIC") == 0)
+		return PANIC;
 
-	if (elevel > 0)
-		exit_or_abort(elevel);
+	ereport(ERROR,
+		(errcode(EINVAL),
+		 errmsg("invalid elevel: %s", value)));
+	return ERROR;		/* unknown value; just return ERROR */
+}
+
+int
+errcode(int sqlerrcode)
+{
+	pgutErrorData  *edata = getErrorData();
+	edata->code = sqlerrcode;
+	return 0;
+}
+
+int
+errcode_errno(void)
+{
+	pgutErrorData  *edata = getErrorData();
+	edata->code = edata->save_errno;
+	return 0;
+}
+
+int
+errmsg(const char *fmt,...)
+{
+	pgutErrorData  *edata = getErrorData();
+	va_list			args;
+	size_t			len;
+	bool			ok;
+
+	do
+	{
+		va_start(args, fmt);
+		ok = appendStringInfoVA(&edata->msg, fmt, args);
+		va_end(args);
+	} while (!ok);
+	len = strlen(fmt);
+	if (len > 2 && strcmp(fmt + len - 2, ": ") == 0)
+		appendStringInfoString(&edata->msg, strerror(edata->save_errno));
+	trimStringBuffer(&edata->msg);
+
+	return 0;	/* return value does not matter */
+}
+
+int
+errdetail(const char *fmt,...)
+{
+	pgutErrorData  *edata = getErrorData();
+	va_list			args;
+	bool			ok;
+
+	do
+	{
+		va_start(args, fmt);
+		ok = appendStringInfoVA(&edata->detail, fmt, args);
+		va_end(args);
+	} while (!ok);
+	trimStringBuffer(&edata->detail);
+
+	return 0;	/* return value does not matter */
 }
 
 #ifdef WIN32
@@ -763,7 +1030,7 @@ on_after_exec(pgutConn *conn)
 static void
 on_interrupt(void)
 {
-	pgutConn	   *c;
+	pgutConn   *c;
 	int			save_errno = errno;
 
 	/* Set interruped flag */
@@ -773,7 +1040,7 @@ on_interrupt(void)
 		return;
 
 	/* Send QueryCancel if we are processing a database query */
-	pgut_connections_lock();
+	pgut_conn_lock();
 	for (c = pgut_connections; c; c = c->next)
 	{
 		char		buf[256];
@@ -781,7 +1048,7 @@ on_interrupt(void)
 		if (c->cancel != NULL && PQcancel(c->cancel, buf, sizeof(buf)))
 			elog(WARNING, "Cancel request sent");
 	}
-	pgut_connections_unlock();
+	pgut_conn_unlock();
 
 	errno = save_errno;			/* just in case the write changed it */
 }
@@ -864,6 +1131,32 @@ exit_or_abort(int exitcode)
 	}
 }
 
+/*
+ * unlike the server code, this function automatically extend the buffer.
+ */
+bool
+appendStringInfoVA(StringInfo str, const char *fmt, va_list args)
+{
+	size_t		avail;
+	int			nprinted;
+
+	Assert(str != NULL);
+	Assert(str->maxlen > 0);
+
+	avail = str->maxlen - str->len - 1;
+	nprinted = vsnprintf(str->data + str->len, avail, fmt, args);
+
+	if (nprinted >= 0 && nprinted < (int) avail - 1)
+	{
+		str->len += nprinted;
+		return true;
+	}
+
+	/* Double the buffer size and try again. */
+	enlargePQExpBuffer(str, str->maxlen);
+	return false;
+}
+
 int
 appendStringInfoFile(StringInfo str, FILE *fp)
 {
@@ -924,8 +1217,10 @@ pgut_malloc(size_t size)
 	char *ret;
 
 	if ((ret = malloc(size)) == NULL)
-		elog(ERROR_NOMEM, "could not allocate memory (%lu bytes): %s",
-			(unsigned long) size, strerror(errno));
+		ereport(FATAL,
+			(errcode_errno(),
+			 errmsg("could not allocate memory (%lu bytes): ",
+				(unsigned long) size)));
 	return ret;
 }
 
@@ -935,8 +1230,10 @@ pgut_realloc(void *p, size_t size)
 	char *ret;
 
 	if ((ret = realloc(p, size)) == NULL)
-		elog(ERROR_NOMEM, "could not re-allocate memory (%lu bytes): %s",
-			(unsigned long) size, strerror(errno));
+		ereport(FATAL,
+			(errcode_errno(),
+			 errmsg("could not re-allocate memory (%lu bytes): ",
+				(unsigned long) size)));
 	return ret;
 }
 
@@ -949,8 +1246,9 @@ pgut_strdup(const char *str)
 		return NULL;
 
 	if ((ret = strdup(str)) == NULL)
-		elog(ERROR_NOMEM, "could not duplicate string \"%s\": %s",
-			str, strerror(errno));
+		ereport(FATAL,
+			(errcode_errno(),
+			 errmsg("could not duplicate string \"%s\": ", str)));
 	return ret;
 }
 
@@ -984,11 +1282,24 @@ strdup_trim(const char *str)
 	return strdup_with_len(str, len);
 }
 
-/* Try open file. Also create parent directries if open for writes. */
+/*
+ * Try open file. Also create parent directries if open for writes.
+ *
+ * mode can contain 'R', that is same as 'r' but missing ok.
+ */
 FILE *
-pgut_fopen(const char *path, const char *mode, bool missing_ok)
+pgut_fopen(const char *path, const char *omode)
 {
-	FILE *fp;
+	FILE   *fp;
+	bool	missing_ok = false;
+	char	mode[16];
+
+	strlcpy(mode, omode, lengthof(mode));
+	if (mode[0] == 'R')
+	{
+		mode[0] = 'r';
+		missing_ok = true;
+	}
 
 retry:
 	if ((fp = fopen(path, mode)) == NULL)
@@ -1008,8 +1319,9 @@ retry:
 			}
 		}
 
-		elog(ERROR_SYSTEM, "could not open file \"%s\": %s",
-			path, strerror(errno));
+		ereport(ERROR,
+			(errcode_errno(),
+			 errmsg("could not open file \"%s\": ", path)));
 	}
 
 	return fp;
@@ -1019,7 +1331,7 @@ retry:
  * this tries to build all the elements of a path to a directory a la mkdir -p
  * we assume the path is in canonical form, i.e. uses / as the separator.
  */
-void
+bool
 pgut_mkdir(const char *dirpath)
 {
 	struct stat sb;
@@ -1043,7 +1355,13 @@ pgut_mkdir(const char *dirpath)
 			/* network drive */
 			p = strstr(p + 2, "/");
 			if (p == NULL)
-				elog(ERROR_ARGS, "invalid path \"%s\"", dirpath);
+			{
+				free(path);
+				ereport(ERROR,
+					(errcode(EINVAL),
+					 errmsg("invalid path \"%s\"", dirpath)));
+				return false;
+			}
 		}
 		else if (p[1] == ':' &&
 				 ((p[0] >= 'a' && p[0] <= 'z') ||
@@ -1093,12 +1411,17 @@ retry:
 		if (!last)
 			*p = '/';
 	}
-
-	if (retval != 0)
-		elog(ERROR_SYSTEM, "could not create directory \"%s\": %s",
-					 dirpath, strerror(errno));
-
 	free(path);
+
+	if (retval == 0)
+	{
+		ereport(ERROR,
+			(errcode_errno(),
+			 errmsg("could not create directory \"%s\": ", dirpath)));
+		return false;
+	}
+
+	return true;
 }
 
 #ifdef WIN32
@@ -1128,7 +1451,12 @@ wait_for_sockets(int nfds, fd_set *fds, struct timeval *timeout)
 		{
 			CHECK_FOR_INTERRUPTS();
 			if (errno != EINTR)
-				elog(ERROR_SYSTEM, "select failed: %s", strerror(errno));
+			{
+				ereport(ERROR,
+					(errcode_errno(),
+					 errmsg("select failed: ")));
+				return -1;
+			}
 		}
 		else
 			return i;

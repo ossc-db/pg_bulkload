@@ -111,7 +111,7 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 			"'INFILE=' || $1,"
 			"'TABLE=' || $2,"
 			"'TRUNCATE=' || $3,"
-			"'ON_DUPLICATE=' || $4,"
+			"'ON_DUPLICATE_KEEP=' || $4,"
 			"'DUPLICATE_ERRORS=' || $5,"
 			"'DUPLICATE_BADFILE=' || $6,"
 			"'LOGFILE=' || $7])",

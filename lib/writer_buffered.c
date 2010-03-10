@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "writer.h"
 #include "pg_btree.h"
+#include "pgut/pgut-be.h"
 
 typedef struct BufferedWriter
 {

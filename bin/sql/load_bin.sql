@@ -34,7 +34,7 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 UPDATE customer SET c_data = 'OLD1';
-\! pg_bulkload -d contrib_regression data/bin2.ctl -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES"
+\! pg_bulkload -d contrib_regression data/bin2.ctl -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES"
 \! awk -f data/adjust.awk results/bin3.log
 
 SET enable_seqscan = on;
@@ -48,7 +48,7 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 UPDATE customer SET c_data = 'OLD2';
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin3.dup -o "ON_DUPLICATE=REMOVE_OLD" -l results/bin4.log -P results/bin4.prs -u results/bin4.dup
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin3.dup -o "DUPLICATE_ERRORS=50" -l results/bin4.log -P results/bin4.prs -u results/bin4.dup
 \! awk -f data/adjust.awk results/bin4.log
 
 SET enable_seqscan = on;
@@ -62,7 +62,7 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 UPDATE customer SET c_data = 'OLD3';
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin4.dup -o "ON_DUPLICATE=REMOVE_NEW" -l results/bin5.log -P results/bin5.prs -u results/bin5.dup
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin4.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -l results/bin5.log -P results/bin5.prs -u results/bin5.dup
 \! awk -f data/adjust.awk results/bin5.log
 
 SET enable_seqscan = on;
@@ -76,10 +76,10 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 -- do not error skip an error after of toast_insert_or_update.
-\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "DUPLICATE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
 \! awk -f data/adjust.awk results/bin6.log
 
-\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "DUPLICATE_ERRORS=50" -o "PARSE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
 \! awk -f data/adjust.awk results/bin7.log
 
 SET enable_seqscan = on;

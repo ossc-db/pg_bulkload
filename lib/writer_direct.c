@@ -7,6 +7,7 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "access/heapam.h"
 #include "access/transam.h"
@@ -23,6 +24,7 @@
 #include "writer.h"
 #include "pg_btree.h"
 #include "pg_profile.h"
+#include "pgut/pgut-be.h"
 
 #if PG_VERSION_NUM < 80300
 

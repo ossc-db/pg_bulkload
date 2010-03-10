@@ -20,6 +20,7 @@
 
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
+#include "utils/elog.h"
 
 #define INFINITE_STR		"INFINITE"
 
@@ -43,13 +44,15 @@ extern const char  *PROGRAM_EMAIL;
 /*
  * pgut framework variables and functions
  */
-extern bool			debug;
-extern bool			quiet;
-extern bool			interrupted;
+extern bool		interrupted;
+extern int		pgut_log_level;
+extern int		pgut_abort_level;
+extern bool		pgut_echo;	
 
 extern void pgut_init(int argc, char **argv);
 extern void pgut_atexit_push(pgut_atexit_callback callback, void *userdata);
 extern void pgut_atexit_pop(pgut_atexit_callback callback, void *userdata);
+extern void pgut_putenv(const char *key, const char *value);
 
 /*
  * Database connections
@@ -57,9 +60,11 @@ extern void pgut_atexit_pop(pgut_atexit_callback callback, void *userdata);
 extern PGconn *pgut_connect(const char *info, YesNo prompt, int elevel);
 extern void pgut_disconnect(PGconn *conn);
 extern void pgut_disconnect_all(void);
-extern PGresult *pgut_execute(PGconn* conn, const char *query, int nParams, const char **params, int elevel);
-extern ExecStatusType pgut_command(PGconn* conn, const char *query, int nParams, const char **params, int elevel);
-extern bool pgut_send(PGconn* conn, const char *query, int nParams, const char **params, int elevel);
+extern PGresult *pgut_execute(PGconn* conn, const char *query, int nParams, const char **params);
+extern ExecStatusType pgut_command(PGconn* conn, const char *query, int nParams, const char **params);
+extern bool pgut_commit(PGconn *conn);
+extern void pgut_rollback(PGconn *conn);
+extern bool pgut_send(PGconn* conn, const char *query, int nParams, const char **params);
 extern int pgut_wait(int num, PGconn *connections[], struct timeval *timeout);
 
 /*
@@ -78,34 +83,33 @@ extern char *strdup_trim(const char *str);
 /*
  * file operations
  */
-extern FILE *pgut_fopen(const char *path, const char *mode, bool missing_ok);
-extern void pgut_mkdir(const char *path);
+extern FILE *pgut_fopen(const char *path, const char *mode);
+extern bool pgut_mkdir(const char *path);
 
 /*
  * elog
  */
-#define LOG			(-5)
-#define INFO		(-4)
-#define NOTICE		(-3)
-#define WARNING		(-2)
-#define ALERT		(-1)
-#define HELP		1
-#define ERROR		2
-#define FATAL		3
-#define PANIC		4
-
-#define ERROR_SYSTEM			10	/* I/O or system error */
-#define ERROR_NOMEM				11	/* memory exhausted */
-#define ERROR_ARGS				12	/* some configurations are invalid */
-#define ERROR_INTERRUPTED		13	/* interrupted by signal */
-#define ERROR_PG_COMMAND		14	/* PostgreSQL query or command error */
-#define ERROR_PG_CONNECT		15	/* PostgreSQL connection error */
+#define E_PG_CONNECT	(-1)	/* PostgreSQL connection error */
+#define E_PG_COMMAND	(-2)	/* PostgreSQL query or command error */
 
 #undef elog
-extern void
-elog(int elevel, const char *fmt, ...)
-__attribute__((format(printf, 2, 3)));
+#undef ereport
+#define ereport(elevel, rest) \
+	(pgut_errstart(elevel) ? (pgut_errfinish rest) : (void) 0)
 
+extern void elog(int elevel, const char *fmt, ...)
+__attribute__((format(printf, 2, 3)));
+extern const char *format_elevel(int elevel);
+extern int parse_elevel(const char *value);
+extern int errcode_errno(void);
+extern bool log_required(int elevel, int log_min_level);
+extern bool pgut_errstart(int elevel);
+extern void pgut_errfinish(int dummy, ...);
+extern void pgut_error(int elevel, int code, const char *msg, const char *detail);
+
+/*
+ * CHECK_FOR_INTERRUPTS
+ */
 #undef CHECK_FOR_INTERRUPTS
 extern void CHECK_FOR_INTERRUPTS(void);
 
@@ -145,6 +149,7 @@ extern void CHECK_FOR_INTERRUPTS(void);
 #define appendStringInfoChar	appendPQExpBufferChar
 #define appendBinaryStringInfo	appendBinaryPQExpBuffer
 
+extern bool appendStringInfoVA(StringInfo str, const char *fmt, va_list args);
 extern int appendStringInfoFile(StringInfo str, FILE *fp);
 extern int appendStringInfoFd(StringInfo str, int fd);
 

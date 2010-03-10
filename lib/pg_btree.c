@@ -128,7 +128,7 @@ SpoolerOpen(Spooler *self,
 	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
 
 	self->spools = IndexSpoolBegin(self->relinfo,
-								   options->on_duplicate == ON_DUPLICATE_ERROR);
+								   options->max_dup_errors == 0);
 }
 
 void
@@ -374,7 +374,7 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 		merge ? "with" : "without",
 		wstate.btws_use_wal ? "with" : "without");
 
-	if (merge || (btspool->isunique && self->on_duplicate != ON_DUPLICATE_ERROR))
+	if (merge || (btspool->isunique && self->max_dup_errors > 0))
 	{
 		/* Assign a new file node and merge two streams into it. */
 		RelationSetNewRelfilenode(wstate.index, RecentXmin);
@@ -494,29 +494,29 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 			/* The tuple pointed by the old index should not be visible. */
 			if (heap_is_visible(heapRel, &itup2->t_tid))
 			{
-				switch (on_duplicate)
+				if (self->dup_old + self->dup_new >= self->max_dup_errors)
 				{
-					case ON_DUPLICATE_REMOVE_NEW:
-						self->dup_new++;
-						remove_duplicate(self, heapRel, itup,
-							RelationGetRelationName(wstate->index));
-						itup = BTSpoolGetNextItem(btspool, itup, &should_free);
-						continue;
-					case ON_DUPLICATE_REMOVE_OLD:
-						self->dup_old++;
-						remove_duplicate(self, heapRel, itup2,
-							RelationGetRelationName(wstate->index));
-						itup2 = BTReaderGetNextItem(btspool2);
-						continue;
-					default:
-						report_unique_violation(wstate->index, itup);
-						break;
-				}
-
-				if (self->dup_old + self->dup_new > self->max_dup_errors)
-					ereport(ERROR,
+					ereport(WARNING,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("Maximum duplicate error count exceeded")));
+					report_unique_violation(wstate->index, itup);
+				}
+
+				if (on_duplicate == ON_DUPLICATE_KEEP_NEW)
+				{
+					self->dup_old++;
+					remove_duplicate(self, heapRel, itup2,
+						RelationGetRelationName(wstate->index));
+					itup2 = BTReaderGetNextItem(btspool2);
+				}
+				else
+				{
+					self->dup_new++;
+					remove_duplicate(self, heapRel, itup,
+						RelationGetRelationName(wstate->index));
+					itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+				}
+				continue;
 			}
 			else
 			{

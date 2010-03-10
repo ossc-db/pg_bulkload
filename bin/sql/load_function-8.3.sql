@@ -31,7 +31,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1( - - - 3, -+- 5,'''B')" -l results/function2.log -P results/function2.prs -u results/function2.dup -o "ON_DUPLICATE=REMOVE_NEW"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1( - - - 3, -+- 5,'''B')" -l results/function2.log -P results/function2.prs -u results/function2.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function2.log
 
 SET enable_seqscan = on;
@@ -44,7 +44,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function3.log -P results/function3.prs -u results/function3.dup -o "ON_DUPLICATE=REMOVE_OLD" -o "PARSE_ERRORS=3"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function3.log -P results/function3.prs -u results/function3.dup -o "DUPLICATE_ERRORS=50" -o "PARSE_ERRORS=3"
 \! awk -f data/adjust.awk results/function3.log
 
 SET enable_seqscan = on;
@@ -57,10 +57,10 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function4.log -P results/function4.prs -u results/function4.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function4.log -P results/function4.prs -u results/function4.dup -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function4.log
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function5.log -P results/function5.prs -u results/function5.dup -o "ON_DUPLICATE=REMOVE_OLD" -o "NULL=NULL"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function5.log -P results/function5.prs -u results/function5.dup -o "DUPLICATE_ERRORS=50" -o "NULL=NULL"
 \! awk -f data/adjust.awk results/function5.log
 
 SET enable_seqscan = on;
@@ -74,7 +74,7 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 ALTER TABLE customer ALTER c_data DROP NOT NULL;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function6.log -P results/function6.prs -u results/function6.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function6.log -P results/function6.prs -u results/function6.dup -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function6.log
 
 SET enable_seqscan = on;
@@ -87,7 +87,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -o "SKIP=1" -l results/function10.log -P results/function10.prs -u results/function10.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -o "SKIP=1" -l results/function10.log -P results/function10.prs -u results/function10.dup -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function10.log
 
 SET enable_seqscan = on;
@@ -101,21 +101,21 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 2147483647, 'LOAD=1')" -l results/function11.log -P results/function11.prs -u results/function11.dup -o "ON_DUPLICATE=REMOVE_OLD" -o LOAD=1
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 2147483647, 'LOAD=1')" -l results/function11.log -P results/function11.prs -u results/function11.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1
 \set LOAD1 `awk -f data/gettime.awk results/function11.log`
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "ON_DUPLICATE=REMOVE_OLD" -o LOAD=1000
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1000
 \set LOAD1000 `awk -f data/gettime.awk results/function12.log`
 SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "ON_DUPLICATE=ERROR"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "DUPLICATE_ERRORS=0"
 \! awk -f data/adjust.awk results/function13.log
 
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE=REMOVE_NEW" -o "DUPLICATE_ERRORS=1"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=1"
 \! awk -f data/adjust.awk results/function14.log
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE=REMOVE_NEW" -o "DUPLICATE_ERRORS=3"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=3"
 \! awk -f data/adjust.awk results/function14.log
 SET enable_seqscan = on;
 SET enable_indexscan = off;

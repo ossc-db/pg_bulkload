@@ -193,7 +193,7 @@ extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_f
 #define ASSERT_ONCE(expr) \
 	do { if (!(expr)) \
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), \
-						errmsg("duplicate %s specification", keyword))); \
+						errmsg("duplicate %s specified", keyword))); \
 	} while(0)
 
 #endif   /* READER_H_INCLUDED */

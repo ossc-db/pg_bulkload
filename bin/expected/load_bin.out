@@ -2,27 +2,27 @@ TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_logfile -l infile_logfile -P pbfile -u dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_pbfile -l logfile -P infile_pbfile -u dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_dbfile -l logfile -P pbfile -u infile_dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_pbfile -P logfile_pbfile -u dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_dbfile -P pbfile -u logfile_dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile -P pbfile_dbfile -u pbfile_dbfile
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i data/data1.bin -l results/bin1.log -P results/bin1.prs -u results/bin1.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
@@ -42,9 +42,9 @@ LOGFILE = .../bin1.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 8
-PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+PARSE_ERRORS = 0
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -136,9 +136,9 @@ LOGFILE = .../bin2.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 8
-PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+PARSE_ERRORS = 0
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -228,7 +228,7 @@ SELECT * FROM customer ORDER BY c_id;
 (16 rows)
 
 UPDATE customer SET c_data = 'OLD1';
-\! pg_bulkload -d contrib_regression data/bin2.ctl -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES"
+\! pg_bulkload -d contrib_regression data/bin2.ctl -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES"
 NOTICE: BULK LOAD START
 WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 WARNING:  Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -253,7 +253,7 @@ TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 10
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -347,7 +347,7 @@ SELECT * FROM customer ORDER BY c_id;
 (16 rows)
 
 UPDATE customer SET c_data = 'OLD2';
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin3.dup -o "ON_DUPLICATE=REMOVE_OLD" -l results/bin4.log -P results/bin4.prs -u results/bin4.dup
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin3.dup -o "DUPLICATE_ERRORS=50" -l results/bin4.log -P results/bin4.prs -u results/bin4.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -368,7 +368,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -443,7 +443,7 @@ SELECT * FROM customer ORDER BY c_id;
 (16 rows)
 
 UPDATE customer SET c_data = 'OLD3';
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin4.dup -o "ON_DUPLICATE=REMOVE_NEW" -l results/bin5.log -P results/bin5.prs -u results/bin5.dup
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/bin4.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -l results/bin5.log -P results/bin5.prs -u results/bin5.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -464,7 +464,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -539,10 +539,10 @@ SELECT * FROM customer ORDER BY c_id;
 (16 rows)
 
 -- do not error skip an error after of toast_insert_or_update.
-\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "DUPLICATE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  integer out of range
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/bin6.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -554,9 +554,9 @@ LOGFILE = .../bin6.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 4
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -587,7 +587,7 @@ COL = "CHAR" (218 + 19)
 WRITER = DIRECT
 
 integer out of range
-\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "ON_DUPLICATE=REMOVE_OLD" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
+\! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "DUPLICATE_ERRORS=50" -o "PARSE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "172270229a"
 WARNING:  Parse error Record 2: Input Record 2: Rejected - column 3. value "2147483648" is out of range for type integer
@@ -615,7 +615,7 @@ TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -738,7 +738,7 @@ TRUNCATE = NO
 LIMIT = 0
 PARSE_ERRORS = INFINITE
 DUPLICATE_ERRORS = INFINITE
-ON_DUPLICATE = ERROR
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
@@ -800,7 +800,7 @@ TRUNCATE = NO
 LIMIT = 0
 PARSE_ERRORS = INFINITE
 DUPLICATE_ERRORS = INFINITE
-ON_DUPLICATE = ERROR
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY

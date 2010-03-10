@@ -2,8 +2,7 @@ How to build with Microsoft Visual C++ Express 2005
 
 You might need:
   1. Register PostgreSQL directory to your environment.
-  2. Add empty header files into your include directory.
-  3. Resolve redefinitions of ERROR macro.
+  2. Resolve redefinitions of ERROR macro.
 
 ----
 1. Register PostgreSQL directory to your environment.
@@ -14,34 +13,15 @@ The directory configuration options are found in:
 You might need to add the following directories:
   into "include files"
     - C:\Program Files\PostgreSQL\8.4\include
-    - C:\Program Files\PostgreSQL\8.4\include\server
     - C:\Program Files\PostgreSQL\8.4\include\internal
+    - C:\Program Files\PostgreSQL\8.4\include\server
+    - C:\Program Files\PostgreSQL\8.4\include\server\port\win32
+    - C:\Program Files\PostgreSQL\8.4\include\server\port\win32_msvc
   into "library files"
     - C:\Program Files\PostgreSQL\8.4\lib
 
 ----
-2. Add empty header files into your include directory.
-
-PostgreSQL somehow requires non-standard posix header files.
-You might need to create the following directories and header files
-in your include directory. The all header files can be empty.
-
-+- dirent.h
-+- netdb.h
-+- pwd.h
-|
-+- arpa
-|    +- inet.h
-|
-+- netinet
-|    +- in.h
-|
-+- sys
-     +- socket.h
-     +- time.h
-
-----
-3. Resolve redefinitions of ERROR macro.
+2. Resolve redefinitions of ERROR macro.
 
 It might be a bad manner, but I'll recommend to modify your wingdi.h.
 

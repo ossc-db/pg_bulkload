@@ -196,17 +196,17 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg
-				 ("DELIMITER must not appear in the NULL specification")));
+				 ("DELIMITER cannot be appear in the NULL parameter")));
 	if (strchr(self->null, self->quote))
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg
-				 ("QUOTE must not appear in the NULL specification")));
+				 ("QUOTE cannot be appear in the NULL parameter")));
 	if (list_length(self->fnn_name) > 0 && self->filter.funcstr)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg
-				 ("when specified FILTER, cannot specified FORCE_NOT_NULL")));
+				 ("cannot use FILTER with FORCE_NOT_NULL")));
 
 	self->source = CreateSource(infile, desc);
 

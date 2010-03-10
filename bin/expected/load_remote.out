@@ -1,5 +1,5 @@
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/csv1.ctl -o"delimiter=|" -i stdin < data/data1.csv -l results/remote1.log -P results/remote1.prs -u results/remote1.dup
+\! pg_bulkload -d contrib_regression data/csv1.ctl -o"delimiter=|" -i stdin < data/data1.csv -l results/remote1.log -P results/remote1.prs -u results/remote1.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	2 Rows skipped.
@@ -19,10 +19,10 @@ TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
-ENCODING = SQL_ASCII
+ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
@@ -75,9 +75,9 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv1.ctl -i stdin -l results/remote2.log -P results/remote2.prs -u results/remote2.dup < data/data2.csv
 NOTICE: BULK LOAD START
+WARNING:  Maximum duplicate error count exceeded
 ERROR: copy failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
 DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
-
 \! awk -f data/adjust.awk results/remote2.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -89,11 +89,11 @@ LOGFILE = .../remote2.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 5
-PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+PARSE_ERRORS = 0
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
-ENCODING = SQL_ASCII
+ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
@@ -104,6 +104,7 @@ NULL = "nullvalue           "
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+Maximum parse error count exceeded - 1 error(s) found in input file
 duplicate key value violates unique constraint "customer_pkey"
 SET enable_seqscan = on;
 SET enable_indexscan = off;
@@ -131,7 +132,7 @@ SELECT * FROM customer ORDER BY c_id;
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
 (5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv1.ctl -o "ON_DUPLICATE=REMOVE_OLD" -i stdin -l results/remote3.log -P results/remote3.prs -u results/remote3.dup < data/data2.csv
+\! pg_bulkload -d contrib_regression data/csv1.ctl -o "DUPLICATE_ERRORS=50" -i stdin -l results/remote3.log -P results/remote3.prs -u results/remote3.dup < data/data2.csv -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	2 Rows skipped.
@@ -152,9 +153,9 @@ TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
-ENCODING = SQL_ASCII
+ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2

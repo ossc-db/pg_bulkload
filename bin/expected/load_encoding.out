@@ -20,8 +20,8 @@ TABLE = public.target
 TRUNCATE = YES
 LIMIT = INFINITE
 PARSE_ERRORS = INFINITE
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -80,7 +80,7 @@ SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
 \! pg_bulkload -d contrib_regression_sqlascii data/csv4.ctl -i data/data4.csv -l results/encoding2.log -P results/encoding2.prs -u results/encoding2.dup -o "PARSE_ERRORS=-1" -o "ENCODING=UTF0"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid encoding for parameter "ENCODING": "UTF0"
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/encoding2.log
 awk: data/adjust.awk:1: fatal: cannot open file `results/encoding2.log' for reading (No such file or directory)
 SET enable_seqscan = on;
@@ -137,8 +137,8 @@ TABLE = public.target
 TRUNCATE = YES
 LIMIT = INFINITE
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
@@ -205,8 +205,8 @@ TABLE = public.target
 TRUNCATE = YES
 LIMIT = INFINITE
 PARSE_ERRORS = 1
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 ENCODING = SQL_ASCII
 CHECK_CONSTRAINTS = NO
@@ -276,8 +276,8 @@ TABLE = public.target
 TRUNCATE = YES
 LIMIT = INFINITE
 PARSE_ERRORS = 2
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
@@ -352,8 +352,8 @@ TABLE = public.target
 TRUNCATE = YES
 LIMIT = INFINITE
 PARSE_ERRORS = 3
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 ENCODING = EUC_JP
 CHECK_CONSTRAINTS = NO

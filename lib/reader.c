@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "access/heapam.h"
 #include "access/reloptions.h"
@@ -39,9 +40,10 @@
 #include "pg_strutil.h"
 #include "reader.h"
 #include "writer.h"
+#include "pgut/pgut-be.h"
 
-#define DEFAULT_MAX_PARSE_ERRORS		50
-#define DEFAULT_MAX_DUP_ERRORS			50
+#define DEFAULT_MAX_PARSE_ERRORS		0
+#define DEFAULT_MAX_DUP_ERRORS			0
 
 /*
  * prototype declaration of internal function
@@ -213,9 +215,8 @@ ReaderCreate(Datum options, time_t tm)
 
 const char *ON_DUPLICATE_NAMES[] =
 {
-	"ERROR",
-	"REMOVE_NEW",
-	"REMOVE_OLD"
+	"NEW",
+	"OLD"
 };
 
 static size_t
@@ -349,13 +350,12 @@ ParseOption(Reader *rd, DefElem *opt)
 		ASSERT_ONCE(rd->limit == INT64_MAX);
 		rd->limit = ParseInt64(target, 0);
 	}
-	else if (CompareKeyword(keyword, "ON_DUPLICATE"))
+	else if (CompareKeyword(keyword, "ON_DUPLICATE_KEEP"))
 	{
 		const ON_DUPLICATE values[] =
 		{
-			ON_DUPLICATE_ERROR,
-			ON_DUPLICATE_REMOVE_NEW,
-			ON_DUPLICATE_REMOVE_OLD
+			ON_DUPLICATE_KEEP_NEW,
+			ON_DUPLICATE_KEEP_OLD
 		};
 
 		rd->wo.on_duplicate = values[choice(keyword, target, ON_DUPLICATE_NAMES, lengthof(values))];
@@ -586,7 +586,7 @@ ReaderDumpParams(Reader *self)
 	else
 		appendStringInfo(&buf, "DUPLICATE_ERRORS = " int64_FMT "\n",
 						 self->wo.max_dup_errors);
-	appendStringInfo(&buf, "ON_DUPLICATE = %s\n",
+	appendStringInfo(&buf, "ON_DUPLICATE_KEEP = %s\n",
 					 ON_DUPLICATE_NAMES[self->wo.on_duplicate]);
 	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
 	if (PG_VALID_FE_ENCODING(self->checker.encoding))

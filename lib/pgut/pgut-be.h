@@ -10,6 +10,9 @@
 #ifndef PGUT_BE_H
 #define PGUT_BE_H
 
+#include "fmgr.h"
+#include "utils/tuplestore.h"
+
 #ifndef WIN32
 
 #define PGUT_EXPORT
@@ -97,11 +100,41 @@ extern int no_such_variable
 #define pgstat_end_function_usage(fcu, finalize)	((void)0)
 #define makeRangeVar(schemaname, relname, location) \
 	makeRangeVar((schemaname), (relname))
-
+#define pgstat_track_activity_query_size	PGBE_ACTIVITY_SIZE
 typedef void *BulkInsertState;
+
+#define DefineCustomBoolVariable(name, short_desc, long_desc, valueAddr, bootValue, context, flags, assign_hook, show_hook) \
+	do { \
+		*(valueAddr) = (bootValue); \
+		DefineCustomBoolVariable((name), (short_desc), (long_desc), (valueAddr), (context), (assign_hook), (show_hook)); \
+	} while(0)
+#define DefineCustomIntVariable(name, short_desc, long_desc, valueAddr, bootValue, minValue, maxValue, context, flags, assign_hook, show_hook) \
+	do { \
+		*(valueAddr) = (bootValue); \
+		DefineCustomIntVariable((name), (short_desc), (long_desc), (valueAddr), (minValue), (maxValue), (context), (assign_hook), (show_hook)); \
+	} while(0)
+#define DefineCustomRealVariable(name, short_desc, long_desc, valueAddr, bootValue, minValue, maxValue, context, flags, assign_hook, show_hook) \
+	do { \
+		*(valueAddr) = (bootValue); \
+		DefineCustomRealVariable((name), (short_desc), (long_desc), (valueAddr), (minValue), (maxValue), (context), (assign_hook), (show_hook)); \
+	} while(0)
+#define DefineCustomStringVariable(name, short_desc, long_desc, valueAddr, bootValue, context, flags, assign_hook, show_hook) \
+	do { \
+		*(valueAddr) = (char *) (bootValue); \
+		DefineCustomStringVariable((name), (short_desc), (long_desc), (valueAddr), (context), (assign_hook), (show_hook)); \
+	} while(0)
+
+struct config_enum_entry
+{
+	const char *name;
+	int			val;
+	bool		hidden;
+};
 
 extern char *text_to_cstring(const text *t);
 extern text *cstring_to_text(const char *s);
+extern void tuplestore_putvalues(Tuplestorestate *state, TupleDesc tdesc,
+					 Datum *values, bool *isnull);
 
 #define CStringGetTextDatum(s)		PointerGetDatum(cstring_to_text(s))
 #define TextDatumGetCString(d)		text_to_cstring((text *) DatumGetPointer(d))

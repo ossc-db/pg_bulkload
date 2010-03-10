@@ -1,2 +1,3 @@
 TABLE = customer
 TYPE = CSV
+PARSE_ERRORS = 50

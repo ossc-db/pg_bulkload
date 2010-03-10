@@ -17,7 +17,6 @@
 #include <sys/stat.h>
 #ifndef WIN32
 #include <sys/shm.h>
-#include <unistd.h>
 #endif
 
 #include "pg_loadstatus.h"

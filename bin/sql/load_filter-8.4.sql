@@ -66,7 +66,7 @@ SELECT * FROM target ORDER BY id;
 
 -- FILTER option test
 \pset null (null)
-\! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data6.csv -l results/filter1.log -P results/filter1.prs -u results/filter1.dup -o 'FILTER=using_out_f(int4, int4, int4, text)'
+\! pg_bulkload -d contrib_regression data/csv5.ctl -o "PARSE_ERRORS=50" -i data/data6.csv -l results/filter1.log -P results/filter1.prs -u results/filter1.dup -o 'FILTER=using_out_f(int4, int4, int4, text)'
 \! awk -f data/adjust.awk results/filter1.log
 SET enable_seqscan = on;
 SET enable_indexscan = off;

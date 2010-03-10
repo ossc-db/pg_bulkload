@@ -78,8 +78,6 @@ static pgut_option options[] =
 	/* Recovery options */
 	{ 's', 'D', "pgdata"			, &DataDir },
 	{ 'b', 'r', "recovery"			, &recovery },
-	/* Common options */
-	{ 'b', 's', "silent"			, &quiet },	/* same as 'q'.*/
 	{ 0 }
 };
 
@@ -110,18 +108,22 @@ main(int argc, char *argv[])
 	if (argc < 2)
 	{
 		help(false);
-		return HELP;
+		return 1;
 	}
 
 	if (getcwd(cwd, MAXPGPATH) == NULL)
-		elog(ERROR_SYSTEM, "cannot read current directory");
+		ereport(ERROR,
+			(errcode_errno(),
+			errmsg("cannot read current directory: ")));
 
 	i = pgut_getopt(argc, argv, options);
 
 	for (; i < argc; i++)
 	{
 		if (control_file[0])
-			elog(ERROR_ARGS, "too many arguments");
+			ereport(ERROR,
+				(errcode(EINVAL),
+				errmsg("too many arguments")));
 
 		/* make absolute control file path */
 		if (is_absolute_path(argv[i]))
@@ -278,9 +280,9 @@ LoaderLoadMain(List *options)
 	}
 	appendStringInfoString(&buf, "\"}");
 
-	command("BEGIN", 0, NULL, ERROR);
+	command("BEGIN", 0, NULL);
 	params[0] = buf.data;
-	res = execute("SELECT * FROM pg_bulkload($1)", 1, params, ERROR);
+	res = execute("SELECT * FROM pg_bulkload($1)", 1, params);
 	if (PQresultStatus(res) == PGRES_COPY_IN)
 	{
 		PQclear(res);
@@ -288,7 +290,7 @@ LoaderLoadMain(List *options)
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			elog(ERROR, "copy failed: %s", PQerrorMessage(connection));
 	}
-	command("COMMIT", 0, NULL, ERROR);
+	command("COMMIT", 0, NULL);
 
 	elog(NOTICE, "BULK LOAD END\n"
 				 "\t%s Rows skipped.\n"
@@ -430,7 +432,7 @@ ParseControlFile(const char *path)
 	FILE   *file;
 	List   *items = NIL;
 
-	file = pgut_fopen(path, "rt", false);
+	file = pgut_fopen(path, "rt");
 
 	for (lineno = 1; fgets(buf, LINEBUF, file); lineno++)
 	{
@@ -486,7 +488,9 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 	*outValue = NULL;
 
 	if (buf[strlen(buf) - 1] != '\n')
-		elog(ERROR_ARGS, "too long line \"%s\"", buf);
+		ereport(ERROR,
+			(errcode(EINVAL),
+			errmsg("too long line \"%s\"", buf)));
 
 	p = buf;				/* pointer to keyword */
 
@@ -518,7 +522,9 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 	if (q != NULL)
 		*q = '\0';
 	else
-		elog(ERROR_ARGS, "invalid input \"%s\"", buf);
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("invalid input \"%s\"", buf)));
 
 	q++;					/* pointer to input value */
 
@@ -529,11 +535,15 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 	value = TrimSpaces(q);
 
 	if (!keyword[0] || !value[0])
-		elog(ERROR_ARGS, "invalid input \"%s\"", buf);
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("invalid input \"%s\"", buf)));
 
 	value = UnquoteString(value, '"', '\\');
 	if (!value)
-		elog(ERROR_ARGS, "unterminated quoted field");
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("unterminated quoted field")));
 
 	*outKeyword = keyword;
 	*outValue = value;

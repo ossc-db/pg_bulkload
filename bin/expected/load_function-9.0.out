@@ -12,49 +12,49 @@ $$ LANGUAGE SQL;
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function public.load_function(unknown, unknown, unknown) does not exist
 HINT:  No function matches the given name and argument types.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''','B')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function public.load_function1(unknown, unknown, unknown, unknown) does not exist
 HINT:  No function matches the given name and argument types.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1('A',5,'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid input syntax for integer: "A"
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A'')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5,'A'')
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A'''" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5,'A'''
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5 'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5 'A''')
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''',1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  functions cannot have more than 100 arguments
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,A)" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid input syntax for type numeric: "A"
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,--5,'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,--5,'A''')
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char(1,'0')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function pg_catalog.to_char(unknown, unknown) is not unique
 HINT:  Could not choose a best candidate function.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.lower('A')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function must return set
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''')" -l results/function1.log -P results/function1.prs -u results/function1.dup -o LOAD=3
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
@@ -74,9 +74,9 @@ LOGFILE = .../function1.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 3
-PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+PARSE_ERRORS = 0
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -115,7 +115,7 @@ SELECT * FROM customer ORDER BY c_id;
     3 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | A'
 (3 rows)
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1( - - - 3, -+- 5,'''B')" -l results/function2.log -P results/function2.prs -u results/function2.dup -o "ON_DUPLICATE=REMOVE_NEW"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1( - - - 3, -+- 5,'''B')" -l results/function2.log -P results/function2.prs -u results/function2.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -134,9 +134,9 @@ LOGFILE = .../function2.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -190,7 +190,7 @@ SELECT * FROM customer ORDER BY c_id;
     5 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 'B
 (9 rows)
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function3.log -P results/function3.prs -u results/function3.dup -o "ON_DUPLICATE=REMOVE_OLD" -o "PARSE_ERRORS=3"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function3.log -P results/function3.prs -u results/function3.dup -o "DUPLICATE_ERRORS=50" -o "PARSE_ERRORS=3"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -211,7 +211,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 3
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -267,7 +267,7 @@ SELECT * FROM customer ORDER BY c_id;
     5 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 'B
 (9 rows)
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function4.log -P results/function4.prs -u results/function4.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function4.log -P results/function4.prs -u results/function4.dup -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -288,7 +288,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -314,7 +314,7 @@ Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
 
 CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function5.log -P results/function5.prs -u results/function5.dup -o "ON_DUPLICATE=REMOVE_OLD" -o "NULL=NULL"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function3.prs -l results/function5.log -P results/function5.prs -u results/function5.dup -o "DUPLICATE_ERRORS=50" -o "NULL=NULL"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -335,7 +335,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -397,7 +397,7 @@ SELECT * FROM customer ORDER BY c_id;
 (10 rows)
 
 ALTER TABLE customer ALTER c_data DROP NOT NULL;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function6.log -P results/function6.prs -u results/function6.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 " -l results/function6.log -P results/function6.prs -u results/function6.dup -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -416,9 +416,9 @@ LOGFILE = .../function6.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -477,7 +477,7 @@ SELECT * FROM customer ORDER BY c_id;
     7 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | (null)
 (11 rows)
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(7, 10)" -l results/function7.log -P results/function7.prs -u results/function7.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(7, 10)" -l results/function7.log -P results/function7.prs -u results/function7.dup -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -496,9 +496,9 @@ LOGFILE = .../function7.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -560,7 +560,7 @@ SELECT * FROM customer ORDER BY c_id;
    10 |    216 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | default value
 (14 rows)
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2', -2, 2, 4, 6, 8, 10, 12)" -l results/function8.log -P results/function8.prs -u results/function8.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2', -2, 2, 4, 6, 8, 10, 12)" -l results/function8.log -P results/function8.prs -u results/function8.dup -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -579,9 +579,9 @@ LOGFILE = .../function8.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -650,7 +650,7 @@ SELECT * FROM customer ORDER BY c_id;
    12 |    216 |      0 | 7                | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | function2
 (15 rows)
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2 duplicate', 1,1,1,1,1)" -l results/function9.log -P results/function9.prs -u results/function9.dup -o "ON_DUPLICATE=REMOVE_NEW"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2 duplicate', 1,1,1,1,1)" -l results/function9.log -P results/function9.prs -u results/function9.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -669,9 +669,9 @@ LOGFILE = .../function9.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
@@ -739,7 +739,7 @@ SELECT * FROM customer ORDER BY c_id;
    12 |    216 |      0 | 7                | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | function2
 (15 rows)
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function10.log -P results/function10.prs -u results/function10.dup -o "ON_DUPLICATE=REMOVE_OLD"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function10.log -P results/function10.prs -u results/function10.dup -o "DUPLICATE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	1 Rows skipped.
@@ -760,7 +760,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -833,7 +833,7 @@ SELECT * FROM customer ORDER BY c_id;
 (15 rows)
 
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 2147483647, 'LOAD=1')" -l results/function11.log -P results/function11.prs -u results/function11.dup -o "ON_DUPLICATE=REMOVE_OLD" -o LOAD=1
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 2147483647, 'LOAD=1')" -l results/function11.log -P results/function11.prs -u results/function11.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -843,7 +843,7 @@ NOTICE: BULK LOAD END
 	0 Rows deleted due to duplicate errors.
 \set LOAD1 `awk -f data/gettime.awk results/function11.log`
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "ON_DUPLICATE=REMOVE_OLD" -o LOAD=1000
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1000
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
@@ -858,11 +858,11 @@ SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
  t
 (1 row)
 
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "ON_DUPLICATE=ERROR"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "DUPLICATE_ERRORS=0"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "customer_pkey"
 DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 216, 1) is duplicated.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function13.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -875,8 +875,8 @@ TABLE = public.customer
 TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -889,10 +889,10 @@ WRITER = DIRECT
 
 could not create unique index "customer_pkey"
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=2" -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE=REMOVE_NEW" -o "DUPLICATE_ERRORS=1"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=2" -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=1"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function14.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -906,7 +906,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 1
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -920,7 +920,7 @@ WRITER = DIRECT
 Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Maximum duplicate error count exceeded
-\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=2" -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE=REMOVE_NEW" -o "DUPLICATE_ERRORS=3"
+\! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=2" -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=3"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	2 Rows skipped.
@@ -941,7 +941,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 1
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -967,7 +967,7 @@ TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 3
-ON_DUPLICATE = REMOVE_NEW
+ON_DUPLICATE_KEEP = OLD
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV

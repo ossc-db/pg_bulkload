@@ -23,8 +23,8 @@ TABLE = public.customer
 TRUNCATE = YES
 LIMIT = 5
 PARSE_ERRORS = 3
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -92,9 +92,9 @@ LOGFILE = .../csv1-2.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 2
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = ERROR
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -142,11 +142,12 @@ SELECT * FROM customer ORDER BY c_id;
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
 (5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -l results/csv2.log -P results/csv2.prs -u results/csv2.dup
+\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -l results/csv2.log -P results/csv2.prs -u results/csv2.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
+WARNING:  Maximum duplicate error count exceeded
 ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
 DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv2.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -159,8 +160,8 @@ TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE = ERROR
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -199,7 +200,7 @@ SELECT * FROM customer ORDER BY c_id;
  16777224 |    224 |      0 | DUP-1            | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
 (5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -l results/csv3.log -P results/csv3.prs -u results/csv3.dup
+\! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -o "DUPLICATE_ERRORS=50" -l results/csv3.log -P results/csv3.prs -u results/csv3.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	2 Rows skipped.
@@ -220,7 +221,7 @@ TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 50
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -278,7 +279,7 @@ SELECT * FROM customer ORDER BY c_id;
  16777230 |    230 |      0 | ABCDEFG          | AA       | AAAAAAAAAAAAAAAA | c_street_1           | c_street_2           | AAAAAAAAAAAAAAAAAAAA | AA      | AAAAAAAAA | AAAAAAAAAAAAAAAA | Sun Jan 01 12:34:56 2006 | AA       |   12345.6789 | 12345.6789 | 12345.6789 |    12345.6789 |       12345.7 |     12345.6789 | 123456789012345678
 (9 rows)
 
-\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=0" -o "VERBOSE=YES" -l results/csv4.log -P results/csv4.prs -u results/csv4.dup
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=0" -o "VERBOSE=YES" -l results/csv4.log -P results/csv4.prs -u results/csv4.dup
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
@@ -302,7 +303,7 @@ TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -327,7 +328,7 @@ Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
 
 CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
-\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=10" -o "VERBOSE=YES" -l results/csv5.log -P results/csv5.prs -u results/csv5.dup
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=10" -o "VERBOSE=YES" -l results/csv5.log -P results/csv5.prs -u results/csv5.dup
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -353,7 +354,7 @@ TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 10
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -415,10 +416,10 @@ SELECT * FROM customer ORDER BY c_id;
 (9 rows)
 
 -- do not error skip an error after of toast_insert_or_update.
-\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=1" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv6.log -P results/csv6.prs -u results/csv6.dup
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "SKIP=1" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv6.log -P results/csv6.prs -u results/csv6.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  integer out of range
-query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv6.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -430,9 +431,9 @@ LOGFILE = .../csv6.log
 TABLE = public.customer
 TRUNCATE = NO
 LIMIT = 4
-PARSE_ERRORS = 50
+PARSE_ERRORS = 0
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
@@ -444,7 +445,7 @@ NULL = "nullvalue           "
 WRITER = DIRECT
 
 integer out of range
-\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "ON_DUPLICATE=REMOVE_OLD" -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv7.log -P results/csv7.prs -u results/csv7.dup
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv7.log -P results/csv7.prs -u results/csv7.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "int4"
 WARNING:  Parse error Record 2: Input Record 2: Rejected - column 2. value "32768" is out of range for type smallint
@@ -478,7 +479,7 @@ TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 50
 DUPLICATE_ERRORS = 10
-ON_DUPLICATE = REMOVE_OLD
+ON_DUPLICATE_KEEP = NEW
 VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV

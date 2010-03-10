@@ -25,6 +25,7 @@
 #include "pg_profile.h"
 #include "pg_strutil.h"
 #include "reader.h"
+#include "pgut/pgut-be.h"
 
 typedef struct FunctionParser
 {
