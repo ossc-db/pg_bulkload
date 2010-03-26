@@ -61,6 +61,7 @@ extern PGconn *pgut_connect(const char *info, YesNo prompt, int elevel);
 extern void pgut_disconnect(PGconn *conn);
 extern void pgut_disconnect_all(void);
 extern PGresult *pgut_execute(PGconn* conn, const char *query, int nParams, const char **params);
+PGresult *pgut_execute_elevel(PGconn* conn, const char *query, int nParams, const char **params, int elevel);
 extern ExecStatusType pgut_command(PGconn* conn, const char *query, int nParams, const char **params);
 extern bool pgut_commit(PGconn *conn);
 extern void pgut_rollback(PGconn *conn);

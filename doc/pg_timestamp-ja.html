@@ -1,0 +1,83 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD html 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>pg_timestamp</title>
+<link rel="home" title="pg_timestamp" href="index.html">
+<link rel="stylesheet" TYPE="text/css"href="style.css">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+
+<body>
+<h1 id="pg_timestamp">pg_timestamp</h1>
+<div class="navigation">
+  <a href="index_ja.html">Top</a> &gt;
+  <a href="pg_timestamp-ja.html">pg_timestamp</a>
+<div>
+<hr />
+
+<p>
+ユーザ定義関数がタイムスタンプ文字列のパースのオーバヘッドをスキップするための追加モジュールです。
+これも pg_bulkload のパッケージに含まれています。
+</p>
+
+<h3>pg_timestamp_in</h3>
+<p>
+このユーザ定義関数は timestamp 型のデータを高速にロードします。
+高速に読みこむための入力は、以下の19バイトの型式に限定されます。
+</p>
+
+<pre><code>2007-01-01 12:34:56</code></pre>
+<ul>
+  <li>年/月/日/時/分/秒 は数字(0x30-0x39)
+  <li>年と月、月と日の間はハイフン(0x2D)
+  <li>年月日と時分秒の間はASCII空白(0x20)
+  <li>時と分、分と秒の間はコロン(0x3A)
+  <li>これ以外に、余分な空白やタブを加えてはいけません。
+</ul>
+
+<h2>インストール</h2>
+<p>
+インストール手順は以下の通りです。インストール先のディレクトリへのアクセス権限は正しく与えられているものとします。
+</p>
+<pre><code>$ cd [directory where postgresql-8.2or3.X.tar.gz is untared]/contrib/
+$ tar zxvf pg_bulkload-2.3.X.tar.gz
+$ cd pg_bulkload
+$ make
+$ make install
+$ postgresql start
+$ psql -f $PGHOME/share/contrib/pg_timestamp.sql database_name</code></pre>
+
+
+<h2>注意点</h2>
+<p>
+  タイムゾーンを含む入力文字列は高速化の対象外です。
+  また、上記のフォーマットに合致しないものはPostgreSQLの書式変換ルーチンを通します。
+  この場合の処理速度は従来のものと同じか、もしくは遅くなります。
+</p>
+<p>
+  pg_timestamp_in は timestamp 型データを高速に読む機能を提供するものの、
+  通常使われる PostgreSQL の内部関数を置き換えます。
+  pg_timestampを登録すると、pg_bulkloadに限らず、timestamp型を利用する全ての処理
+  はこの関数を使うことになります。すなわち、<code>COPY</code>や<code>INSERT</code>でもこの関数を利用します。
+  この影響を避けるためには、pg_timestamp_in をロードの時だけ利用し、
+  通常時はアンインストールするなどの対応が必要です。
+</p>
+
+<hr />
+<div class="navigation">
+  <a href="index_ja.html">Top</a> &gt;
+  <a href="pg_timestamp-ja.html">pg_timestamp</a>
+<div>
+<p class="footer">Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+try {
+var pageTracker = _gat._getTracker("UA-10244036-1");
+pageTracker._trackPageview();
+} catch(err) {}</script>
+</body>
+</html>

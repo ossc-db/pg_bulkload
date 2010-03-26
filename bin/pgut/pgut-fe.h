@@ -63,6 +63,7 @@ extern void help(bool details);
 extern void disconnect(void);
 extern void reconnect(int elevel);
 extern PGresult *execute(const char *query, int nParams, const char **params);
+extern PGresult *execute_elevel(const char *query, int nParams, const char **params, int elevel);
 extern ExecStatusType command(const char *query, int nParams, const char **params);
 
 extern int pgut_getopt(int argc, char **argv, pgut_option options[]);

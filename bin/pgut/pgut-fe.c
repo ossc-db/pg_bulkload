@@ -218,7 +218,9 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 				message = "a boolean";
 				break;
 			default:
-				elog(ERROR, "invalid option type: %c", opt->type);
+				ereport(ERROR,
+					(errcode(EINVAL),
+					 errmsg("invalid option type: %c", opt->type)));
 				return;	/* keep compiler quiet */
 		}
 	}
@@ -443,6 +445,12 @@ execute(const char *query, int nParams, const char **params)
 	return pgut_execute(connection, query, nParams, params);
 }
 
+PGresult *
+execute_elevel(const char *query, int nParams, const char **params, int elevel)
+{
+	return pgut_execute_elevel(connection, query, nParams, params, elevel);
+}
+
 /*
  * command - Execute a SQL and discard the result.
  */
@@ -663,10 +671,10 @@ help(bool details)
 	if (details)
 	{
 		printf("  -e, --echo                echo queries\n");
-		printf("  -E, --elevel              set output message level\n");
+		printf("  -E, --elevel=LEVEL        set output message level\n");
 	}
-	printf("  --help                    show this help, then execute\n");
-	printf("  --version                 output version information, then execute\n");
+	printf("  --help                    show this help, then exit\n");
+	printf("  --version                 output version information, then exit\n");
 
 	if (details && (PROGRAM_URL || PROGRAM_EMAIL))
 	{

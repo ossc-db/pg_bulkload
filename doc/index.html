@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html
+	PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en   ">
+<head>
+	<link rel="icon" type="image/png" href="http://pgfoundry.org/images/elephant-icon.png" />
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>pg_bulkload: Project Home Page</title>
+	<link rel="stylesheet" TYPE="text/css"href="style.css">
+</head>
+
+<body>
+<Div Align="right"><h2><a href="http://pgbulkload.projects.postgresql.org/index_ja.html"> Japanese</a></h2></Div>
+
+<center><img style="border: none; margin-left: auto; margin-right: auto; " src="http://pgfoundry.org/images/elephantSmall.png" height="75" width="75" />
+<hr />
+<h1>Welcome to the pg_bulkload Project Home Page</h1>
+<hr />
+</center>
+<p>pg_bulkload is a high speed data loading utility for PostgreSQL</p>
+<p>The pg_bulkload project is a <a href="http://www.postgresql.org">PostgreSQL</a> Community project that is a part of the <a href="http://pgfoundry.org">pgFoundry</a>. It is produced by NTT OSS Center.</p>
+<p>The pgFoundry page for the project is at <a href="http://pgfoundry.org/projects/pgbulkload">http://pgfoundry.org/projects/pgbulkload</a>, 
+where you can find <a href="http://pgfoundry.org/frs/?group_id=1000261">downloads</a>, documentation, bug reports, mailing lists, and a whole lot more.</p>
+<p>
+<a href="index_ja.html">日本語ページはこちら</a>
+</p>
+<p>
+<h1>Contents</h1>
+<ul>
+<li><a href="#README"> README</a>
+<li><a href="#performance">Performance result</a>
+</ul>
+</p>
+
+<hr />
+
+<center>
+<h1>
+<a name="README">README</a>
+</h1>
+<h3>
+pg_bulkload - High speed data loading utility.
+</h3>
+</center>
+
+<h1>Introduction</h1>
+<p>
+pg_bulkload provides high-speed data loading capability to PostgreSQL users.
+</p>
+<p>
+When we load huge amount of data to a database, it is common situation that 
+data set to be loaded is valid and consistent.   For example, dedicated tools 
+are used to prepare such data, providing data validation in advance.   In such 
+cases, we'd like to bypass any overheads within database system to load data as 
+quickly as possible.  pg_bulkload is developed to help such situations.   
+Therefore, it is not pg_bulkload's goal to provide detailed data validation.  
+Rather, pg_bulkload asumes that loaded data set is validated by separate means.
+If you're not in such situation, you should use <code>COPY</code> command in PostgreSQL.
+</p>
+
+<h1>Lineup</h1>
+
+<p>
+pg_bulkload provides two programs to users.
+
+<ol>
+<h3><li>pg_bulkload</h3>
+  This program is used to load the data.   Internally, it invokes PostgreSQL's 
+  user-defined function called pg_bulkload() and perform the loading.   
+  pg_bulkload() function will be installed during pg_bulkload installation.
+
+<h3><li>postgresql script</h3>
+<p>
+  This is a wrapper command for <code>pg_ctl</code>, which starts and stops PostgreSQL 
+  server.  postgresql script invokes <code>pg_ctl</code> internally.   postgresql script 
+  provides very important pg_bulkload functionality, recovery.   For 
+  performance, pg_bulkload bypasses some of PostgreSQL's internal functionality
+  such as WAL.   Therefore, pg_bulkload needs to provide separate recovery 
+  procedure before usual PostgreSQL's recovery is performed.   postgresql script
+  provides this feature.
+</p>
+<p>
+  You must see below <b>"Reminder"</b>, especially if 
+<ul>
+<li>you use pg_bulkload in <code>DIRECT</code> load mode (bypassing WAL : <b>default settings</b>)
+</ul>
+ or
+<ul>
+<li>in Windows environment (We don't provide postgresql.bat so far.)
+</ul>
+</p>
+</ol>
+</p>
+
+<h1>Installation</h1>
+
+
+<p>
+<ol>
+<h3><li> Environment</h3>
+
+pg_bulkload installation assumes the following;
+<ul>
+<li>PostgreSQL must have been installed in advance,
+<li>Source tree used to install the PostgreSQL above is available, and
+<li>The database has been initialized using <code>initdb</code>.
+</ul>
+<h3><li> Installation procedure</h3>
+
+Installation sequence is shown below. Parmission for installed directories are 
+given correctly.
+
+<pre><code>
+$ cd [directory where postgresql-8.2or3.X.tar.gz is untared]/contrib/
+$ tar zxvf pg_bulkload-2.3.X.tar.gz
+$ cd pg_bulkload
+$ make
+$ make install
+$ mkdir $PGDATA/pg_bulkload
+$ postgresql start
+$ psql -f $PGHOME/share/contrib/pg_bulkload.sql database_name
+</code></pre>
+
+
+</ol>
+<h1>Usage</h1>
+
+<p>
+You can use pg_bulklad by the following three steps:
+</p>
+<ol>
+<li>Edit control file "sample_csv.ctl" or "sample_bin.ctl" that includes settigs for data loading. You can specify table name, absolute path for input file, description of the input file, and so on.
+
+<li>Assume there is a directory <code>$PGDATA/pg_bulkload</code>, in that load status files are created.
+
+<li>Execute command with a control file as argument. Relative path is available for the argument.
+<pre><code>
+$ pg_bulkload sample_csv.ctl 
+</code></pre>
+</ol>
+</p>
+<h2>Control File</h2>
+<p>
+You can specify the following load options. See sample_csv.ctl and sample_bin.ctl included in a pg_bulkload package.
+<h3>Common</h3>
+<ul>
+<li>TABLE       : [schema_name.]table_name
+<li>INFILE      : Input data location(absolute path)
+<li>TYPE        : CSV or FIXED
+<li>LOADER      : DIRECT or BUFFERED
+  <ul>
+      <li>DIRECT  : Bypass the shared buffers and skip WAL records, but
+                  need the own recovery procedure.
+                  This is the default, and original older version's mode.
+      <li>BUFFERED : Use shared buffers, write WALs,  and use the original
+                  PostgreSQL WAL recovery.
+  </ul>
+<li>MAX_ERR_CNT : The number of errors to stop loading. The default is 0, that is
+              all of data is loaded at once in spite of occuring errors.
+<li>OFFSET      : The number of skip input rows. The default is 0.
+<li>LIMIT       : The number of rows to load. The default is 0, that is all of data 
+              is loaded.
+</ul>
+
+<h3>CSV format</h3>
+<ul>
+<li>DELIMITER      : The single ASCII character that separates columns within each row (line) of the file. The default is comma.
+<li>QUOTE          : Specifies the ASCII quotation character. The default is double-quotation.
+<li>ESCAPE         : Specifies the ASCII character that should appear before a QUOTE data character value. The default is double-quotation.
+<li>NULL           : The string that represents a null value.  The default is a empty value with no quotes.
+<li>FORCE_NOT_NULL : Process each specified column as though it were not a NULL value. Multiple columns are available as needed.
+</ul>
+<h3>Fixed format</h3>
+<ul>
+<li>COL             : Column format of input file.
+<ul>
+<li>COL TYPE(N)   : N bytes of TYPE. TYPE should be CHAR, VARCHAR, INTEGER or FLOAT.
+                  CHAR and VARCHAR means the input column is text, and INTEGER and
+                  FLOAT means it is binary.
+<li>COL TYPE      : TYPE with default length. TYPE should be one of the following:
+<ul>
+    <li>SMALLINT = INTGEGER(2)
+    <li>INTEGER  = INTEGER(4)
+    <li>BIGINT   = INTEGER(8)
+    <li>FLOAT    = FLOAT(4)
+    <li>DOUBLE   = FLOAT(8)
+<li>COL TYPE(N+M) : N bytes, offset M bytes
+<li>COL TYPE(N:M) : start at N bytes and end at M bytes
+<li>COL N         : Same as COL CHAR(N), for backward compatibility.
+</ul>
+<li>PRESERVE_BLANKS : {YES|NO}. YES regards following "COL N" as "COL CHAR(N)" and NO as "COL VARCHAR(N)". Default is NO.
+<li>STRIDE          : Length of one row. Use if you want to truncate the end of row. The default is whole of the row, which means the total of COLs.
+</ul>
+</ul>
+
+
+<h1>Reminder</h1>
+
+<ul>
+<li>If you use direct load mode (<b><code>LOAD=DIRECT</code></b>, which is the default), you have to be aware below:
+<h3>PostgreSQL startup sequence</h3>
+<p>
+  When pg_bulkload is crashed and some .loadstatus files are remained in <code>$PGDATA/pg_bulkload</code>, database must be recovered by pg_bulkload own recovery with "<code>pg_bulkoad -r</code>" command before you invoke pg_ctl start.
+  You must start and stop PostgreSQL using postgresql script, which invokes "<code>pg_bulkload -r</code>" and "pg_ctl start" correctly.   We recommend not to use <code>pg_ctl</code> directly.
+</p>
+<p>
+  If you use pg_bulkload in Windows operating system, postgresql script is not included in a pg_bulkload package. So you have to invoke "<code>pg_bulkload -r</code>" manually.
+</p>
+<h3>PITR</h3>
+<p>
+  Because of bypassing WAL, archive recovery by PITR is 
+  not available.   If you would like to use PITR, take a full backup of the 
+  database after the loading by pg_bulkload.
+</p>
+<h3>Load status file in $PGDATA/pg_bulkload</h3>
+<p>  
+  You must not remove the load status file (*.loadstatus) found in 
+  <code>$PGDATA/pg_bulkload</code> directory.   This file is needed in pg_bulkload crash 
+  recovery.
+</p>
+<h3>Do not use <code>kill -9</code></h3>
+<p>
+  Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as possible.   If you did this, you 
+  must invoke postgresql script to perform pg_bulkload recovery and restart 
+  PostgreSQL to continue.
+<p>  
+<li> Other reminders are the following:
+<h3>Constraint limitation</h3>
+  Only unique constraint and not-NULL constraint are enforced during the 
+  loading.   Other constraints such as referentiial integrity are not enforced.
+  It is user's responsibility to provide valid data set.
+</p>
+
+</ul>
+</p>  
+
+<h1>Optional tool : pg_timestamp_in</h1>
+
+<p>
+  In addition to pg_bulkload, the following user-defined function is also provided to skip parsing overhead of timestamp string. This is involved in a pg_bulkload package.
+
+<h3>pg_timestamp_in</h3>
+  This user-defined function provides very fast loading of timestamp type data.
+  For the speed, instead, the format of the timestamp data must satisfy the 
+  following 19byte format:
+
+<pre><code>2007-01-01 12:34:56</code></pre>
+<ul>
+	  <li>Year/Month/Day/Hour/Minute/Second, each must be represented using only digits (0x30 to 0x39, no month name, no AM/PM, etc.).
+	  <li>Only a hyphen (0x2d) can be used (and must be used) to separate year, month and day.
+	  <li>Single space (0x20) must appear between the day and the hour.
+	  <li>Hour, minute and second must be separated using single colon (0x3a)
+	    respectively.
+	  <li>No additional spaces and tabs are allowed.
+</ul>
+</p>
+<h2>Installation</h2>
+<p>
+Installation sequence is shown below. Parmission for installed directories are 
+given correctly.
+</p>
+<pre><code>
+$ cd [directory where postgresql-8.2or3.X.tar.gz is untared]/contrib/
+$ tar zxvf pg_bulkload-2.3.X.tar.gz
+$ cd pg_bulkload
+$ make
+$ make install
+$ postgresql start
+$ psql -f $PGHOME/share/contrib/pg_timestamp.sql database_name
+</code></pre>
+
+
+<h2>Reminder</h2>
+<p>
+  Timestamp value with timezone attribute is outside the scope of pg_timestamp_in. 
+  If you provide data in such format, you must use usual 
+  PostgreSQL feature to read data.   In this case, you may need longer duration
+  to load.  Although pg_timestamp_in provide much faster data loading for 
+  timestamp data, it replaces usual PostgreSQL's internal function used to read
+  timestamp data.   That is, use of pg_timestamp_in influences the data symtax 
+  for PostgreSQL's SQL statements such as <code>INSERT</code>, <code>COPY</code>, and <code>UPDATE</code>.   To avoid 
+  such influence, users have to use pg_timestamp_in only in the data loading, 
+  and uninstall pg_timestamp_in.
+</p>
+
+<h1>Author</h1>
+
+<p>
+NTT Opensource Software Center<br />
+Copyright (c) 2007-2008 Nippon Telegraph and Telephone Corporation
+</p>
+
+<center>
+<hr />
+<h1>
+<a name="performance">Performance Result</a>
+</h1>
+</center>
+<p>
+  <dl>
+    <dt><h2>Overview</h2></dt>
+    <ul>
+      <li>Load 1GB CSV Data by COPY and pg_bulkload</li>
+      <ul>
+      <li>Target table : 4GB already existing data</li>
+      <li>Table definition : customer table by DBT-2</li>
+      <li>Index definition : two indexes(PK(single int column), non-unique(single int column))
+      </ul>
+    </ul>
+  </dl>
+  <dl>
+    <dt><h2>Result</h2></dt>
+      <ul>
+        <li> (COPY to indexed table) vs pg_bulkload </li>
+          <table border="1">
+          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
+          <tr align="right"><td>COPY(sec.)</td><td>1601.4</td><td>1586.2</td></tr>
+          <tr align="right"><td>pg_bulkload(sec.)</td><td>147.7</td><td>131.8</td></tr>
+          <tr align="right" bgcolor="#D8BFD8"><td>ratio</td><td>10.8</td><td>12.0</td></tr>
+          </table>
+      </ul>
+      <br>
+      <ul>
+        <li> ((COPY to non-indexed table) + CREATE INDEX) vs pg_bulkload </li>
+          <table border="1">
+          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
+          <tr align="right"><td>COPY(sec.)</td><td>548.9</td><td>596.5</td></tr>
+          <tr align="right"><td>pg_bulkload(sec.)</td><td>147.7</td><td>131.8</td></tr>
+          <tr align="right" bgcolor="#D8BFD8"><td>ratio</td><td>4.17</td><td>4.04</td></tr>
+          </table>
+      </ul>
+      <br>
+      <ul><ul>
+        <li> Detail result </li>
+          <table border="1">
+          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
+          <tr><td>pg_bulkload to an indexed table</td><td align="right">147.7</td><td align="right">131.8</td></tr>
+          <tr><td>pg_bulkload to a non-indexed table</td><td align="right">72.5</td><td align="right">72.9</td></tr>
+          <tr><td>COPY to an indexed table</td><td align="right">1601.4</td><td align="right">1586.2</td></tr>
+          <tr><td>COPY to a non-indexed table</td><td align="right">127.7</td><td align="right">140.2</td></tr>
+          <tr><td>CREATE INDEX</td><td align="right">468.8</td><td align="right">408.7</td></tr>
+          </table>
+      </ul></ul>
+      <br>
+      <ul>
+      <img src="img/20070316_copy_vs_pg_bulkload-818.png">
+      <img src="img/20070316_copy_vs_pg_bulkload-823.png">
+      </ul>
+      <ul>
+        <li> Conditions </li>
+          <table border="1">
+          <tr bgcolor="#B0C4DE"><td>Item</td><td>value</td>
+          <tr><td>Machine</td><td>PowerEdge1900</td>
+          <tr><td>CPU</td><td>Dual Core Intel(R) Xeon(R) Processor5050 CPU3.0GHz</td>
+          <tr><td>Memory</td><td>2GB （512MB*4）</td>
+          <tr><td>Disc size (operating system installed)</td><td>SerialATAⅡ80GB</td>
+          <tr><td>Storage size (database cluster stored)</td><td>RAID0 1.2TB</td>
+          <tr><td>RAID Controller Cache</td><td>128MB</td>
+          <tr><td>Hyper Thread</td><td>ON</td>
+          <tr><td>Version</td><td>RHEL ES release4 update4(32bit)</td>
+          <tr><td>Kernel</td><td>2.6.9-42.ELsmp</td>
+          <tr><td>libc</td><td>2.3.4</td>
+          <tr><td>Version</td><td>8.1.8/8.2.3</td>
+          <tr><td>shared_buffers</td><td>1024</td>
+          <tr><td>checkpoint_segments</td><td>1000</td>
+          <tr><td>checkpoint_timeout</td><td>3600</td>
+          <tr><td>work_mem</td><td>1024</td>
+          <tr><td>maintenance_work_mem</td><td>16384</td>
+          <tr><td>Table definition</td><td>DBT-2 customer table</td>
+          <tr><td>Index column</td><td>c_id (PRIMARY KEY)</td>
+          <tr><td></td><td>c_d_id (non-unique B-Tree)</td>
+          <tr><td>Constraint</td><td>Non-NULL (all columns)</td>
+          <tr><td>Existing data</td><td>16,777,216 tuples(4GB)</td>
+          <tr><td>Loading data</td><td>4,194,304 tuples(1GB)</td>
+          <tr><td>Input file type</td><td>CSV</td>
+          <tr><td>pg_bulkload version</td><td>pg_bulkload-2.1.2(PG-8.1.8)/2.2.0(PG-8.2.3)</td>
+          </table>
+      </ul>
+
+  </dl>
+
+
+</p>
+
+<hr />
+<p class="footer">Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+try {
+var pageTracker = _gat._getTracker("UA-10244036-1");
+pageTracker._trackPageview();
+} catch(err) {}</script>
+</body>
+</html>

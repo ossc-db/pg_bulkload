@@ -499,6 +499,12 @@ echo_query(const char *query, int nParams, const char **params)
 PGresult *
 pgut_execute(PGconn* conn, const char *query, int nParams, const char **params)
 {
+	return pgut_execute_elevel(conn, query, nParams, params, ERROR);
+}
+
+PGresult *
+pgut_execute_elevel(PGconn* conn, const char *query, int nParams, const char **params, int elevel)
+{
 	PGresult   *res;
 	pgutConn   *c;
 
@@ -510,7 +516,7 @@ pgut_execute(PGconn* conn, const char *query, int nParams, const char **params)
 
 	if (conn == NULL)
 	{
-		ereport(ERROR,
+		ereport(elevel,
 			(errcode(E_PG_COMMAND),
 			 errmsg("not connected")));
 		return NULL;
@@ -539,7 +545,7 @@ pgut_execute(PGconn* conn, const char *query, int nParams, const char **params)
 		case PGRES_COPY_IN:
 			break;
 		default:
-			ereport(ERROR,
+			ereport(elevel,
 				(errcode(E_PG_COMMAND),
 				 errmsg("query failed: %s", PQerrorMessage(conn)),
 				 errdetail("query was: %s", query)));
@@ -692,7 +698,7 @@ typedef struct pgutErrorData
 	StringInfoData	detail;
 } pgutErrorData;
 
-/* TODO: support recursive error */
+/* FIXME: support recursive error */
 static pgutErrorData *
 getErrorData(void)
 {
@@ -714,7 +720,6 @@ getErrorData(void)
 #endif
 }
 
-/* FIXME: support recursive call */
 static pgutErrorData *
 pgut_errinit(int elevel)
 {
@@ -723,6 +728,7 @@ pgut_errinit(int elevel)
 
 	edata->elevel = elevel;
 	edata->save_errno = save_errno;
+	edata->code = (elevel >= ERROR ? 1 : 0);
 
 	/* reset msg */
 	if (edata->msg.data)
