@@ -372,14 +372,6 @@ flush_pages(DirectWriter *loader)
 	{
 		XLogRecPtr	recptr;
 
-#if PG_VERSION_NUM >= 80500
-		char		reason[NAMEDATALEN + 30];
-
-		snprintf(reason, sizeof(reason), "pg_bulkload on \"%s\"",
-				 RelationGetRelationName(loader->rel));
-		XLogReportUnloggedStatement(reason);
-#endif
-
 		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
 			ls->ls.exist_cnt, loader->blocks);
 		XLogFlush(recptr);

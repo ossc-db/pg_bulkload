@@ -1057,7 +1057,7 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 static void
 report_unique_violation(Relation rel, IndexTuple itup)
 {
-#if PG_VERSION_NUM >= 80500
+#if PG_VERSION_NUM >= 90000
 	Datum	values[INDEX_MAX_KEYS];
 	bool	isnull[INDEX_MAX_KEYS];
 
