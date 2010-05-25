@@ -26,7 +26,7 @@
  *
  * If needed more, then the size will be doubled when needed.
  */
-#define INITIAL_BUF_LEN (1024 * 1024)
+#define INITIAL_BUF_LEN		(1024 * 1024)
 
 typedef struct CSVParser
 {
@@ -63,7 +63,7 @@ typedef struct CSVParser
 	/**
 	 * @brief Size of the record buffer and the field buffer.
 	 * If needed more, then the size will be doubled when needed.
-	 * Firld buffer size does not exceed a single record size.
+	 * Field buffer size does not exceed a single record size.
 	 * Therefore these two has the same size. These two buffers are
 	 * expanded at the same time and therefore the size is contained
 	 * in this single variable.
@@ -364,7 +364,6 @@ CSVParserRead(CSVParser *self, Checker *checker)
 	/* Skip first offset lines in the input file */
 	if (unlikely(self->need_offset > 0))
 	{
-#define LINEBUFLEN		1024
 		int		len;
 		int		skipped = 0;
 		bool	inCR = false;
@@ -454,7 +453,7 @@ skip_done:
 				src -= move_size;
 				self->cur = self->rec_buf;
 			}
-			else
+			else if (self->buf_len - self->used_len <= 1)
 			{
 				int			j;
 				char	   *old_buf = self->field_buf;
