@@ -59,7 +59,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/access/nbtree/nbtsort.c,v 1.119 2009/01/01 17:23:36 momjian Exp $
+ *	  $PostgreSQL: pgsql/src/backend/access/nbtree/nbtsort.c,v 1.119.2.1 2009/10/02 21:14:11 tgl Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -133,6 +133,95 @@ static void _bt_buildadd(BTWriteState *wstate, BTPageState *state,
 static void _bt_uppershutdown(BTWriteState *wstate, BTPageState *state);
 static void _bt_load(BTWriteState *wstate,
 		 BTSpool *btspool, BTSpool *btspool2);
+
+
+/*
+ * Interface routines
+ */
+
+
+/*
+ * create and initialize a spool structure
+ */
+BTSpool *
+_bt_spoolinit(Relation index, bool isunique, bool isdead)
+{
+	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
+	int			btKbytes;
+
+	btspool->index = index;
+	btspool->isunique = isunique;
+
+	/*
+	 * We size the sort area as maintenance_work_mem rather than work_mem to
+	 * speed index creation.  This should be OK since a single backend can't
+	 * run multiple index creations in parallel.  Note that creation of a
+	 * unique index actually requires two BTSpool objects.	We expect that the
+	 * second one (for dead tuples) won't get very full, so we give it only
+	 * work_mem.
+	 */
+	btKbytes = isdead ? work_mem : maintenance_work_mem;
+	btspool->sortstate = tuplesort_begin_index_btree(index, isunique,
+													 btKbytes, false);
+
+	return btspool;
+}
+
+/*
+ * clean up a spool structure and its substructures.
+ */
+void
+_bt_spooldestroy(BTSpool *btspool)
+{
+	tuplesort_end(btspool->sortstate);
+	pfree(btspool);
+}
+
+/*
+ * spool an index entry into the sort file.
+ */
+void
+_bt_spool(IndexTuple itup, BTSpool *btspool)
+{
+	tuplesort_putindextuple(btspool->sortstate, itup);
+}
+
+/*
+ * given a spool loaded by successive calls to _bt_spool,
+ * create an entire btree.
+ */
+void
+_bt_leafbuild(BTSpool *btspool, BTSpool *btspool2)
+{
+	BTWriteState wstate;
+
+#ifdef BTREE_BUILD_STATS
+	if (log_btree_build_stats)
+	{
+		ShowUsage("BTREE BUILD (Spool) STATISTICS");
+		ResetUsage();
+	}
+#endif   /* BTREE_BUILD_STATS */
+
+	tuplesort_performsort(btspool->sortstate);
+	if (btspool2)
+		tuplesort_performsort(btspool2->sortstate);
+
+	wstate.index = btspool->index;
+
+	/*
+	 * We need to log index creation in WAL iff WAL archiving is enabled AND
+	 * it's not a temp index.
+	 */
+	wstate.btws_use_wal = XLogArchivingActive() && !wstate.index->rd_istemp;
+
+	/* reserve the metapage */
+	wstate.btws_pages_alloced = BTREE_METAPAGE + 1;
+	wstate.btws_pages_written = 0;
+	wstate.btws_zeropage = NULL;	/* until needed */
+
+	_bt_load(&wstate, btspool, btspool2);
+}
 
 
 /*
@@ -391,9 +480,10 @@ _bt_buildadd(BTWriteState *wstate, BTPageState *state, IndexTuple itup)
 	if (itupsz > BTMaxItemSize(npage))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("index row size %lu exceeds btree maximum, %lu",
+				 errmsg("index row size %lu exceeds maximum %lu for index \"%s\"",
 						(unsigned long) itupsz,
-						(unsigned long) BTMaxItemSize(npage)),
+						(unsigned long) BTMaxItemSize(npage),
+						RelationGetRelationName(wstate->index)),
 		errhint("Values larger than 1/3 of a buffer page cannot be indexed.\n"
 				"Consider a function index of an MD5 hash of the value, "
 				"or use full text indexing.")));

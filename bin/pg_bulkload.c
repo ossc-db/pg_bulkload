@@ -16,7 +16,7 @@
 #include "pgut/pgut-fe.h"
 #include "pgut/pgut-list.h"
 
-const char *PROGRAM_VERSION	= "3.0alpha3";
+const char *PROGRAM_VERSION	= "3.0beta1";
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
@@ -114,7 +114,7 @@ main(int argc, char *argv[])
 	if (getcwd(cwd, MAXPGPATH) == NULL)
 		ereport(ERROR,
 			(errcode_errno(),
-			errmsg("cannot read current directory: ")));
+			 errmsg("cannot read current directory: ")));
 
 	i = pgut_getopt(argc, argv, options);
 
@@ -123,7 +123,7 @@ main(int argc, char *argv[])
 		if (control_file[0])
 			ereport(ERROR,
 				(errcode(EINVAL),
-				errmsg("too many arguments")));
+				 errmsg("too many arguments")));
 
 		/* make absolute control file path */
 		if (is_absolute_path(argv[i]))
@@ -240,6 +240,11 @@ LoaderLoadMain(List *options)
 	StringInfoData	buf;
 	int				encoding;
 	ListCell	   *cell;
+
+	if (options == NIL)
+		ereport(ERROR,
+			(errcode(EINVAL),
+			 errmsg("requires control file or command line options")));
 
 	initStringInfo(&buf);
 	reconnect(ERROR);
@@ -490,7 +495,7 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 	if (buf[strlen(buf) - 1] != '\n')
 		ereport(ERROR,
 			(errcode(EINVAL),
-			errmsg("too long line \"%s\"", buf)));
+			 errmsg("too long line \"%s\"", buf)));
 
 	p = buf;				/* pointer to keyword */
 

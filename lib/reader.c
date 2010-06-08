@@ -249,7 +249,7 @@ ParseOption(Reader *rd, DefElem *opt)
 
 	if (opt->arg == NULL)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("option %s has no value", opt->defname)));
+				errmsg("option \"%s\" has no value", opt->defname)));
 
 	keyword = opt->defname;
 	target = strVal(opt->arg);

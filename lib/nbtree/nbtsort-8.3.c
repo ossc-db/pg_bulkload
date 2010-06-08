@@ -133,6 +133,95 @@ static void _bt_load(BTWriteState *wstate,
 
 
 /*
+ * Interface routines
+ */
+
+
+/*
+ * create and initialize a spool structure
+ */
+BTSpool *
+_bt_spoolinit(Relation index, bool isunique, bool isdead)
+{
+	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
+	int			btKbytes;
+
+	btspool->index = index;
+	btspool->isunique = isunique;
+
+	/*
+	 * We size the sort area as maintenance_work_mem rather than work_mem to
+	 * speed index creation.  This should be OK since a single backend can't
+	 * run multiple index creations in parallel.  Note that creation of a
+	 * unique index actually requires two BTSpool objects.	We expect that the
+	 * second one (for dead tuples) won't get very full, so we give it only
+	 * work_mem.
+	 */
+	btKbytes = isdead ? work_mem : maintenance_work_mem;
+	btspool->sortstate = tuplesort_begin_index(index, isunique,
+											   btKbytes, false);
+
+	return btspool;
+}
+
+/*
+ * clean up a spool structure and its substructures.
+ */
+void
+_bt_spooldestroy(BTSpool *btspool)
+{
+	tuplesort_end(btspool->sortstate);
+	pfree(btspool);
+}
+
+/*
+ * spool an index entry into the sort file.
+ */
+void
+_bt_spool(IndexTuple itup, BTSpool *btspool)
+{
+	tuplesort_putindextuple(btspool->sortstate, itup);
+}
+
+/*
+ * given a spool loaded by successive calls to _bt_spool,
+ * create an entire btree.
+ */
+void
+_bt_leafbuild(BTSpool *btspool, BTSpool *btspool2)
+{
+	BTWriteState wstate;
+
+#ifdef BTREE_BUILD_STATS
+	if (log_btree_build_stats)
+	{
+		ShowUsage("BTREE BUILD (Spool) STATISTICS");
+		ResetUsage();
+	}
+#endif   /* BTREE_BUILD_STATS */
+
+	tuplesort_performsort(btspool->sortstate);
+	if (btspool2)
+		tuplesort_performsort(btspool2->sortstate);
+
+	wstate.index = btspool->index;
+
+	/*
+	 * We need to log index creation in WAL iff WAL archiving is enabled AND
+	 * it's not a temp index.
+	 */
+	wstate.btws_use_wal = XLogArchivingActive() && !wstate.index->rd_istemp;
+
+	/* reserve the metapage */
+	wstate.btws_pages_alloced = BTREE_METAPAGE + 1;
+	wstate.btws_pages_written = 0;
+	wstate.btws_zeropage = NULL;	/* until needed */
+
+	_bt_load(&wstate, btspool, btspool2);
+}
+
+
+/*
  * Internal routines.
  */
 
