@@ -1,0 +1,666 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD html 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>pg_bulkload</title>
+<link rel="home" title="pg_bulkload" href="index.html">
+<link rel="stylesheet" TYPE="text/css"href="style.css">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+
+<body>
+<h1 id="pg_bulkload">pg_bulkload 3.0 Beta 1</h1>
+<div class="navigation">
+  <a href="index.html">Top</a> &gt;
+  <a href="pg_bulkload.html">pg_bulkload</a>
+<div>
+<hr />
+
+<div class="index">
+<ol>
+<li><a href="#name">Name</a></li>
+<li><a href="#synopsis">Synopsis</a></li>
+<li><a href="#description">Description</a></li>
+<li><a href="#examples">Examples</a></li>
+<li><a href="#options">Options</a></li>
+<li><a href="#controlfile">Control Files</a></li>
+<li><a href="#environment">Envirionment</a></li>
+<li><a href="#restrictions">Restrictions</a></li>
+<li><a href="#details">Details</a></li>
+<li><a href="#install">Installation</a></li>
+<li><a href="#requirement">Requirements</a></li>
+<li><a href="#seealso">See Also</a></li>
+</ol>
+</div>
+
+<h2 id="name">Name</h2>
+<p>pg_bulkload -- it provides high-speed data loading capability to PostgreSQL users.</p>
+
+<h2 id="synopsis">Synopsis</h2>
+<p>
+pg_bulkload [ OPTIONS ] [ controlfile ]
+</p>
+
+<h2 id="description">Description</h2>
+<p>
+pg_bulkload is designed to load huge amount of data to a database.
+You can choose whether database constraints are checked and how many errors are ignored during the loading.
+For example, you can skip integrity checks for performance when you copy data from another database to PostgreSQL.
+On the other hand, you can enable constraint checks when loading unclean data.
+</p>
+
+<p>
+The original goal of pg_bulkload was an faster alternative of <code>COPY</code> command in PostgreSQL,
+but now version 3.0 has some ETL features like input data validation and data transformation with filter functions.
+</p>
+
+<h2 id="examples">Examples</h2>
+
+<p>
+pg_bulkload provides two programs.
+</p>
+
+<h3>postgresql script</h3>
+<p>
+This is a wrapper command for <code>pg_ctl</code>, which starts and stops PostgreSQL 
+server.  postgresql script invokes <code>pg_ctl</code> internally.   postgresql script 
+provides very important pg_bulkload functionality, recovery.   For 
+performance, pg_bulkload bypasses some of PostgreSQL's internal functionality
+such as WAL.   Therefore, pg_bulkload needs to provide separate recovery 
+procedure before usual PostgreSQL's recovery is performed.   postgresql script
+provides this feature.
+</p>
+<p>
+You must see below "<a href="#restrictions">Restrictions</a>",
+especially if you use pg_bulkload in DIRECT or PARALLEL load modes.
+It requires special database recovery processes.
+Notice that DIRECT mode is <b>the default settings</b>.
+</p>
+
+<h3>pg_bulkload</h3>
+<p>
+This program is used to load the data.
+Internally, it invokes PostgreSQL's user-defined function called pg_bulkload() and perform the loading.   
+pg_bulkload() function will be installed during pg_bulkload installation.
+</p>
+
+<p>
+You can use pg_bulklad by the following three steps:
+</p>
+<ol>
+<li>Edit control file "<a href="sample_csv.ctl">sample_csv.ctl</a>" or "<a href="sample_bin.ctl">sample_bin.ctl</a>" that includes settigs for data loading. You can specify table name, absolute path for input file, description of the input file, and so on.
+
+<li>Assume there is a directory <code>$PGDATA/pg_bulkload</code>, in that load status files are created.
+
+<li>Execute command with a control file as argument. Relative path is available for the argument.
+<pre><code>$ pg_bulkload sample_csv.ctl</code></pre>
+</ol>
+</p>
+
+<h2 id="options">Options</h2>
+<p>pg_bulkload has the following command line options:</p>
+
+<h3>Load Options</h3>
+<p>Options to load data.</p>
+
+<dl>
+<dt>
+-i INFILE<br />
+--infile=INFILE
+</dt>
+<dd>A path to read the input source.
+Same as "<a href="#INFILE">INFILE</a>" in control files.
+</dd>
+
+<dt>
+-l LOGFILE<br />
+--logfile=LOGFILE
+</dt>
+<dd>A path to write the result log.
+Same as "<a href="#LOGFILE">LOGFILE</a>" in control files.
+</dd>
+
+<dt>
+-P PARSE_BADFILE<br />
+--parse-badfile=PARSE_BADFILE
+</dt>
+<dd>A path to write bad records that cannot be parsed correctly.
+Same as "<a href="#PARSE_BADFILE">PARSE_BADFILE</a>" in control files.
+</dd>
+
+<dt>
+-u DUPLICATE_BADFILE<br />
+--duplicate-badfile=DUPLICATE_BADFILE
+</dt>
+<dd>A path to write bad records that conflict with unique constraints during index rebuild.
+Same as "<a href="#DUPLICATE_BADFILE">DUPLICATE_BADFILE</a>" in control files.
+</dd>
+
+<dt>
+-o "key=val"<br />
+--option="key=val"
+</dt>
+<dd>
+Any options available in the <a href="#controlfile">control file</a>.
+You can pass multiple options.
+</dd>
+
+</dl>
+
+<h3>Connection Options</h3>
+<p>Options to connect to servers.</p>
+
+<dl>
+<dt>
+-d dbname<br />
+--dbname dbname
+</dt>
+<dd>Specifies the name of the database to be connected.
+If this is not specified, the database name is read from the environment variable PGDATABASE.
+If that is not set, the user name specified for the connection is used.
+</dd>
+
+<dt>-h host<br />
+--host host</dt>
+<dd>Specifies the host name of the machine on which the server is running. If the value begins with a slash, it is used as the directory for the Unix domain socket. </dd>
+
+<dt>-p port<br />
+--port port</dt>
+<dd>Specifies the TCP port or local Unix domain socket file extension on which the server is listening for connections.</dd>
+
+<dt>-U username<br />
+--username username</dt>
+<dd>User name to connect as. </dd>
+
+<dt>-W<br />--password</dt>
+<dd>Force pg_reorg to prompt for a password before connecting to a database.</dd>
+<dd>This option is never essential, since pg_reorg will automatically prompt for a password if the server demands password authentication. However, vacuumdb will waste a connection attempt finding out that the server wants a password. In some cases it is worth typing -W to avoid the extra connection attempt. </dd>
+</dl>
+
+<h3>Generic Options</h3>
+<dl>
+<dt>-e<br />--echo</dt>
+<dd>Echo commands sent to server.</dd>
+<dt>-E<br />--elevel</dt>
+<dd>Choose the output message level from DEBUG, INFO, NOTICE, WARNING, ERROR, LOG, FATAL, and PANIC.
+The default is INFO.</dd>
+<dt>--help</dt>
+<dd>Show usage of the program.</dd>
+<dt>--version</dt>
+<dd>Show the version number of the program.</dd>
+</dl>
+
+<h2 id="controlfile">Control Files</h2>
+<p>
+You can specify the following load options.
+Control files can be specifed with an absolute path or a relative path.
+If you specify it by a relative path, it will be relative to the current working directory executing pg_bulkload command.
+If you don't specify a control file, you should pass required options through command line arguments for pg_bulkload.
+</p>
+
+<p>
+Following parameters are available in control files.
+Characters after "#" are ignored as comments in each line.
+</p>
+
+<h3>Common</h3>
+<dl>
+
+<dt>TABLE = [ schema_name. ] table_name</dt>
+<dd>
+The target table to be loaded.
+If no <i>schema_name</i>, search_path is used to find the target table.
+Always required.
+</dd>
+
+<dt>TYPE</dt>
+<dd>
+The type of input data. Always required.
+<ul>
+  <li>CSV : load from a text file in CSV format</li>
+  <li>BINARY | FIXED : load from a fixed binary file</li>
+  <li>FUNCTION : load from a result set from a function.<br/>
+      If you use it, INFILE must be an expression to call a function.</li>
+</ul>
+</dd>
+
+<dt id="INFILE">INFILE</dt>
+<dd>
+A path to read the input source. Always required.
+The value is treated as following depending on the TYPE option:
+<ul>
+  <li>A file in the server:
+      This is a file path in server.
+      If it is a relative path, it will be relative from the control file when specified in the control file,
+      or will be relative from current working directory when specified in command line arguments.
+      The user of PostgreSQL server must have read permission to the file.
+      It is available only when "TYPE=CSV" or "TYPE=BINARY".
+  </li>
+  <li>Standard input to pg_bulkload command:
+      "INFILE=stdin" means pg_bulkload will read data from the standard input of pg_bulkload client program through network.
+      You should use this form when the input file and database is in different servers.
+      It is available only when "TYPE=CSV" or "TYPE=BINARY".
+      For example:
+      <pre>$ pg_bulkload csv_load.ctl &lt; DATA.csv</pre></li>
+  <li>A SQL function:
+      Specify a SQL function with arguments that returns set of input data.
+      It is available only when "TYPE=FUNCTION".
+      The following example uses a built-in function, but you can also use any user-defined functions.
+      Note that you might need to develop those function with C language instead of PL/pgSQL
+      because the function must use SFRM_ValuePerCall mode for streaming loading.
+<pre>TABLE = sample_table
+TYPE = FUNCTION
+WRITER = DIRECT
+INFILE = generate_series(1, 1000)  # sequential numbers from 1 to 1000
+...</pre></li>
+</ul>
+</dd>
+
+<dt>WRITER | LOADER = DIRECT | BUFFERED | PARALLEL</dt>
+<dd>
+The method to load data. The default is DIRECT.
+<ul>
+  <li>DIRECT   : Bypass the shared buffers and skip WAL records, but need the own recovery procedure.
+                 This is the default, and original older version's mode.</li>
+  <li>BUFFERED : Use shared buffers, write WALs,  and use the original PostgreSQL WAL recovery.</li>
+  <li>PARALLEL : Same as DIRECT, but uses two processes for reading and writing data.</li>
+</ul>
+</dd>
+
+<dt>SKIP | OFFSET = n</dt>
+<dd>
+The number of skip input rows. The default is 0.
+This option is unavailable if you use TYPE=FUNCTION.
+</dd>
+
+<dt>LIMIT | LOAD = n</dt>
+<dd>
+The number of rows to load.
+The default is 0, that is all of data will be loaded.
+This option is available even if you use TYPE=FUNCTION.
+</dd>
+
+<dt>ENCODING</dt>
+<dd>
+Specify the encoding of the input data.
+The input data is verified to be in the encoding, and converted to the database encoding if needed.
+If you have data that encoding is same as database, you can skip encoding verification and conversion for performance when you don't specify the option.
+The default is neither verified nor converted, but the default of "INFILE=stdin" is client_encoding.
+</dd>
+<dd>
+See <a href="http://www.postgresql.jp/document/current/html/functions-string.html#CONVERSION-NAMES">Built-in Conversions</a> for valid encoding names.
+Here are option values and actual behaviors:
+</dd>
+
+<dd>
+<table>
+<thead>
+  <tr>
+    <th colspan=2 rowspan=2> </th>
+    <th colspan=2>DB encoding</th>
+  </tr>
+  <tr>
+    <th>SQL_ASCII</th>
+    <th>non-SQL_ASCII</th>
+  </tr>
+</thead>
+  <tr>
+    <th rowspan=4>ENCODING</th>
+    <th>not specified</th>
+    <td>neither checked nor converted</td>
+    <td>neither checked nor converted</td>
+  </tr>
+  <tr>
+    <th>SQL_ASCII</th>
+    <td>neither checked nor converted</td>
+    <td>only checked</td>
+  </tr>
+  <tr>
+    <th>non-SQL_ASCII, same as DB</th>
+    <td>only checked</td>
+    <td>only checked</td>
+  </tr>
+  <tr>
+    <th>non-SQL_ASCII, different from DB</th>
+    <td>only checked</td>
+    <td>checked and converted</td>
+  </tr>
+</table>
+</dd>
+
+<dt>FILTER = [ schema_name. ] function_name [ (argtype, ... ) ]</dt>
+<dd>
+Specify the filter function to convert each row in the input file.
+You can omit definitions of argtype as long as the function name is unique in the database.
+If not specified, the input data are directly parsed as the load-target table.
+See also <a href="#filter">How to write FILTER functions</a> to make FILTER functions.
+</dd>
+<dd>
+FILTER option is ignored when "TYPE=FUNCTION" is specified.
+Also, FORCE_NOT_NULL in CSV option cannot be used with FILTER option.
+</dd>
+
+<dt>CHECK_CONSTRAINTS = YES | NO</dt>
+<dd>
+Specify whether CHECK constraints are checked during the loading.
+The default is NO.
+</dd>
+
+<dt>PARSE_ERRORS</dt>
+<dd>
+The number of ingored tuples that throw errors during parsing, encoding checks, encoding conversion, FILTER function, CHECK constraint checks, or NOT NULL checks.
+Invalid input tuples are not loaded and recorded in the PARSE BADFILE.
+The default is 0.
+If there are equal or more parse errors than the value, <strong>already loaded data is committed and the remaining tuples are not loaded</strong>.
+0 means to allow no errors, and -1 means ignore all errors.
+</dd>
+
+<dt>DUPLICATE_ERRORS</dt>
+<dd>
+The number of ingored tuples that violate unique constraints.
+Conflicted tuples are removed from the table and recorded in the DUPLICATE BADFILE.
+The default is 0.
+If there are equal or more unique violations than the value, <strong>the whole load is rollbacked</strong>.
+0 means to allow no violations, and -1 means ignore all violations.
+</dd>
+
+<dt>ON_DUPLICATE_KEEP = NEW | OLD</dt>
+<dd>Specify how to handle tuples that violate unique constraints.
+The removed tuples are recorded in the BAD file.
+The default is NEW.
+You also need to set DUPLICATE_ERRORS to more than 0 if you enable the option.
+<ul>
+  <li>NEW : Keep tuples in the input data, and remove corresponding existing tuples.
+            When both violated tuples are in the data, keep the latter one.</li>
+  <li>OLD : Keep existing tuples and remove tuples in the input data.</li>
+</ul>
+</dd>
+
+<dt id="LOGFILE">LOGFILE = path</dt>
+<dd>
+A path to write the result log.
+If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.log.
+</dd>
+
+<dt id="PARSE_BADFILE">PARSE_BADFILE = path</dt>
+<dd>
+A path to write bad records that cannot be parsed correctly.
+The format of the file is same as the input source file.
+If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.bad.&lt;<i>extension-of-infile</i>&gt;.
+</dd>
+
+<dt id="DUPLICATE_BADFILE">DUPLICATE_BADFILE = path</dt>
+<dd>
+A path to write bad records that conflict with unique constraints during index rebuild.
+The format of the file is always CSV.
+If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.dup.csv.
+</dd>
+
+<dt>TRUNCATE = YES | NO</dt>
+<dd>
+If YES, delete all rows from the target table with TRUNCATE command.
+If NO, do nothing.
+The default is NO.
+</dd>
+
+<dt>VERBOSE = YES | NO</dt>
+<dd>
+If YES, write bad tuples also in server log.
+If NO, don't write them in serverlog.
+The default is NO.
+</dd>
+
+</dl>
+
+
+<h3>CSV format</h3>
+<dl>
+<dt>DELIMITER</dt>
+<dd>
+The single ASCII character that separates columns within each row (line) of the file.
+The default is comma.
+</dd>
+<dt>QUOTE</dt>
+<dd>
+Specifies the ASCII quotation character.
+The default is double-quotation.
+</dd>
+<dt>ESCAPE</dt>
+<dd>
+Specifies the ASCII character that should appear before a QUOTE data character value.
+The default is double-quotation.
+</dd>
+<dt>NULL</dt>
+<dd>
+The string that represents a null value.
+The default is a empty value with no quotes.
+</dd>
+<dt>FORCE_NOT_NULL</dt>
+<dd>
+Process each specified column as though it were not a NULL value.
+Multiple columns are available as needed.
+FILTER cannot be used together with this option.
+</dd>
+
+</dl>
+
+<h3>Binary format</h3>
+<dl>
+<dt>COL = type [ (size) ]<dt>
+<dd>
+Column definitions of input file from left to right.
+The definitions consists of type name, offset, and length in bytes.
+CHAR and VARCHAR means input data is a text.
+Otherwise, it is a binary data.
+If binary, endian must match between server and data file.
+  <ul>
+    <li>CHAR | CHARACTER : a string trimmed trailing spaces. The length is always required.</li>
+    <li>VARCHAR | CHARACTER VARYING : a string keeping trailing spaces. The length is always required.</li>
+    <li>SMALLINT | SHOFT : signed integer in 2 bytes.</li>
+    <li>INTEGER | INT : signed integer in 2 or 4 or 8 bytes. The default is 4.</li>
+    <li>BIGINT | LONG : signed integer in 8 bytes.</li>
+    <li>UNSIGNED SMALLINT | SHORT : unsigned integer in 2 bytes.</li>
+    <li>UNSIGNED INTEGER | INT : unsigned integer in 2 or 4 bytes. The default is 4.</li>
+    <li>FLOAT | REAL : floating point number in 4 or 8 bytes. The default is 4.</li>
+    <li>DOUBLE : floating point number in 8 bytes.</li>
+  </ul>
+The length and offset of the type can be specifed as following:
+  <ul>
+    <li>TYPE : TYPE with default length follows.</li>
+    <li>TYPE(L) : TYPE with L bytes follows.</li>
+    <li>TYPE(S+L) : L bytes, offset S bytes from the beginning of the line</li>
+    <li>TYPE(S:E) : start at S bytes and end at E bytes.</li>
+  </ul>
+In addition, "COL N" is available, that is same as COL CHAR(N), for backward compatibility.
+</dd>
+
+<dt>PRESERVE_BLANKS = YES | NO</dt>
+<dd>
+YES regards following "COL N" as "COL CHAR(N)" and NO as "COL VARCHAR(N)".
+Default is NO.
+</dd>
+
+<dt>STRIDE = n</dt>
+<dd>
+Length of one row.
+Use if you want to truncate the end of row.
+The default is whole of the row, which means the total of COLs.
+</dd>
+
+</dl>
+
+<h2 id="environment">Environment</h2>
+<p>The followin envionment variables affect pg_bulkload.</p>
+
+<dl>
+	<dt>
+		PGDATABASE<br />
+		PGHOST<br />
+		PGPORT<br />
+		PGUSER
+	</dt>
+	<dd>Default connection parameters</dd>
+</dl>
+<p>This utility, like most other PostgreSQL utilities, also uses the environment variables supported by libpq  (see <a href="http://developer.postgresql.org/pgdocs/postgres/libpq-envars.html">Environment Variables</a>).</p>
+
+<h2 id="restrictions">Restrictions</h2>
+
+<h3>On direct loading</h3>
+<p>
+If you use direct load mode (WRITER=DIRECT or PARALLEL), you have to be aware below:
+</p>
+
+<h4>PostgreSQL startup sequence</h4>
+<p>
+When pg_bulkload is crashed and some .loadstatus files are remained in <code>$PGDATA/pg_bulkload</code>, database must be recovered by pg_bulkload own recovery with "<code>pg_bulkoad -r</code>" command before you invoke pg_ctl start.
+You must start and stop PostgreSQL using postgresql script, which invokes "<code>pg_bulkload -r</code>" and "pg_ctl start" correctly.   We recommend not to use <code>pg_ctl</code> directly.
+</p>
+<p>
+If you use pg_bulkload in Windows operating system, postgresql script is not included in a pg_bulkload package. So you have to invoke "<code>pg_bulkload -r</code>" manually.
+</p>
+
+<h4>PITR</h4>
+<p>
+Because of bypassing WAL, archive recovery by PITR is not available.
+If you would like to use PITR, take a full backup of the 
+database after the loading by pg_bulkload.
+</p>
+
+<h4>Load status file in $PGDATA/pg_bulkload</h4>
+<p>  
+You must not remove the load status file (*.loadstatus) found in 
+<code>$PGDATA/pg_bulkload</code> directory.
+This file is needed in pg_bulkload crash recovery.
+</p>
+
+<h4>Do not use <code>kill -9</h4>
+<p>
+Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as possible.   If you did this, you 
+must invoke postgresql script to perform pg_bulkload recovery and restart 
+PostgreSQL to continue.
+<p>  
+
+<h3>Database Constraints</h3>
+<p>
+Only unique constraint and not-NULL constraint are enforced during data load in default.
+You can to set "CHECK_CONSTRAINTS=YES" to check CHECK constraints.
+Foreign key constraints cannot be checked.
+It is user's responsibility to provide valid data set.
+</p>
+
+<h2 id="details">Details</h2>
+<h3 id="internal">Internal</h3>
+<p>Here is an internal structure in pg_bulkload.</p>
+<img src="img/internal.png" width="600" />
+
+<p>Here are system structure to load data from a file, stdin, or a SQL function:</a>
+<ul>
+<li><a href="img/from-file.png">File</a></li>
+<li><a href="img/from-stdin.png">Stdin</a></li>
+<li><a href="img/from-func.png">SQL function</a></li>
+</ul>
+
+
+<h3 id="filter">How to write FILTER functions</h3>
+<p>There are some notes and warnings when you write FILTER functions:</p>
+<ul>
+  <li>Records in the input file are passed to the FILTER function one-by-one.</li>
+  <li>When an error occurs in the FILTER function, the passed record is not loaded and written into PARSE BADFILE.</li>
+  <li>The FILTER function must return <i>record</i> type or some composite type.
+      Also, the actual record type must match with the target table definition.</li>
+  <li>If the FILTER function returns NULL, a record that has NULLs in all columns is loaded.</li>
+  <li>Functions with default arguments are supported.
+      If the input data has fewer columns than arguments of the function, default values will be used.</li>
+  <li>VARIADIC functions are NOT supported.</li>
+  <li>SETOF funtions are NOT supported.</li>
+  <li>Functions that have generic types (any, anyelement etc.) are NOT supported.</li>
+  <li>FILTER functions can be implemented with any languages.
+      SQL, C, PLs are ok, but you should write functions as fast as possible
+      because they are called many times.</li>
+  <li>You can only specify one of FILTER or FORCE_NOT_NULL options.
+      Please re-implement FORCE_NOT_NULL-compatible FILTER functions if you need the feature.</li>
+</ul>
+
+<p>Here is an example of FILTER function.</p>
+<pre>CREATE FUNCTION sample_filter(integer, text, text, real DEFAULT 0.05) RETURNS record
+    AS $$ SELECT $1 * $4, upper($3) $$
+    LANGUAGE SQL;
+</pre>
+
+<h2 id="install">Installation</h2>
+
+<p>pg_bulkload can be installed same as standard contrib modules.</p>
+
+<h3>Requirements</h3>
+<p>
+pg_bulkload installation assumes the following:
+</p>
+<ul>
+<li>PostgreSQL must have been installed in advance,</li>
+<li>The database has been initialized using <code>initdb</code>.</li>
+</ul>
+
+<h3 id="build">Installation from Source Code</h3>
+<p>You can build pg_bulkload with pgxs.</p>
+<pre>$ cd pg_bulkload
+$ make USE_PGXS=1
+$ su
+$ make USE_PGXS=1 install</pre>
+
+<p>Then, register functions to the database.</p>
+<pre>$ postgresql start
+$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+
+<h3 id="rpm">Installation from RPM package</h3>
+<p>
+It can be installed from RPM package.
+Please check postgresql-server is installed before you install pg_bulkload.
+</p>
+<p>
+The following command will install pg_bulkload:
+</p>
+<pre># rpm -ivh pg_bulkload-&lt;version&gt;.rpm</pre>
+
+<p>You can check whether the module has been installed with the following command:</p>
+<pre># rpm -qa | grep pg_bulkload</pre>
+
+<p>You can find where files are installed:</p>
+<pre># rpm -qs pg_bulkload </pre>
+
+<p>Finally, register functions to the database.
+The script pg_bulkload.sql is in the path diplayed by rpm -qs.
+$PGSHARE is used instead in the following example:</p>
+<pre>$ postgresql start
+$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+
+<h2 id="requirement">Requirements</h2>
+<dl>
+<dt>PostgreSQL versions</dt>
+<dd>PostgreSQL 8.3, 8.4, 9.0</dd>
+<dt>OS</dt>
+<dd>RHEL 5.3, Fedora 12, Windows XP</dd>
+</dl>
+
+<h2 id="seealso">See Also</h2>
+<a href="http://developer.postgresql.org/pgdocs/postgres/sql-copy.html">COPY</a>
+
+<hr />
+<div class="navigation">
+  <a href="index.html">Top</a> &gt;
+  <a href="pg_bulkload.html">pg_bulkload</a>
+<div>
+<p class="footer">Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+try {
+var pageTracker = _gat._getTracker("UA-10244036-1");
+pageTracker._trackPageview();
+} catch(err) {}</script>
+</body>
+</html>
