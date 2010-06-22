@@ -92,7 +92,14 @@ You can use pg_bulklad by the following three steps:
 <li>Assume there is a directory <code>$PGDATA/pg_bulkload</code>, in that load status files are created.
 
 <li>Execute command with a control file as argument. Relative path is available for the argument.
-<pre><code>$ pg_bulkload sample_csv.ctl</code></pre>
+<pre>$ pg_bulkload sample_csv.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	8 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.</pre>
 </ol>
 </p>
 
@@ -506,6 +513,23 @@ The default is whole of the row, which means the total of COLs.
 <p>This utility, like most other PostgreSQL utilities, also uses the environment variables supported by libpq  (see <a href="http://developer.postgresql.org/pgdocs/postgres/libpq-envars.html">Environment Variables</a>).</p>
 
 <h2 id="restrictions">Restrictions</h2>
+
+<h3>Exit code of pg_bulkload</h3>
+<p>
+pg_bulkload returns 0 when succesfully loaded.
+It also returns 1 with a WARNING message when there are some parse errors or duplicate errors even if loading itself was finished.
+Note that skipped rows and replaced rows (with ON_DUPLICATE_KEEP = NEW) are not considered as an error; the exit code will be 0.
+</p>
+
+<p>
+When there is a non-continuable error, the loader raises an ERROR message.
+Then, the exit code will be one of values defined in <a href="http://www.opengroup.org/onlinepubs/9699919799/basedefs/errno.h.html">errno.h</a>
+or the following values. The code will be often -2 because almost all errors occur in the database server.
+</p>
+<ul>
+<li>-1 : PostgreSQL connection error</li>
+<li>-2 : PostgreSQL SQL error</li>
+</ul>
 
 <h3>On direct loading</h3>
 <p>

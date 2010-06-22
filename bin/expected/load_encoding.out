@@ -7,7 +7,7 @@ NOTICE: BULK LOAD END
 	9 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/encoding1.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -37,7 +37,7 @@ WRITER = DIRECT
   9 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -124,7 +124,8 @@ NOTICE: BULK LOAD END
 	2 Rows successfully loaded.
 	1 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -157,7 +158,7 @@ Maximum parse error count exceeded - 1 error(s) found in input file
   2 Rows successfully loaded.
   1 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -192,7 +193,8 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	2 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding4.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -226,7 +228,7 @@ Maximum parse error count exceeded - 2 error(s) found in input file
   4 Rows successfully loaded.
   2 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -263,7 +265,8 @@ NOTICE: BULK LOAD END
 	6 Rows successfully loaded.
 	3 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding5.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -298,7 +301,7 @@ Maximum parse error count exceeded - 3 error(s) found in input file
   6 Rows successfully loaded.
   3 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -339,7 +342,8 @@ NOTICE: BULK LOAD END
 	6 Rows successfully loaded.
 	3 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding6.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -373,7 +377,7 @@ Parse error Record 3: Input Record 8: Rejected - column 2. invalid byte sequence
   6 Rows successfully loaded.
   3 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>

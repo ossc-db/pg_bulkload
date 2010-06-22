@@ -239,6 +239,7 @@ LoaderLoadMain(List *options)
 	const char	   *params[1];
 	StringInfoData	buf;
 	int				encoding;
+	int				errors;
 	ListCell	   *cell;
 
 	if (options == NIL)
@@ -297,12 +298,15 @@ LoaderLoadMain(List *options)
 	}
 	command("COMMIT", 0, NULL);
 
+	errors = atoi(PQgetvalue(res, 0, 2)) +	/* parse errors */
+			 atoi(PQgetvalue(res, 0, 3));	/* duplicate errors */
+
 	elog(NOTICE, "BULK LOAD END\n"
 				 "\t%s Rows skipped.\n"
 				 "\t%s Rows successfully loaded.\n"
 				 "\t%s Rows not loaded due to parse errors.\n"
 				 "\t%s Rows not loaded due to duplicate errors.\n"
-				 "\t%s Rows deleted due to duplicate errors.",
+				 "\t%s Rows replaced with new rows.",
 				 PQgetvalue(res, 0, 0), PQgetvalue(res, 0, 1),
 				 PQgetvalue(res, 0, 2), PQgetvalue(res, 0, 3),
 				 PQgetvalue(res, 0, 4));
@@ -311,7 +315,13 @@ LoaderLoadMain(List *options)
 	disconnect();
 	termStringInfo(&buf);
 
-	return 0;
+	if (errors > 0)
+	{
+		elog(WARNING, "some rows were not loaded due to errors.");
+		return 1;
+	}
+	else
+		return 0;	/* succeeded without errors */
 }
 
 /*

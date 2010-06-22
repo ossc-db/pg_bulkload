@@ -80,7 +80,14 @@ pg_bulkload() ユーザ定義関数は、pg_bulkload のインストール時に
 </li>
 <li>$PGDATA/pg_bulkload ディレクトリが存在することを確認してください。そのディレクトリにはロードステータスファイルが作成されます。</li>
 <li>制御ファイルを引数としてコマンドを実行します。
-<pre>$ pg_bulkload sample_csv.ctl</pre></li>
+<pre>$ pg_bulkload sample_csv.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	8 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.</pre>
 </ol>
 
 <h2 id="options">オプション</h2>
@@ -489,6 +496,23 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 </p>
 
 <h2 id="restrictions">使用上の注意と制約</h2>
+
+<h3>pg_bulkload の終了コード</h3>
+<p>
+データロードが正常に終了した場合は 0 が返ります。
+ロードは完了してもパースエラーや一意性エラーによりロードできない行が発生している場合には、WARNING メッセージと共に 1 が返ります。
+この際、スキップされた行 (Rows skipped) や、置換された行 (Rows replaced, ON_DUPLICATE_KEEP = NEW) が存在する場合も正常終了 (返値 0) 扱いであることに注意してください。
+</p>
+
+<p>
+ロード中にエラーが発生した場合には ERROR が報告されます。
+この際の終了コードはさまざまであり、<a href="http://www.opengroup.org/onlinepubs/9699919799/basedefs/errno.h.html">errno.h</a> に定義された値の他、以下のエラーも返します。
+エラーの多くはロード中にサーバで生じるため、-2 がほとんどです。
+</p>
+<ul>
+<li>-1 : PostgreSQL への接続に失敗</li>
+<li>-2 : PostgreSQL へのSQLでエラー</li>
+</ul>
 
 <h3>ダイレクトロードで使用する場合</h3>
 <p>ダイレクトロードで使用する場合 (WRITER=DIRECT または PARALLEL)、以下のことに注意しなければなりません：</p>

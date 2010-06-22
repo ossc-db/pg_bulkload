@@ -5,7 +5,8 @@ NOTICE: BULK LOAD END
 	5 Rows successfully loaded.
 	3 Rows not loaded due to parse errors.
 	2 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check1.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -40,7 +41,7 @@ Duplidate error Record 2: Rejected - duplicate key value violates unique constra
   5 Rows successfully loaded.
   3 Rows not loaded due to parse errors.
   2 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -111,7 +112,8 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	3 Rows not loaded due to parse errors.
 	2 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -147,7 +149,7 @@ Duplidate error Record 2: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   3 Rows not loaded due to parse errors.
   2 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -184,7 +186,8 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	4 Rows not loaded due to parse errors.
 	2 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check4.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -220,7 +223,7 @@ Duplidate error Record 2: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   4 Rows not loaded due to parse errors.
   2 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>

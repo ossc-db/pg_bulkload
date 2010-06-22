@@ -308,7 +308,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 			  "  " int64_FMT " Rows successfully loaded.\n"
 			  "  " int64_FMT " Rows not loaded due to parse errors.\n"
 			  "  " int64_FMT " Rows not loaded due to duplicate errors.\n"
-			  "  " int64_FMT " Rows deleted due to duplicate errors.\n\n",
+			  "  " int64_FMT " Rows replaced with new rows.\n\n",
 			  skip, count, parse_errors, ret.num_dup_new, ret.num_dup_old);
 
 	pg_rusage_init(&ru1);

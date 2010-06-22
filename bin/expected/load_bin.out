@@ -30,7 +30,7 @@ NOTICE: BULK LOAD END
 	8 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin1.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -79,7 +79,7 @@ WRITER = DIRECT
   8 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -124,7 +124,7 @@ NOTICE: BULK LOAD END
 	8 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin2.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -173,7 +173,7 @@ WRITER = DIRECT
   8 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -239,7 +239,7 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	4 Rows deleted due to duplicate errors.
+	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -292,7 +292,7 @@ Duplidate error Record 4: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  4 Rows deleted due to duplicate errors.
+  4 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -354,7 +354,7 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	4 Rows deleted due to duplicate errors.
+	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin4.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -388,7 +388,7 @@ Duplidate error Record 4: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  4 Rows deleted due to duplicate errors.
+  4 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -450,7 +450,8 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	4 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin5.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -484,7 +485,7 @@ Duplidate error Record 4: Rejected - duplicate key value violates unique constra
   0 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   4 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -601,7 +602,8 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	7 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin7.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -657,7 +659,7 @@ Parse error Record 7: Input Record 7: Rejected - column 5. null value in column 
   0 Rows successfully loaded.
   7 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -724,7 +726,7 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin8.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -773,7 +775,7 @@ WRITER = DIRECT
   0 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -786,7 +788,7 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin9.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -835,7 +837,7 @@ WRITER = DIRECT
   0 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>

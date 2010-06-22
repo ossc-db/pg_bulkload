@@ -62,7 +62,7 @@ NOTICE: BULK LOAD END
 	3 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function1.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -87,7 +87,7 @@ WRITER = DIRECT
   3 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -122,7 +122,8 @@ NOTICE: BULK LOAD END
 	6 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	3 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function2.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -150,7 +151,7 @@ Duplidate error Record 3: Rejected - duplicate key value violates unique constra
   6 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   3 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -197,7 +198,8 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	4 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function3.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -227,7 +229,7 @@ Maximum parse error count exceeded - 4 error(s) found in input file
   0 Rows successfully loaded.
   4 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -274,7 +276,8 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	4 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function4.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -308,7 +311,7 @@ Parse error Record 4: Input Record 4: Rejected - column 21. null value in column
   0 Rows successfully loaded.
   4 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -321,7 +324,7 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	3 Rows deleted due to duplicate errors.
+	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function5.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -354,7 +357,7 @@ Duplidate error Record 3: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  3 Rows deleted due to duplicate errors.
+  3 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -404,7 +407,7 @@ NOTICE: BULK LOAD END
 	5 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	4 Rows deleted due to duplicate errors.
+	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function6.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -433,7 +436,7 @@ Duplidate error Record 4: Rejected - duplicate key value violates unique constra
   5 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  4 Rows deleted due to duplicate errors.
+  4 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -484,7 +487,7 @@ NOTICE: BULK LOAD END
 	4 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	1 Rows deleted due to duplicate errors.
+	1 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function7.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -510,7 +513,7 @@ Duplidate error Record 1: Rejected - duplicate key value violates unique constra
   4 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  1 Rows deleted due to duplicate errors.
+  1 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -567,7 +570,7 @@ NOTICE: BULK LOAD END
 	7 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	6 Rows deleted due to duplicate errors.
+	6 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function8.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -598,7 +601,7 @@ Duplidate error Record 6: Rejected - duplicate key value violates unique constra
   7 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
-  6 Rows deleted due to duplicate errors.
+  6 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -657,7 +660,8 @@ NOTICE: BULK LOAD END
 	0 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	5 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function9.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -687,7 +691,7 @@ Duplidate error Record 5: Rejected - duplicate key value violates unique constra
   0 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   5 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -746,7 +750,8 @@ NOTICE: BULK LOAD END
 	1 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	3 Rows not loaded due to duplicate errors.
-	1 Rows deleted due to duplicate errors.
+	1 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function10.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -780,7 +785,7 @@ Duplidate error Record 4: Rejected - duplicate key value violates unique constra
   1 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   3 Rows not loaded due to duplicate errors.
-  1 Rows deleted due to duplicate errors.
+  1 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
@@ -840,7 +845,7 @@ NOTICE: BULK LOAD END
 	1 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \set LOAD1 `awk -f data/gettime.awk results/function11.log`
 TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1000
@@ -850,7 +855,7 @@ NOTICE: BULK LOAD END
 	1000 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
 \set LOAD1000 `awk -f data/gettime.awk results/function12.log`
 SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
  LOAD1 is fast 
@@ -927,7 +932,8 @@ NOTICE: BULK LOAD END
 	1 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	2 Rows not loaded due to duplicate errors.
-	0 Rows deleted due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function14.log
 
 pg_bulkload 3.0alpha2 on <TIMESTAMP>
@@ -985,7 +991,7 @@ Duplidate error Record 2: Rejected - duplicate key value violates unique constra
   1 Rows successfully loaded.
   0 Rows not loaded due to parse errors.
   2 Rows not loaded due to duplicate errors.
-  0 Rows deleted due to duplicate errors.
+  0 Rows replaced with new rows.
 
 Run began on <TIMESTAMP>
 Run ended on <TIMESTAMP>
