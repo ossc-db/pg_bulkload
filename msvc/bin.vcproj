@@ -365,6 +365,46 @@
 				</File>
 			</Filter>
 		</Filter>
+		<Filter
+			Name="doc"
+			>
+			<File
+				RelativePath="..\doc\index.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\index_ja.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\pg_bulkload-ja.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\pg_bulkload.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\pg_timestamp-ja.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\pg_timestamp.html"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\sample_bin.ctl"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\sample_csv.ctl"
+				>
+			</File>
+			<File
+				RelativePath="..\doc\style.css"
+				>
+			</File>
+		</Filter>
 		<File
 			RelativePath=".\readme.txt"
 			>

@@ -60,7 +60,11 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 	PGresult   *res;
 	const char *params[7];
 	char		max_dup_errors[MAXINT8LEN + 1];
- 
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("PARALLEL writer is not supported for now")));
+
 	self = palloc0(sizeof(ParallelWriter));
 	self->base.insert = (WriterInsertProc) ParallelWriterInsert,
 	self->base.close = (WriterCloseProc) ParallelWriterClose,

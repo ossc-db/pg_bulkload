@@ -63,7 +63,9 @@ pg_bulkload を利用する場合、必ずこの postgresql スクリプトを�
 
 <p>
 下記の "<a href="#restrictions">使用上の注意と制約</a>" を必ず読んでください。
-特に、pg_bulkload を DIRECT モードまたは PARALLEL モードで使った際のリカバリに関係します。
+特に、pg_bulkload を DIRECT モード
+<!-- または PARALLEL モード -->
+で使った際のリカバリに関係します。
 DIRECT モードは<b>デフォルトの設定</b>であるため、ほとんどのユーザに影響があります。
 </p>
 
@@ -254,13 +256,15 @@ INFILE = generate_series(1, 1000)  # 1から1,000の連番をロードする
 </ul>
 </dd>
 
-<dt>WRITER | LOADER = DIRECT | BUFFERED | PARALLEL</dt>
+<dt>WRITER | LOADER = DIRECT | BUFFERED<!-- | PARALLEL --></dt>
 <dd>
 ロード方式を以下のいずれかで指定します。デフォルトは DIRECT です。
 <ul>
   <li>DIRECT   : 高速ですが特殊なリカバリ手順が必要です。WALをスキップし、共有バッファも汚しません。</li>
   <li>BUFFERED : 特殊なリカバリは不要です。ただし、WALを書き、共有バッファも汚します。</li>
+<!--
   <li>PARALLEL : 基本的には DIRECT と同じですが、データの読み取りと書き出しをそれぞれ異なるプロセスで実行します。</li>
+-->
 </ul>
 </dd>
 
@@ -515,7 +519,7 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 </ul>
 
 <h3>ダイレクトロードで使用する場合</h3>
-<p>ダイレクトロードで使用する場合 (WRITER=DIRECT または PARALLEL)、以下のことに注意しなければなりません：</p>
+<p>ダイレクトロードで使用する場合 (WRITER=DIRECT<!-- または PARALLEL -->)、以下のことに注意しなければなりません：</p>
 
 <h4>PostgreSQL 起動手順</h4>
 <p>pg_bulkload がクラッシュし、.loadstatus ファイルが $PGDATA/pg_bulkload に残っていた場合、データベースは pg_bulkload 独自のリカバリ手順によってリカバリする必要があります。これは "pg_bulkoad -r" コマンドを "pg_ctl start" より前に実行することにより行います。PostgreSQL の起動・停止を postgresql スクリプトにより行うことで、このリカバリをし忘れることを防ぎます。postgresql スクリプトは内部的に "pg_bulkload -r" を実行し、続けて "pg_ctl start" を行っています。そのためダイレクトロードの利用環境下では、pg_ctl を直接使わずに、postgresql スクリプトを利用することをお勧めいたします。</p>
