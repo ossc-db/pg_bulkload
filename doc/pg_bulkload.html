@@ -426,10 +426,15 @@ The default is NO.
 
 <h3>CSV format</h3>
 <dl>
-<dt>DELIMITER</dt>
+<dt id="DELIMITER">DELIMITER</dt>
 <dd>
 The single ASCII character that separates columns within each row (line) of the file.
 The default is comma.
+When you load a tab-separated format file (TSV), you can set DELIMITER to a tab character.
+Then, you need to double quote the tab:
+<pre>DELIMITER="	" # a double-quoted tab</pre>
+You can also specify DELIMITER as a command-lineo option with <code>$'\t'</code> syntax.
+<pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
 </dd>
 <dt>QUOTE</dt>
 <dd>

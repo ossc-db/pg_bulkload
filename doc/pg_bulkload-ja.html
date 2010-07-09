@@ -417,9 +417,15 @@ NO の場合はサーバログに出力しません。デフォルトは NO で�
 
 <h3>CSV フォーマット特有の設定項目</h3>
 <dl>
-<dt>DELIMITER</dt>
+<dt id="DELIMITER">DELIMITER</dt>
 <dd>デリミタを指定します。
-デフォルトは「,」です。ASCII 文字 (1バイト文字) でなければなりません。</dd>
+デフォルトは「,」です。ASCII 文字 (1バイト文字) でなければなりません。
+タブ区切り形式のファイル (TSV) をロードする場合には、DELIMITER にタブ文字を指定します。
+タブ単独だと行末と扱われてしまうため、ダブルクォートで囲んでください。
+<pre>DELIMITER="	" # a double-quoted tab</pre>
+コマンドラインから指定する場合には<code>$'\t'</code>を使います。
+<pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
+</dd>
 <dt>QUOTE</dt>
 <dd>引用符を指定します。
 デフォルトは「"」です。ASCII 文字 (1バイト文字) でなければなりません。</dd>
