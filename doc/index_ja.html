@@ -13,25 +13,22 @@
 </head>
 
 <body>
-<Div Align="right"><h2><a href="http://pgbulkload.projects.postgresql.org/"> English</a></h2></Div>
-<center><img style="border: none; margin-left: auto; margin-right: auto; " src="http://pgfoundry.org/images/elephantSmall.png" height="75" width="75" />
+<div Align="right"><h2><a href="http://pgbulkload.projects.postgresql.org/"> English</a></h2></div>
+<center>
+<img style="border: none; margin-left: auto; margin-right: auto; " src="http://pgfoundry.org/images/elephantSmall.png" height="75" width="75" />
 <hr />
 <h1>pg_bulkload ホームページへようこそ</h1>
-<hr />
 </center>
-<p>pg_bulkload は PostgreSQL 向けの高速データロードユーティリティです。</p> 
-<p>pg_bulkload プロジェクトは NTT OSS センタから <a href="http://www.postgresql.org">PostgreSQL</a> のコミュニティへ貢献するものとして <a href="http://pgfoundry.org">pgFoundry</a> に登録されているプロジェクトの一つです。</p>
-<p>pgFoundry のページはこちらです： <a href="http://pgfoundry.org/projects/pgbulkload">http://pgfoundry.org/projects/pgbulkload</a> <br>
-ここで<a href="http://pgfoundry.org/frs/?group_id=1000261">ダウンロード</a>、
-<a href="http://pgfoundry.org/docman/index.php?group_id=1000261&language_id=2">ドキュメント</a>の入手、バグレポート、メーリングリストの閲覧・購読などが行えます。</p>
+
 <p>
-詳細なドキュメントは
-<a href="http://pgfoundry.org/docman/index.php?group_id=1000261&language_id=2">こちら</a>から入手可能です。
-日本語ドキュメントは「ランゲージ」で"Japanese" を選択し、"Go"を押すと表示されます。 </p>
+pg_bulkload は PostgreSQL 向けの高速データロードユーティリティです。
+<a href="http://pgfoundry.org/projects/pgbulkload">pgFoundry のページ</a>より、<a href="http://pgfoundry.org/frs/?group_id=1000261">ダウンロード</a>、
+<a href="http://pgfoundry.org/docman/index.php?group_id=1000261&language_id=2">ドキュメント</a>の入手、バグレポート、メーリングリストの閲覧・購読などが行えます。</p>
 
 <p>
 <a href="index.html">Here is an English page.</a>
 </p>
+
 <hr />
 
 <h1 id="documentation">ドキュメント</h1>
@@ -50,90 +47,224 @@
 </li>
 </ul>
 
+<hr />
+
 <h1 id="performance">性能測定結果</h1>
 
 <p>
-  <dl>
-    <dt><h2>概要</h2></dt>
-    <ul>
-      <li>1GB の CSV データを COPY と pg_bulkload それぞれでロードします。</li>
-      <ul>
-      <li>ロード対象テーブル : 4GB のデータがすでに存在しているものとします。</li>
-      <li>テーブル定義 : <a href="http://www.osdl.net/lab_activities/kernel_testing/osdl_database_test_suite/osdl_dbt-2/">DBT-2</a>(<a href="http://www.tpc.org/tpcc/">TPC-C</a>ライクなベンチマークキット)で使われる customer テーブルです。</li>
-      <li>インデックス定義 : 2つのインデックスを定義しています(PK(int 1つからなるカラム), 非ユニークインデックス(int 1つからなるカラム))
-      </ul>
-    </ul>
-  </dl>
-  <dl>
-    <dt><h2>結果</h2></dt>
-      <ul>
-        <li> (インデックス定義済みテーブルへの COPY) vs pg_bulkload </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>項目</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr align="right"><td>COPY(秒)</td><td>1601.4</td><td>1586.2</td></tr>
-          <tr align="right"><td>pg_bulkload(秒)</td><td>147.7</td><td>131.8</td></tr>
-          <tr align="right" bgcolor="#D8BFD8"><td>比</td><td>10.8</td><td>12.0</td></tr>
-          </table>
-      </ul>
-      <br>
-      <ul>
-        <li> ((インデックス定義がないテーブルへの COPY) + CREATE INDEX) vs pg_bulkload </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>項目</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr align="right"><td>COPY(秒)</td><td>548.9</td><td>596.5</td></tr>
-          <tr align="right"><td>pg_bulkload(秒)</td><td>147.7</td><td>131.8</td></tr>
-          <tr align="right" bgcolor="#D8BFD8"><td>比</td><td>4.17</td><td>4.04</td></tr>
-          </table>
-      </ul>
-      <br>
-      <ul><ul>
-        <li> 結果詳細 </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>項目</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr><td>pg_bulkload（インデックス定義済みテーブル）</td><td align="right">147.7</td><td align="right">131.8</td></tr>
-          <tr><td>pg_bulkload (インデックスなしテーブル)</td><td align="right">72.5</td><td align="right">72.9</td></tr>
-          <tr><td>COPY (インデックス定義済みテーブル)</td><td align="right">1601.4</td><td align="right">1586.2</td></tr>
-          <tr><td>COPY (インデックスなしテーブル)</td><td align="right">127.7</td><td align="right">140.2</td></tr>
-          <tr><td>CREATE INDEX</td><td align="right">468.8</td><td align="right">408.7</td></tr>
-          </table>
-      </ul></ul>
-      <br>
-      <ul>
-      <img src="img/20070316_copy_vs_pg_bulkload-818.png">
-      <img src="img/20070316_copy_vs_pg_bulkload-823.png">
-      </ul>
-      <ul>
-        <li> 測定条件 </li>
-          <table border="1">
-          <tr bgcolor="#B0C4DE"><td>項目</td><td>値</td>
-          <tr><td>マシン</td><td>PowerEdge1900</td>
-          <tr><td>CPU</td><td>Dual Core Intel(R) Xeon(R) Processor5050 CPU3.0GHz</td>
-          <tr><td>メモリ</td><td>2GB</td>
-          <tr><td>ディスクサイズ (OSがインストールされているディスク)</td><td>SerialATA II 80GB</td>
-          <tr><td>ストレージサイズ (データベースクラスタが格納されているディスク)</td><td>RAID0 1.2TB</td>
-          <tr><td>RAID コントローラキャッシュ</td><td>128MB</td>
-          <tr><td>ハイパースレッド</td><td>ON</td>
-          <tr><td>OSバージョン</td><td>RHEL ES release4 update4(32bit)</td>
-          <tr><td>カーネルバージョン</td><td>2.6.9-42.ELsmp</td>
-          <tr><td>libcバージョン</td><td>2.3.4</td>
-          <tr><td>PostgreSQLバージョン</td><td>8.1.8/8.2.3</td>
-          <tr><td>shared_buffers</td><td>1024</td>
-          <tr><td>checkpoint_segments</td><td>1000</td>
-          <tr><td>checkpoint_timeout</td><td>3600</td>
-          <tr><td>work_mem</td><td>1024</td>
-          <tr><td>maintenance_work_mem</td><td>16384</td>
-          <tr><td>テーブル定義</td><td>DBT-2 customer table</td>
-          <tr><td>インデックスカラム</td><td>c_id (PRIMARY KEY)</td>
-          <tr><td></td><td>c_d_id (非ユニーク B-Tree)</td>
-          <tr><td>制約</td><td>非NULL (全カラム)</td>
-          <tr><td>既存のデータ量</td><td>16,777,216 tuples(4GB)</td>
-          <tr><td>新規ロードデータ量</td><td>4,194,304 tuples(1GB)</td>
-          <tr><td>入力ファイルタイプ</td><td>CSV</td>
-          <tr><td>pg_bulkload バージョン</td><td>pg_bulkload-2.1.2(PG-8.1.8)/2.2.0(PG-8.2.3)</td>
-          </table>
-      </ul>
-  </dl>
+COPY と pg_bulkload の比較のため、以下の条件で測定を行いました。
+PostgreSQL サーバは、基本的なチューニングを済ませた状態です。
 </p>
+
+<dl>
+  <dt>テーブル定義</dt>
+  <dd>
+  <a href="http://www.tpc.org/tpcc/">TPC-C</a> ベンチマークの簡易実装である
+  <a href="http://www.osdl.net/lab_activities/kernel_testing/osdl_database_test_suite/osdl_dbt-2/">DBT-2</a> の、customer テーブルと同じ構成です。</li>
+  <dt>インデックス定義</dt>
+  <dd>
+  2つのインデックスを定義しています。
+  1つ目は、integer 1列を含む昇順の主キーです。
+  2つ目は、integer 1列を含むランダム・キーから成る非ユニークインデックスです。
+  </dd>
+</dl>
+
+<p>
+測定パターンは以下です。
+</p>
+
+<ol>
+  <li>空のテーブルへの 4GB のデータの初期ロード</li>
+  <li>既に 4GB のデータを持つテーブルへの、1GB の追加ロード</li>
+  <li>PARALLEL, FILTER 機能の性能への影響</li>
+</ol>
+
+<h2>結果1 : 初期ロード</h2>
+<p>
+COPY で初期ロードを行う場合、COPY と同一のトランザクションで TRUNCATE を行うと高速にロードできます。
+また、COPY ではインデックスを張らない状態でロードし、ロード後からインデックスを作成したほうが全体の時間が短くなります。
+これらのチューニングを行った COPY と比べても、pg_bulkload はロード時間を約85%まで短縮できています。
+</p>
+
+<table style="float:left">
+<caption>初期ロード: TRUNCATE+COPY vs pg_bulkload</caption>
+<thead>
+  <tr>
+    <th rowspan="2">項目</th>
+    <th colspan="2">version (postgres + bulkload)</th>
+  </tr>
+  <tr>
+    <th>8.4.4 + 2.4</th>
+    <th>9.0b2 + 3.0</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>COPY with indexes</td>
+    <td align="right">1133.4 sec</td>
+    <td align="right">1105.8 sec</td>
+  </tr>
+  <tr>
+    <td>COPY without indexes<br />+ CREATE INDEX</td>
+    <td align="right">717.9 sec</td>
+    <td align="right">705.3 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (DIRECT)<br />with indexes</td>
+    <td align="right">603.2 sec</td>
+    <td align="right">598.9 sec</td>
+  </tr>
+  <tr>
+    <th>時間比</th>
+    <th style="text-align:right">84.0 %</th>
+    <th style="text-align:right">84.9 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/initial_load.png" />
+</div>
+
+<h2 style="clear:both">結果2 : 追加ロード</h2>
+<p>
+追加ロードの COPY では、既存のデータは削除できないため、初期ロードで行った TRUNCATE によるチューニングは使えません。
+また、インデックスの再作成の際は、既存のデータもインデックスしなければならないため、必ずしも高速化には結びつかないようです。
+その結果、pg_bulkload のロード時間は約35%となり、COPY との差が広がっています。
+</p>
+
+<table style="float:left">
+<caption>追加ロード: COPY vs pg_bulkload</caption>
+<thead>
+  <tr>
+    <th rowspan="2">項目</th>
+    <th colspan="2">version (postgres + bulkload)</th>
+  </tr>
+  <tr>
+    <th>8.4.4 + 2.4</th>
+    <th>9.0b2 + 3.0</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>COPY with indexes</td>
+    <td align="right">520.4 sec</td>
+    <td align="right">549.3 sec</td>
+  </tr>
+  <tr>
+    <td>COPY without indexes<br />+ CREATE INDEX</td>
+    <td align="right">805.3 sec</td>
+    <td align="right">799.6 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (DIRECT)<br />with indexes</td>
+    <td align="right">185.2 sec</td>
+    <td align="right">191.7 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>時間比</th>
+    <th style="text-align:right">35.6 %</th>
+    <th style="text-align:right">34.9 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/appended_load.png" />
+</div>
+
+<h2 style="clear:both">結果3 : PARALLEL, FILTER 機能の性能への影響</h2>
+<p>
+パラレルローダは WRITER = PARALLEL の指定で利用できます。
+入力ファイルの読み込みと、テーブルへの行の書き出しを別プロセスで行うため、特にマルチCPU環境で高速化が期待できます。
+実測では、ロード時間を約70%に短縮できました。
+</p>
+
+<p>
+FILTER 機能は、入力データを柔軟に編集した後にロードすることができますが、編集するためのコストは無料ではありません。
+実測では、SQL関数を利用する場合には 250-300%、C言語関数を利用する場合には 150% までロード時間が増加しました。
+</p>
+
+<table style="float:left">
+<caption>PARALLEL, FILTER 機能の性能への影響</caption>
+<thead>
+  <tr>
+    <th rowspan="2">項目</th>
+    <th>初期ロード (4GB)</th>
+    <th>追加ロード (1GB)</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>pg_bulkload (DIRECT)</td>
+    <td align="right">598.9 sec</td>
+    <td align="right">191.7 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (PARALLEL)</td>
+    <td align="right">413.5 sec</td>
+    <td align="right">133.0 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>時間比</th>
+    <th style="text-align:right">69.0 %</th>
+    <th style="text-align:right">69.4 %</th>
+  </tr>
+  <tr>
+    <td>pg_bulkload (SQL-FILTER)</td>
+    <td align="right">1813.9 sec</td>
+    <td align="right">484.6 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>時間比</th>
+    <th style="text-align:right">302.9 %</th>
+    <th style="text-align:right">252.7 %</th>
+  </tr>
+  <tr>
+    <td>pg_bulkload (C-FILTER)</td>
+    <td align="right">918.4 sec</td>
+    <td align="right">263.7 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>時間比</th>
+    <th style="text-align:right">153.3 %</th>
+    <th style="text-align:right">137.6 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/para+filter.png" />
+</div>
+
+<p style="clear:both">
+すべて PostgreSQL 9.0b2 + pg_bulkload 3.0b1 を使用。インデックス付き。
+</p>
+
+<h2>測定条件</h2>
+<table>
+<thead>
+  <tr><th>項目</th><th>値</th></tr>
+</thead>
+<tbody>
+  <tr><td>Server</td><td>Dell PowerEdge 1900</td></tr>
+  <tr><td>CPU</td><td>Dual Core Xeon 5050 (3.0GHz)</td></tr>
+  <tr><td>Hyper-Threading</td><td>off</td></tr>
+  <tr><td>Memory</td><td>2GB</td></tr>
+  <tr><td>Storage Subsystem</td><td>Dell PowerVault 221S</td></tr>
+  <tr><td>Disks</td><td>SCSI 7x146GB (RAID 0)</td></tr>
+  <tr><td>RAID Controller</td><td>PERC 4e/DC DRAM=128MB</td></tr>
+  <tr><td>OS</td><td>CentOS 5.5 (64bit)</td></tr>
+  <tr><td>shared_buffers</td><td>256MB</td></tr>
+  <tr><td>checkpoint_segments</td><td>300</td></tr>
+  <tr><td>checkpoint_timeout</td><td>5min</td></tr>
+  <tr><td>Table definition</td><td>DBT-2 customer table</td></tr>
+  <tr><td rowspan="2">Indexed columns</td><td>c_id (PRIMARY KEY)</td></tr>
+  <tr><td>c_d_id (non-unique B-Tree)</td></tr>
+  <tr><td>Constraints</td><td>NOT NULL for all columns</td></tr>
+  <tr><td>Input file format</td><td>CSV</td></tr>
+</tbody>
+</table>
 
 <hr />
 <p class="footer">Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>

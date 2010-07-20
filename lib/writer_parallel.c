@@ -61,10 +61,6 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 	const char *params[7];
 	char		max_dup_errors[MAXINT8LEN + 1];
 
-	ereport(ERROR,
-		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		 errmsg("PARALLEL writer is not supported for now")));
-
 	self = palloc0(sizeof(ParallelWriter));
 	self->base.insert = (WriterInsertProc) ParallelWriterInsert,
 	self->base.close = (WriterCloseProc) ParallelWriterClose,
@@ -273,14 +269,12 @@ write_queue(ParallelWriter *self, const void *buffer, uint32 len)
 
 	for (;;)
 	{
-		PGresult *res;
-
 		if (QueueWrite(self->queue, iov, 2, DEFAULT_TIMEOUT_MSEC, false))
 			return;
 
-		if ((res = PQgetResult(self->conn)) != NULL)
+		PQconsumeInput(self->conn);
+		if (!PQisBusy(self->conn))
 		{
-			PQclear(res);
 			ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
 				 errmsg("unexpected reader termination"),

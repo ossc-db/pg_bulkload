@@ -71,7 +71,7 @@ provides this feature.
 </p>
 <p>
 You must see below "<a href="#restrictions">Restrictions</a>",
-especially if you use pg_bulkload in DIRECT<!-- or PARALLEL --> load modes.
+especially if you use pg_bulkload in DIRECT or PARALLEL load modes.
 It requires special database recovery processes.
 Notice that DIRECT mode is <b>the default settings</b>.
 </p>
@@ -262,16 +262,14 @@ INFILE = generate_series(1, 1000)  # sequential numbers from 1 to 1000
 </ul>
 </dd>
 
-<dt>WRITER | LOADER = DIRECT | BUFFERED<!-- | PARALLEL --></dt>
+<dt>WRITER | LOADER = DIRECT | BUFFERED | PARALLEL</dt>
 <dd>
 The method to load data. The default is DIRECT.
 <ul>
   <li>DIRECT   : Bypass the shared buffers and skip WAL records, but need the own recovery procedure.
                  This is the default, and original older version's mode.</li>
   <li>BUFFERED : Use shared buffers, write WALs,  and use the original PostgreSQL WAL recovery.</li>
-<!--
   <li>PARALLEL : Same as DIRECT, but uses two processes for reading and writing data.</li>
--->
 </ul>
 </dd>
 
@@ -540,7 +538,7 @@ or the following values. The code will be often -2 because almost all errors occ
 
 <h3>On direct loading</h3>
 <p>
-If you use direct load mode (WRITER=DIRECT<!-- or PARALLEL -->), you have to be aware below:
+If you use direct load mode (WRITER=DIRECT or PARALLEL), you have to be aware below:
 </p>
 
 <h4>PostgreSQL startup sequence</h4>

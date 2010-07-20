@@ -19,10 +19,9 @@
 <h1>Welcome to the pg_bulkload Project Home Page</h1>
 <hr />
 </center>
-<p>pg_bulkload is a high speed data loading utility for PostgreSQL</p>
-<p>The pg_bulkload project is a <a href="http://www.postgresql.org">PostgreSQL</a> Community project that is a part of the <a href="http://pgfoundry.org">pgFoundry</a>. It is produced by NTT OSS Center.</p>
-<p>The pgFoundry page for the project is at <a href="http://pgfoundry.org/projects/pgbulkload">http://pgfoundry.org/projects/pgbulkload</a>, 
-where you can find <a href="http://pgfoundry.org/frs/?group_id=1000261">downloads</a>, documentation, bug reports, mailing lists, and a whole lot more.</p>
+<p>
+pg_bulkload is a high speed data loading utility for PostgreSQL.
+Here is <a href="http://pgfoundry.org/projects/pgbulkload">the pgFoundry page</a>, where you can find <a href="http://pgfoundry.org/frs/?group_id=1000261">downloads</a>, documentation, bug reports, mailing lists, and a whole lot more.</p>
 <p>
 <a href="index_ja.html">日本語ページはこちら</a>
 </p>
@@ -45,92 +44,223 @@ where you can find <a href="http://pgfoundry.org/frs/?group_id=1000261">download
 </li>
 </ul>
 
-<h1><a name="performance">Performance Result</a></h1>
+<hr />
+
+<h1 id="performance">Performance Results</h1>
+
 <p>
-  <dl>
-    <dt><h2>Overview</h2></dt>
-    <ul>
-      <li>Load 1GB CSV Data by COPY and pg_bulkload</li>
-      <ul>
-      <li>Target table : 4GB already existing data</li>
-      <li>Table definition : customer table by DBT-2</li>
-      <li>Index definition : two indexes(PK(single int column), non-unique(single int column))
-      </ul>
-    </ul>
-  </dl>
-  <dl>
-    <dt><h2>Result</h2></dt>
-      <ul>
-        <li> (COPY to indexed table) vs pg_bulkload </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr align="right"><td>COPY(sec.)</td><td>1601.4</td><td>1586.2</td></tr>
-          <tr align="right"><td>pg_bulkload(sec.)</td><td>147.7</td><td>131.8</td></tr>
-          <tr align="right" bgcolor="#D8BFD8"><td>ratio</td><td>10.8</td><td>12.0</td></tr>
-          </table>
-      </ul>
-      <br>
-      <ul>
-        <li> ((COPY to non-indexed table) + CREATE INDEX) vs pg_bulkload </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr align="right"><td>COPY(sec.)</td><td>548.9</td><td>596.5</td></tr>
-          <tr align="right"><td>pg_bulkload(sec.)</td><td>147.7</td><td>131.8</td></tr>
-          <tr align="right" bgcolor="#D8BFD8"><td>ratio</td><td>4.17</td><td>4.04</td></tr>
-          </table>
-      </ul>
-      <br>
-      <ul><ul>
-        <li> Detail result </li>
-          <table border="1">
-          <tr align="center" bgcolor="#B0C4DE"><td>item</td><td width="75">8.1.8</td><td width="75">8.2.3</td></tr>
-          <tr><td>pg_bulkload to an indexed table</td><td align="right">147.7</td><td align="right">131.8</td></tr>
-          <tr><td>pg_bulkload to a non-indexed table</td><td align="right">72.5</td><td align="right">72.9</td></tr>
-          <tr><td>COPY to an indexed table</td><td align="right">1601.4</td><td align="right">1586.2</td></tr>
-          <tr><td>COPY to a non-indexed table</td><td align="right">127.7</td><td align="right">140.2</td></tr>
-          <tr><td>CREATE INDEX</td><td align="right">468.8</td><td align="right">408.7</td></tr>
-          </table>
-      </ul></ul>
-      <br>
-      <ul>
-      <img src="img/20070316_copy_vs_pg_bulkload-818.png">
-      <img src="img/20070316_copy_vs_pg_bulkload-823.png">
-      </ul>
-      <ul>
-        <li> Conditions </li>
-          <table border="1">
-          <tr bgcolor="#B0C4DE"><td>Item</td><td>value</td>
-          <tr><td>Machine</td><td>PowerEdge1900</td>
-          <tr><td>CPU</td><td>Dual Core Intel(R) Xeon(R) Processor5050 CPU3.0GHz</td>
-          <tr><td>Memory</td><td>2GB</td>
-          <tr><td>Disc size (operating system installed)</td><td>SerialATA II 80GB</td>
-          <tr><td>Storage size (database cluster stored)</td><td>RAID0 1.2TB</td>
-          <tr><td>RAID Controller Cache</td><td>128MB</td>
-          <tr><td>Hyper Thread</td><td>ON</td>
-          <tr><td>Version</td><td>RHEL ES release4 update4(32bit)</td>
-          <tr><td>Kernel</td><td>2.6.9-42.ELsmp</td>
-          <tr><td>libc</td><td>2.3.4</td>
-          <tr><td>Version</td><td>8.1.8/8.2.3</td>
-          <tr><td>shared_buffers</td><td>1024</td>
-          <tr><td>checkpoint_segments</td><td>1000</td>
-          <tr><td>checkpoint_timeout</td><td>3600</td>
-          <tr><td>work_mem</td><td>1024</td>
-          <tr><td>maintenance_work_mem</td><td>16384</td>
-          <tr><td>Table definition</td><td>DBT-2 customer table</td>
-          <tr><td>Index column</td><td>c_id (PRIMARY KEY)</td>
-          <tr><td></td><td>c_d_id (non-unique B-Tree)</td>
-          <tr><td>Constraint</td><td>Non-NULL (all columns)</td>
-          <tr><td>Existing data</td><td>16,777,216 tuples(4GB)</td>
-          <tr><td>Loading data</td><td>4,194,304 tuples(1GB)</td>
-          <tr><td>Input file type</td><td>CSV</td>
-          <tr><td>pg_bulkload version</td><td>pg_bulkload-2.1.2(PG-8.1.8)/2.2.0(PG-8.2.3)</td>
-          </table>
-      </ul>
-
-  </dl>
-
-
+Here are comparisons between COPY and pg_bulkload.
+Performance was measured with basic-tuned PostgreSQL server.
 </p>
+
+<dl>
+  <dt>Table definition</dt>
+  <dd>
+  Customer table in <a href="http://www.osdl.net/lab_activities/kernel_testing/osdl_database_test_suite/osdl_dbt-2/">DBT-2</a> benchmark, that is an implementation of <a href="http://www.tpc.org/tpcc/">TPC-C</a>.</li>
+  <dt>Index definition</dt>
+  <dd>
+  There are 2 indexes.
+  The first one is a primary key with one ascending integer column.
+  The second one is a non-unique index with one random integer column.
+  </dd>
+</dl>
+
+<p>
+There are the following measurement patterns.
+</p>
+
+<ol>
+  <li>Initial data loading to an empty table for 4GB of data</li>
+  <li>Appended data loading to a table with 4GB of data for 1GB of new data</li>
+  <li>Performance efficiencies by PARALLEL and FILTER features</li>
+</ol>
+
+<h2>Result 1: Initial data loading</h2>
+<p>
+COPY has better performance on initial data loading if the destination table is TRUNCATEd in the same transaction with COPY.
+In addition, performance of COPY is improved when the data are loaded without indexes and create indexes after the loading.
+However, pg_bulkload has completed in 85% of loading time compared with the tuned COPY.
+</p>
+
+<table style="float:left">
+<caption>Initial: TRUNCATE+COPY vs pg_bulkload</caption>
+<thead>
+  <tr>
+    <th rowspan="2">Item</th>
+    <th colspan="2">version (postgres + bulkload)</th>
+  </tr>
+  <tr>
+    <th>8.4.4 + 2.4</th>
+    <th>9.0b2 + 3.0</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>COPY with indexes</td>
+    <td align="right">1133.4 sec</td>
+    <td align="right">1105.8 sec</td>
+  </tr>
+  <tr>
+    <td>COPY without indexes<br />+ CREATE INDEX</td>
+    <td align="right">717.9 sec</td>
+    <td align="right">705.3 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (DIRECT)<br />with indexes</td>
+    <td align="right">603.2 sec</td>
+    <td align="right">598.9 sec</td>
+  </tr>
+  <tr>
+    <th>Duration comparison</th>
+    <th style="text-align:right">84.0 %</th>
+    <th style="text-align:right">84.9 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/initial_load.png" />
+</div>
+
+<h2 style="clear:both">Result 2: Appended data loading</h2>
+<p>
+The TRUNCATE hack is not available on appended data loading.
+Also, creating indexes after loading is not always faster than loading with indexes.
+Therefore, pg_bulkload has completed in 35% of loading time compared with COPY on appended data loading.
+</p>
+
+<table style="float:left">
+<caption>Appended: COPY vs pg_bulkload</caption>
+<thead>
+  <tr>
+    <th rowspan="2">Item</th>
+    <th colspan="2">version (postgres + bulkload)</th>
+  </tr>
+  <tr>
+    <th>8.4.4 + 2.4</th>
+    <th>9.0b2 + 3.0</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>COPY with indexes</td>
+    <td align="right">520.4 sec</td>
+    <td align="right">549.3 sec</td>
+  </tr>
+  <tr>
+    <td>COPY without indexes<br />+ CREATE INDEX</td>
+    <td align="right">805.3 sec</td>
+    <td align="right">799.6 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (DIRECT)<br />with indexes</td>
+    <td align="right">185.2 sec</td>
+    <td align="right">191.7 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>Duration comparison</th>
+    <th style="text-align:right">35.6 %</th>
+    <th style="text-align:right">34.9 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/appended_load.png" />
+</div>
+
+<h2 style="clear:both">Result 3: PARALLEL and FILTER features</h2>
+<p>
+The parallel loader is used when WRITER = PARALLEL is specified.
+Performance would be improved on multi-CPU server because reading an input file and writing rows to a table are done with two processes.
+The actual measurement shows the loading time is shortened to 70%.
+</p>
+
+<p>
+FILTER feature transforms input data in various operations, but it's not free.
+The actual measurement shows the loading time is increased to 250-300% with SQL functions and 150% with C functions.
+</p>
+
+<table style="float:left">
+<caption>PARALLEL and FILTER features</caption>
+<thead>
+  <tr>
+    <th rowspan="2">Item</th>
+    <th>Initial (4GB)</th>
+    <th>Appended (1GB)</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>pg_bulkload (DIRECT)</td>
+    <td align="right">598.9 sec</td>
+    <td align="right">191.7 sec</td>
+  </tr>
+  <tr>
+    <td>pg_bulkload (PARALLEL)</td>
+    <td align="right">413.5 sec</td>
+    <td align="right">133.0 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>Duration comparison</th>
+    <th style="text-align:right">69.0 %</th>
+    <th style="text-align:right">69.4 %</th>
+  </tr>
+  <tr>
+    <td>pg_bulkload (SQL-FILTER)</td>
+    <td align="right">1813.9 sec</td>
+    <td align="right">484.6 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>Duration comparison</th>
+    <th style="text-align:right">302.9 %</th>
+    <th style="text-align:right">252.7 %</th>
+  </tr>
+  <tr>
+    <td>pg_bulkload (C-FILTER)</td>
+    <td align="right">918.4 sec</td>
+    <td align="right">263.7 sec</td>
+  </tr>
+  <tr bgcolor="#D8BFD8">
+    <th>Duration comparison</th>
+    <th style="text-align:right">153.3 %</th>
+    <th style="text-align:right">137.6 %</th>
+  </tr>
+</tbody>
+</table>
+
+<div style="float:left">
+<img src="img/para+filter.png" />
+</div>
+
+<p style="clear:both">
+PostgreSQL 9.0b2 + pg_bulkload 3.0b1 was used for all measurements, with indexes.
+</p>
+
+<h2>Conditions</h2>
+<table>
+<thead>
+  <tr><th>Item</th><th>Value</th></tr>
+</thead>
+<tbody>
+  <tr><td>Server</td><td>Dell PowerEdge 1900</td></tr>
+  <tr><td>CPU</td><td>Dual Core Xeon 5050 (3.0GHz)</td></tr>
+  <tr><td>Hyper-Threading</td><td>off</td></tr>
+  <tr><td>Memory</td><td>2GB</td></tr>
+  <tr><td>Storage Subsystem</td><td>Dell PowerVault 221S</td></tr>
+  <tr><td>Disks</td><td>SCSI 7x146GB (RAID 0)</td></tr>
+  <tr><td>RAID Controller</td><td>PERC 4e/DC DRAM=128MB</td></tr>
+  <tr><td>OS</td><td>CentOS 5.5 (64bit)</td></tr>
+  <tr><td>shared_buffers</td><td>256MB</td></tr>
+  <tr><td>checkpoint_segments</td><td>300</td></tr>
+  <tr><td>checkpoint_timeout</td><td>5min</td></tr>
+  <tr><td>Table definition</td><td>DBT-2 customer table</td></tr>
+  <tr><td rowspan="2">Indexed columns</td><td>c_id (PRIMARY KEY)</td></tr>
+  <tr><td>c_d_id (non-unique B-Tree)</td></tr>
+  <tr><td>Constraints</td><td>NOT NULL for all columns</td></tr>
+  <tr><td>Input file format</td><td>CSV</td></tr>
+</tbody>
+</table>
 
 <hr />
 <p class="footer">Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
