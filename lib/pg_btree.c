@@ -662,7 +662,13 @@ BTReaderInit(BTReader *reader, Relation rel)
 	 * smgropen *after* RelationSetNewRelfilenode.
 	 */
 	memset(&reader->smgr, 0, sizeof(reader->smgr));
+#if PG_VERSION_NUM >= 90100
+	reader->smgr.smgr_rnode.node = rel->rd_node;
+	reader->smgr.smgr_rnode.backend =
+		rel->rd_istemp ? MyBackendId : InvalidBackendId;
+#else
 	reader->smgr.smgr_rnode = rel->rd_node;
+#endif
 	reader->smgr.smgr_which = 0;	/* md.c */
 
 	reader->blkno = InvalidBlockNumber;

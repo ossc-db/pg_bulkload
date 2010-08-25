@@ -7,6 +7,7 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "access/heapam.h"
@@ -114,7 +115,7 @@ static void	DirectWriterDumpParams(DirectWriter *self);
 #define LS_TOTAL_CNT(ls)	((ls)->ls.exist_cnt + (ls)->ls.create_cnt)
 
 /* Signature of static functions */
-static int	open_data_file(RelFileNode rnode, BlockNumber blknum);
+static int	open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum);
 static void	flush_pages(DirectWriter *loader);
 static void	close_data_file(DirectWriter *loader);
 static void	UpdateLSF(DirectWriter *loader, BlockNumber num);
@@ -393,7 +394,9 @@ flush_pages(DirectWriter *loader)
 		if (relblks % RELSEG_SIZE == 0)
 			close_data_file(loader);
 		if (loader->datafd == -1)
-			loader->datafd = open_data_file(ls->ls.rnode, relblks);
+			loader->datafd = open_data_file(ls->ls.rnode,
+											loader->rel->rd_istemp,
+											relblks);
 
 		/* Number of blocks to be added to the current file. */
 		flush_num = Min(num - i, RELSEG_SIZE - relblks % RELSEG_SIZE);
@@ -438,14 +441,21 @@ flush_pages(DirectWriter *loader)
  * @return File descriptor of the last data file.
  */
 static int
-open_data_file(RelFileNode rnode, BlockNumber blknum)
+open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum)
 {
 	int			fd = -1;
 	int			ret;
 	BlockNumber segno;
 	char	   *fname = NULL;
 
+#if PG_VERSION_NUM >= 90100
+	RelFileNodeBackend	bknode;
+	bknode.node = rnode;
+	bknode.backend = istemp ? MyBackendId : InvalidBackendId;
+	fname = relpath(bknode, MAIN_FORKNUM);
+#else
 	fname = relpath(rnode, MAIN_FORKNUM);
+#endif
 	segno = blknum / RELSEG_SIZE;
 	if (segno > 0)
 	{
