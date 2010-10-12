@@ -11,7 +11,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/parallel1.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data1.csv
 PARSE_BADFILE = .../parallel1.prs
@@ -76,13 +76,11 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -o "WRITER=PARALLEL" -l results/parallel2.log -P results/parallel2.prs -u results/parallel2.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
-WARNING:  Maximum duplicate error count exceeded
-ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
+ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel2.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel2.prs
@@ -105,7 +103,7 @@ NULL = "nullvalue           "
 WRITER = PARALLEL
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-duplicate key value violates unique constraint "customer_pkey"
+Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -143,7 +141,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/parallel3.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel3.prs
@@ -166,7 +164,7 @@ NULL = "nullvalue           "
 WRITER = PARALLEL
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   2 Rows skipped.
   5 Rows successfully loaded.
@@ -214,13 +212,11 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -o "WRITER=PARALLEL" -o "PARSE_ERRORS=0" -l results/parallel4.log -P results/parallel4.prs -u results/parallel4.dup
 NOTICE: BULK LOAD START
-WARNING:  Maximum duplicate error count exceeded
-ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
+ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel4.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel4.prs
@@ -244,7 +240,7 @@ WRITER = PARALLEL
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Maximum parse error count exceeded - 1 error(s) found in input file
-duplicate key value violates unique constraint "customer_pkey"
+Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;

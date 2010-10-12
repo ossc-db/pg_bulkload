@@ -182,6 +182,7 @@ struct Filter
 	Oid				fn_rettype;
 };
 
+extern void tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc);
 extern void FilterInit(Filter *filter, TupleDesc desc);
 extern void FilterTerm(Filter *filter);
 extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field);

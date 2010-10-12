@@ -134,7 +134,7 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 	if (opt == NULL)
 	{
 		fprintf(stderr, "Try \"%s --help\" for more information.\n", PROGRAM_NAME);
-		exit(EINVAL);
+		exit(E_PG_OTHER);
 	}
 
 	if (opt->source > src)
@@ -220,7 +220,7 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 				break;
 			default:
 				ereport(ERROR,
-					(errcode(EINVAL),
+					(errcode(E_PG_OTHER),
 					 errmsg("invalid option type: %c", opt->type)));
 				return;	/* keep compiler quiet */
 		}
@@ -228,12 +228,12 @@ pgut_setopt(pgut_option *opt, const char *optarg, pgut_optsrc src)
 
 	if (isprint(opt->sname))
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(E_PG_OTHER),
 			 errmsg("option -%c, --%s should be %s: '%s'",
 				opt->sname, opt->lname, message, optarg)));
 	else
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(E_PG_OTHER),
 			 errmsg("option --%s should be %s: '%s'",
 				opt->lname, message, optarg)));
 }
@@ -531,7 +531,7 @@ get_username(void)
 
 	if (ret == NULL)
 		ereport(ERROR,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not get current user name: ")));
 	return ret;
 }
@@ -622,12 +622,12 @@ pgut_getopt(int argc, char **argv, pgut_option options[])
 		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
 		{
 			help(true);
-			exit(1);
+			exit(0);
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
 			fprintf(stderr, "%s %s\n", PROGRAM_NAME, PROGRAM_VERSION);
-			exit(1);
+			exit(0);
 		}
 	}
 

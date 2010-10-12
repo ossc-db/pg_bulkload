@@ -94,7 +94,6 @@ static void _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool,
 static int compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
 	ScanKey entry, int keysz, TupleDesc tupdes, bool *hasnull);
 static bool heap_is_visible(Relation heapRel, ItemPointer htid);
-static void report_unique_violation(Relation rel, IndexTuple itup);
 static void remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *relname);
 
 
@@ -496,14 +495,6 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 			/* The tuple pointed by the old index should not be visible. */
 			if (heap_is_visible(heapRel, &itup2->t_tid))
 			{
-				if (self->dup_old + self->dup_new >= self->max_dup_errors)
-				{
-					ereport(WARNING,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Maximum duplicate error count exceeded")));
-					report_unique_violation(wstate->index, itup);
-				}
-
 				if (on_duplicate == ON_DUPLICATE_KEEP_NEW)
 				{
 					self->dup_old++;
@@ -517,6 +508,13 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 					remove_duplicate(self, heapRel, itup,
 						RelationGetRelationName(wstate->index));
 					itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+				}
+
+				if (self->dup_old + self->dup_new > self->max_dup_errors)
+				{
+					ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("Maximum duplicate error count exceeded")));
 				}
 				continue;
 			}
@@ -537,6 +535,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 		{
 			_bt_buildadd(wstate, state, itup);
 
+			/* get next item */
 			if (btspool->isunique)
 			{
 				IndexTuple	next_itup = NULL;
@@ -544,26 +543,31 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 
 				for (;;)
 				{
+					int32	compare;
+					bool	hasnull;
+
 					next_itup = BTSpoolGetNextItem(btspool, next_itup,
 												   &next_should_free);
 					if (next_itup == NULL)
 						break;
-					else
+
+					compare = compare_indextuple(itup, next_itup, indexScanKey,
+												 keysz, tupdes, &hasnull);
+					if (compare < 0 || hasnull)
+						break;
+
+					if (compare > 0)
 					{
-						int32	compare;
-						bool	hasnull;
+						/* shouldn't happen */
+						elog(ERROR, "faild in tuplesort_performsort");
+					}
 
-						compare = compare_indextuple(itup, next_itup,
-									indexScanKey, keysz, tupdes, &hasnull);
-						if (compare < 0 || hasnull)
-							break;
-
-						if (compare > 0)
-						{
-							/* shouldn't happen */
-							elog(ERROR, "faild in tuplesort_performsort");
-						}
-
+					/*
+					 * If tupple is deleted by other unique indexes, not visible
+					 */
+					if (heap_is_visible(heapRel, &itup->t_tid) &&
+						heap_is_visible(heapRel, &next_itup->t_tid))
+					{
 						self->dup_new++;
 						remove_duplicate(self, heapRel, next_itup,
 							RelationGetRelationName(wstate->index));
@@ -971,7 +975,7 @@ remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *reln
 
 	ReleaseBuffer(buffer);
 
-	LoggerLog(WARNING, "Duplidate error Record " int64_FMT
+	LoggerLog(WARNING, "Duplicate error Record " int64_FMT
 		": Rejected - duplicate key value violates unique constraint \"%s\"\n",
 		self->dup_old + self->dup_new, relname);
 }
@@ -1060,74 +1064,4 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 	pfree(nulls);
 
 	return buf.data;
-}
-
-static void
-report_unique_violation(Relation rel, IndexTuple itup)
-{
-#if PG_VERSION_NUM >= 90000
-	Datum	values[INDEX_MAX_KEYS];
-	bool	isnull[INDEX_MAX_KEYS];
-
-	index_deform_tuple(itup, RelationGetDescr(rel), values, isnull);
-	ereport(ERROR,
-			(errcode(ERRCODE_UNIQUE_VIOLATION),
-			 errmsg("duplicate key value violates unique constraint \"%s\"",
-					RelationGetRelationName(rel)),
-			 errdetail("Key %s already exists.",
-					   BuildIndexValueDescription(rel, values, isnull))));
-#else
-#define BUFLENGTH	512
-	char		key_names[BUFLENGTH];
-	char		key_values[BUFLENGTH];
-	char	   *name_ptr = key_names;
-	char	   *val_ptr = key_values;
-	int			i;
-
-	TupleDesc	tupdesc = rel->rd_att;
-
-	for (i = 0; i < tupdesc->natts; i++)
-	{
-		Datum		value;
-		bool		isnull;
-		char	   *name,
-				   *val;
-
-		name = NameStr(tupdesc->attrs[i]->attname);
-		value = index_getattr(itup, i + 1, tupdesc, &isnull);
-		if (isnull)
-			val = "null";
-		else
-		{
-			Oid			foutoid;
-			bool		typisvarlena;
-
-			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
-							  &foutoid, &typisvarlena);
-			val = OidOutputFunctionCall(foutoid, value);
-		}
-
-		/*
-		 * Go to "..." if name or value doesn't fit in buffer.  We reserve 5
-		 * bytes to ensure we can add comma, "...", null.
-		 */
-		if (strlen(name) >= (key_names + BUFLENGTH - 5) - name_ptr ||
-			strlen(val) >= (key_values + BUFLENGTH - 5) - val_ptr)
-		{
-			sprintf(name_ptr, "...");
-			sprintf(val_ptr, "...");
-			break;
-		}
-
-		name_ptr += sprintf(name_ptr, "%s%s", i > 0 ? ", " : "", name);
-		val_ptr += sprintf(val_ptr, "%s%s", i > 0 ? ", " : "", val);
-	}
-
-	ereport(ERROR,
-			(errcode(ERRCODE_UNIQUE_VIOLATION),
-			 errmsg("duplicate key value violates unique constraint \"%s\"",
-					RelationGetRelationName(rel)),
-		errdetail("Key (%s)=(%s) already exists.",
-				  key_names, key_values)));
-#endif
 }

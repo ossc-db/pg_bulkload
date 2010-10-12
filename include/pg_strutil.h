@@ -21,7 +21,7 @@ typedef struct ParsedFunction
  */
 extern char *QuoteString(char *str);
 extern char *QuoteSingleChar(char c);
-extern bool	ParseBoolean(const char *value, bool defaultValue);
+extern bool	ParseBoolean(const char *value);
 extern char	ParseSingleChar(const char *value);
 extern int	ParseInt32(char *value, int minValue);
 extern int64	ParseInt64(char *value, int64 minValue);

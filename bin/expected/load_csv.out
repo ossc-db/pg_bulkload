@@ -14,7 +14,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv1.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data1.csv
 PARSE_BADFILE = .../csv1.prs
@@ -84,7 +84,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/csv1-2.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data1.csv
 PARSE_BADFILE = .../csv1-2.prs
@@ -145,13 +145,11 @@ SELECT * FROM customer ORDER BY c_id;
 
 \! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -l results/csv2.log -P results/csv2.prs -u results/csv2.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
-WARNING:  Maximum duplicate error count exceeded
-ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 224, 16777224) already exists.
+ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv2.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../csv2.prs
@@ -174,7 +172,8 @@ NULL = "nullvalue           "
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -212,7 +211,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv3.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../csv3.prs
@@ -235,7 +234,7 @@ NULL = "nullvalue           "
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   2 Rows skipped.
   5 Rows successfully loaded.
@@ -285,7 +284,7 @@ SELECT * FROM customer ORDER BY c_id;
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
-WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 NOTICE: BULK LOAD END
 	2 Rows skipped.
 	1 Rows successfully loaded.
@@ -295,7 +294,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv4.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../csv4.prs
@@ -319,7 +318,7 @@ WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Maximum parse error count exceeded - 1 error(s) found in input file
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   2 Rows skipped.
   1 Rows successfully loaded.
@@ -334,10 +333,10 @@ CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 \! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data2.csv -o "SKIP=2" -o "LOAD=4" -o "PARSE_ERRORS=10" -o "VERBOSE=YES" -l results/csv5.log -P results/csv5.prs -u results/csv5.dup
 NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-WARNING:  Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-WARNING:  Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-WARNING:  Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
-WARNING:  Duplidate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+WARNING:  Duplicate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
 NOTICE: BULK LOAD END
 	2 Rows skipped.
 	4 Rows successfully loaded.
@@ -347,7 +346,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv5.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../csv5.prs
@@ -370,10 +369,10 @@ NULL = "nullvalue           "
 WRITER = DIRECT
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   2 Rows skipped.
   4 Rows successfully loaded.
@@ -426,7 +425,7 @@ ERROR: query failed: ERROR:  integer out of range
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv6.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data3.csv
 PARSE_BADFILE = .../csv6.prs
@@ -473,7 +472,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv7.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data3.csv
 PARSE_BADFILE = .../csv7.prs

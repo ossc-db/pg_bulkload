@@ -49,4 +49,22 @@ tuplestore_putvalues(Tuplestorestate *state, TupleDesc tdesc,
 	tuplestore_puttuple(state, heap_form_tuple(tdesc, values, isnull));
 }
 
+Datum
+ExecFetchSlotTupleDatum(TupleTableSlot *slot)
+{
+	HeapTuple	tup;
+	HeapTupleHeader td;
+	TupleDesc	tupdesc;
+
+	/* Make sure we can scribble on the slot contents ... */
+	tup = ExecMaterializeSlot(slot);
+	/* ... and set up the composite-Datum header fields, in case not done */
+	td = tup->t_data;
+	tupdesc = slot->tts_tupleDescriptor;
+	HeapTupleHeaderSetDatumLength(td, tup->t_len);
+	HeapTupleHeaderSetTypeId(td, tupdesc->tdtypeid);
+	HeapTupleHeaderSetTypMod(td, tupdesc->tdtypmod);
+	return PointerGetDatum(td);
+}
+
 #endif

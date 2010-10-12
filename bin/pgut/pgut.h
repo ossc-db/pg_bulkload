@@ -90,8 +90,10 @@ extern bool pgut_mkdir(const char *path);
 /*
  * elog
  */
-#define E_PG_CONNECT	(-1)	/* PostgreSQL connection error */
-#define E_PG_COMMAND	(-2)	/* PostgreSQL query or command error */
+#define E_PG_COMMAND	1	/* PostgreSQL query or command error */
+#define E_PG_CONNECT	2	/* PostgreSQL connection error */
+#define E_PG_USER		3	/* User error */
+#define E_PG_OTHER		4	/* Other error */
 
 #undef elog
 #undef ereport

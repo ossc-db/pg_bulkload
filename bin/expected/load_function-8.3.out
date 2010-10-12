@@ -6,12 +6,12 @@ $$
 $$ LANGUAGE SQL;
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function(1,5,'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  function public.load_function(unknown, unknown, unknown) does not exist
+ERROR: query failed: ERROR:  function public.load_function(integer, integer, unknown) does not exist
 HINT:  No function matches the given name and argument types.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''','B')" -l results/function_e.log
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  function public.load_function1(unknown, unknown, unknown, unknown) does not exist
+ERROR: query failed: ERROR:  function public.load_function1(integer, integer, unknown, unknown) does not exist
 HINT:  No function matches the given name and argument types.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1('A',5,'A''')" -l results/function_e.log
@@ -42,7 +42,7 @@ DETAIL: query was: SELECT * FROM pg_bulkload($1)
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,--5,'A''')
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char(1,'0')" -l results/function_e.log
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char('1','0')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function pg_catalog.to_char(unknown, unknown) is not unique
 HINT:  Could not choose a best candidate function.
@@ -61,7 +61,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function1.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = public.load_function1(1,5,'A''')
 PARSE_BADFILE = .../function1.prs
@@ -122,7 +122,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function2.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = "public.load_function1( - - - 3, -+- 5,'''B')"
 PARSE_BADFILE = .../function2.prs
@@ -139,9 +139,9 @@ CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
 WRITER = DIRECT
 
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   0 Rows skipped.
   6 Rows successfully loaded.
@@ -198,7 +198,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function3.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = "public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function3.prs
@@ -276,7 +276,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function4.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function3.prs
 PARSE_BADFILE = .../function4.prs
@@ -323,7 +323,7 @@ NOTICE: BULK LOAD END
 	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function5.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function3.prs
 PARSE_BADFILE = .../function5.prs
@@ -345,9 +345,9 @@ ESCAPE = "\""
 NULL = NULL
 WRITER = DIRECT
 
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   0 Rows skipped.
   4 Rows successfully loaded.
@@ -406,7 +406,7 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function6.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = "public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function6.prs
@@ -423,10 +423,10 @@ CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
 WRITER = DIRECT
 
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   0 Rows skipped.
   5 Rows successfully loaded.
@@ -486,7 +486,7 @@ NOTICE: BULK LOAD END
 	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function10.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function6.dup
 PARSE_BADFILE = .../function10.prs
@@ -508,9 +508,9 @@ ESCAPE = "\""
 NULL = 
 WRITER = DIRECT
 
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
 
   1 Rows skipped.
   3 Rows successfully loaded.
@@ -588,13 +588,11 @@ SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
 
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "DUPLICATE_ERRORS=0"
 NOTICE: BULK LOAD START
-WARNING:  Maximum duplicate error count exceeded
-ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 216, 4) already exists.
+ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function13.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function6.dup
 PARSE_BADFILE = .../function13.prs
@@ -616,7 +614,8 @@ ESCAPE = "\""
 NULL = 
 WRITER = DIRECT
 
-duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Maximum duplicate error count exceeded
 TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=1"
 NOTICE: BULK LOAD START
@@ -628,7 +627,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function6.dup
 PARSE_BADFILE = .../function14.prs
@@ -663,13 +662,11 @@ Run ended on <TIMESTAMP>
 CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function6.dup -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=3"
 NOTICE: BULK LOAD START
-WARNING:  Maximum duplicate error count exceeded
-ERROR: query failed: ERROR:  duplicate key value violates unique constraint "customer_pkey"
-DETAIL:  Key (c_w_id, c_d_id, c_id)=(0, 216, 6) already exists.
+ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function6.dup
 PARSE_BADFILE = .../function14.prs
@@ -703,7 +700,7 @@ Run ended on <TIMESTAMP>
 
 CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../function6.dup
 PARSE_BADFILE = .../function14.prs
@@ -725,10 +722,11 @@ ESCAPE = "\""
 NULL = 
 WRITER = DIRECT
 
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
-Duplidate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
-duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 3: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Duplicate error Record 4: Rejected - duplicate key value violates unique constraint "customer_pkey"
+Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;

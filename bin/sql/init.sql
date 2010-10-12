@@ -128,7 +128,17 @@ $$ LANGUAGE SQL;
 ---------------------------------------------------------------------------
 -- load_encoding test
 CREATE DATABASE contrib_regression_sqlascii TEMPLATE template0 ENCODING 'sql_ascii';
+ALTER DATABASE contrib_regression_sqlascii SET lc_messages TO 'C';
+ALTER DATABASE contrib_regression_sqlascii SET lc_monetary TO 'C';
+ALTER DATABASE contrib_regression_sqlascii SET lc_numeric TO 'C';
+ALTER DATABASE contrib_regression_sqlascii SET lc_time TO 'C';
+ALTER DATABASE contrib_regression_sqlascii SET timezone_abbreviations TO 'Default';
 CREATE DATABASE contrib_regression_utf8 TEMPLATE template0 ENCODING 'utf8';
+ALTER DATABASE contrib_regression_utf8 SET lc_messages TO 'C';
+ALTER DATABASE contrib_regression_utf8 SET lc_monetary TO 'C';
+ALTER DATABASE contrib_regression_utf8 SET lc_numeric TO 'C';
+ALTER DATABASE contrib_regression_utf8 SET lc_time TO 'C';
+ALTER DATABASE contrib_regression_utf8 SET timezone_abbreviations TO 'Default';
 
 \connect contrib_regression_sqlascii
 CREATE TABLE target (id int, str text, master int);

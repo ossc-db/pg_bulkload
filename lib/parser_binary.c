@@ -711,7 +711,7 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 	}
 	else if (CompareKeyword(keyword, "PRESERVE_BLANKS"))
 	{
-		self->preserve_blanks = ParseBoolean(value, false);
+		self->preserve_blanks = ParseBoolean(value);
 	}
 	else if (CompareKeyword(keyword, "STRIDE"))
 	{

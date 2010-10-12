@@ -13,13 +13,16 @@
 #include "access/heapam.h"
 #include "access/htup.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "executor/executor.h"
+#include "funcapi.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 #include "logger.h"
 #include "pg_profile.h"
@@ -39,6 +42,8 @@ typedef struct FunctionParser
 	ExprContext			   *arg_econtext;
 	ReturnSetInfo			rsinfo;
 	HeapTupleData			tuple;
+	TupleTableSlot		   *funcResultSlot;
+	bool					tupledesc_matched;
 } FunctionParser;
 
 static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc);
@@ -79,6 +84,10 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
 
+	if (pg_strcasecmp(infile, "stdin") == 0)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot load from STDIN in the case of \"TYPE = FUNCTION\"")));
+
 	if (checker->encoding != -1)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("does not support parameter \"ENCODING\" in \"TYPE = FUNCTION\"")));
@@ -95,6 +104,28 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 	ftup = SearchSysCache(PROCOID, ObjectIdGetDatum(funcid), 0, 0, 0);
 	pp = (Form_pg_proc) GETSTRUCT(ftup);
+
+	/* Check data type of the function result value */
+	if (pp->prorettype == desc->tdtypeid)
+		self->tupledesc_matched = true;
+	else if (pp->prorettype == RECORDOID)
+	{
+		TupleDesc	resultDesc = NULL;
+
+		/* Check for OUT parameters defining a RECORD result */
+		resultDesc = build_function_result_tupdesc_t(ftup);
+
+		if (resultDesc)
+		{
+			tupledesc_match(desc, resultDesc);
+			self->tupledesc_matched = true;
+			FreeTupleDesc(resultDesc);
+		}
+	}
+	else if (get_typtype(pp->prorettype) != TYPTYPE_COMPOSITE)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("function return data type and target table data type do not match")));
 
 	/*
 	 * assign arguments
@@ -257,11 +288,16 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	self->rsinfo.isDone = ExprSingleResult;
 	self->rsinfo.setResult = NULL;
 	self->rsinfo.setDesc = NULL;
+	self->funcResultSlot = MakeSingleTupleTableSlot(self->desc);
 }
 
 static int64
 FunctionParserTerm(FunctionParser *self)
 {
+	if (self->funcResultSlot)
+		ExecClearTuple(self->funcResultSlot);
+	if (self->rsinfo.setResult)
+		tuplestore_end(self->rsinfo.setResult);
 	if (self->arg_econtext)
 		FreeExprContext(self->arg_econtext, true);
 	if (self->econtext)
@@ -273,6 +309,29 @@ FunctionParserTerm(FunctionParser *self)
 	return 0;
 }
 
+static void
+set_datum_tuple(FunctionParser *self, Datum datum)
+{
+	HeapTupleHeader	td = DatumGetHeapTupleHeader(datum);
+
+	if (!self->tupledesc_matched)
+	{
+		TupleDesc		resultDesc;
+
+		resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
+											HeapTupleHeaderGetTypMod(td));
+		tupledesc_match(self->desc, resultDesc);
+		self->tupledesc_matched = true;
+		ReleaseTupleDesc(resultDesc);
+	}
+
+	self->tuple.t_data = td;
+	self->tuple.t_len = HeapTupleHeaderGetDatumLength(td);
+	self->base.count++;
+
+	self->base.parsing_field = -1;
+}
+
 static HeapTuple
 FunctionParserRead(FunctionParser *self, Checker *checker)
 {
@@ -281,6 +340,30 @@ FunctionParserRead(FunctionParser *self, Checker *checker)
 #if PG_VERSION_NUM >= 80400
 	PgStat_FunctionCallUsage	fcusage;
 #endif
+
+	/*
+	 * If a previous call of the function returned a set result in the form of
+	 * a tuplestore, continue reading rows from the tuplestore until it's
+	 * empty.
+	 */
+	if (self->rsinfo.setResult)
+	{
+		BULKLOAD_PROFILE(&prof_reader_source);
+
+restart:
+
+		/*
+		 * Get the next tuple from tuplestore. Return NULL if no more tuples.
+		 */
+		if (!tuplestore_gettupleslot(self->rsinfo.setResult, true, false,
+									 self->funcResultSlot))
+			return NULL;
+
+		datum = ExecFetchSlotTupleDatum(self->funcResultSlot);
+		set_datum_tuple(self, datum);
+
+		return &self->tuple;
+	}
 
 	BULKLOAD_PROFILE(&prof_reader_parser);
 
@@ -291,21 +374,50 @@ FunctionParserRead(FunctionParser *self, Checker *checker)
 	datum = FunctionCallInvoke(&self->fcinfo);
 
 	pgstat_end_function_usage(&fcusage,
-							self->rsinfo.isDone != ExprMultipleResult);
+							  self->rsinfo.isDone != ExprMultipleResult);
 
 	BULKLOAD_PROFILE(&prof_reader_source);
 
-	if (self->rsinfo.isDone == ExprEndResult)
-		return NULL;
+	/* Which protocol does function want to use? */
+	if (self->rsinfo.returnMode == SFRM_ValuePerCall)
+	{
+		/*
+		 * Check for end of result set.
+		 */
+		if (self->rsinfo.isDone == ExprEndResult)
+			return NULL;
 
-	self->tuple.t_data = DatumGetHeapTupleHeader(datum);
-	self->tuple.t_len = HeapTupleHeaderGetDatumLength(self->tuple.t_data);
-	self->base.count++;
+		/*
+		 * For a function returning set, we consider this a protocol violation.
+		 */
+		if (self->fcinfo.isnull)
+			ereport(ERROR,
+					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+					 errmsg("function returning set of rows cannot return null value")));
 
-	self->base.parsing_field = -1;
+		set_datum_tuple(self, datum);
+	}
+	else if (self->rsinfo.returnMode == SFRM_Materialize)
+	{
+		/* check we're on the same page as the function author */
+		if (self->rsinfo.isDone != ExprSingleResult)
+			ereport(ERROR,
+					(errcode(ERRCODE_E_R_I_E_SRF_PROTOCOL_VIOLATED),
+					 errmsg("table-function protocol for materialize mode was not followed")));
+
+		if (self->rsinfo.setResult == NULL)
+			return NULL;
+
+		/* back to top to start returning from tuplestore */
+		goto restart;
+	}
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_E_R_I_E_SRF_PROTOCOL_VIOLATED),
+				 errmsg("unrecognized table-function returnMode: %d",
+						(int) self->rsinfo.returnMode)));
 
 	return &self->tuple;
-
 }
 
 static bool

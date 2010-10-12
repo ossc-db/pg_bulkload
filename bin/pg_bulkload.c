@@ -13,10 +13,11 @@
  *	If -r option is specified, performs recovery to cancel inconveniences caused
  *	by errors in the previous loading.
  */
+#include "common.h"
 #include "pgut/pgut-fe.h"
 #include "pgut/pgut-list.h"
 
-const char *PROGRAM_VERSION	= "3.0beta1";
+const char *PROGRAM_VERSION	= PG_BULKLOAD_VERSION;
 const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
 const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
 
@@ -35,6 +36,7 @@ static char *logfile = NULL;			/* LOGFILE */
 static char *parse_badfile = NULL;		/* PARSE_BADFILE */
 static char *duplicate_badfile = NULL;	/* DUPLICATE_BADFILE */
 static List *bulkload_options = NIL;
+static bool	type_function = false;
 
 /*
  * The length of the database cluster directory name should be short enough
@@ -65,6 +67,9 @@ parse_option(pgut_option *opt, char *arg)
 
 	if (arg && arg[0])
 		bulkload_options = lappend(bulkload_options, arg);
+
+	if (pg_strcasecmp(arg, "TYPE=FUNCTION") == 0)
+		type_function = true;
 }
 
 static pgut_option options[] =
@@ -108,12 +113,12 @@ main(int argc, char *argv[])
 	if (argc < 2)
 	{
 		help(false);
-		return 1;
+		return E_PG_OTHER;
 	}
 
 	if (getcwd(cwd, MAXPGPATH) == NULL)
 		ereport(ERROR,
-			(errcode_errno(),
+			(errcode(EXIT_FAILURE),
 			 errmsg("cannot read current directory: ")));
 
 	i = pgut_getopt(argc, argv, options);
@@ -122,7 +127,7 @@ main(int argc, char *argv[])
 	{
 		if (control_file[0])
 			ereport(ERROR,
-				(errcode(EINVAL),
+				(errcode(EXIT_FAILURE),
 				 errmsg("too many arguments")));
 
 		/* make absolute control file path */
@@ -172,7 +177,7 @@ main(int argc, char *argv[])
 			if (path == NULL)
 				continue;
 
-			if (i == 0 && pg_strcasecmp(path, "stdin") == 0)
+			if (i == 0 && (pg_strcasecmp(path, "stdin") == 0 || type_function))
 			{
 				/* special case for stdin */
 				strlcpy(abspath, path, lengthof(abspath));
@@ -244,7 +249,7 @@ LoaderLoadMain(List *options)
 
 	if (options == NIL)
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(EXIT_FAILURE),
 			 errmsg("requires control file or command line options")));
 
 	initStringInfo(&buf);
@@ -318,7 +323,7 @@ LoaderLoadMain(List *options)
 	if (errors > 0)
 	{
 		elog(WARNING, "some rows were not loaded due to errors.");
-		return 1;
+		return E_PG_USER;
 	}
 	else
 		return 0;	/* succeeded without errors */
@@ -480,6 +485,9 @@ ParseControlFile(const char *path)
 			item = pgut_malloc(len);
 			snprintf(item, len, "%s=%s", keyword, value);
 			items = lappend(items, item);
+
+			if (pg_strcasecmp(item, "TYPE=FUNCTION") == 0)
+				type_function = true;
 		}
 	}
 
@@ -504,7 +512,7 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 
 	if (buf[strlen(buf) - 1] != '\n')
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(EXIT_FAILURE),
 			 errmsg("too long line \"%s\"", buf)));
 
 	p = buf;				/* pointer to keyword */
@@ -538,7 +546,7 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 		*q = '\0';
 	else
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(EXIT_FAILURE),
 			 errmsg("invalid input \"%s\"", buf)));
 
 	q++;					/* pointer to input value */
@@ -551,13 +559,13 @@ ParseControlFileLine(char buf[], char **outKeyword, char **outValue)
 
 	if (!keyword[0] || !value[0])
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(EXIT_FAILURE),
 			 errmsg("invalid input \"%s\"", buf)));
 
 	value = UnquoteString(value, '"', '\\');
 	if (!value)
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(EXIT_FAILURE),
 			 errmsg("unterminated quoted field")));
 
 	*outKeyword = keyword;

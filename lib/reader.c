@@ -362,15 +362,15 @@ ParseOption(Reader *rd, DefElem *opt)
 	}
 	else if (CompareKeyword(keyword, "VERBOSE"))
 	{
-		rd->verbose = ParseBoolean(target, false);
+		rd->verbose = ParseBoolean(target);
 	}
 	else if (CompareKeyword(keyword, "TRUNCATE"))
 	{
-		rd->wo.truncate = ParseBoolean(target, false);
+		rd->wo.truncate = ParseBoolean(target);
 	}
 	else if (CompareKeyword(keyword, "CHECK_CONSTRAINTS"))
 	{
-		rd->checker.check_constraints = ParseBoolean(target, false);
+		rd->checker.check_constraints = ParseBoolean(target);
 	}
 	else if (CompareKeyword(keyword, "ENCODING"))
 	{
@@ -894,10 +894,17 @@ TupleFormerValue(TupleFormer *former, const char *str, int col)
  * destination type, so long as the physical storage matches.  This is
  * helpful in some cases involving out-of-date cached plans.
  */
-static void
+void
 tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 {
 	int			i;
+
+	if (dst_tupdesc->tdhasoid != src_tupdesc->tdhasoid)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("function return record definition and target table record definition do not match"),
+				 errdetail("Returned record hasoid %d, but target table hasoid %d.",
+						   src_tupdesc->tdhasoid, dst_tupdesc->tdhasoid)));
 
 	if (dst_tupdesc->natts != src_tupdesc->natts)
 		ereport(ERROR,

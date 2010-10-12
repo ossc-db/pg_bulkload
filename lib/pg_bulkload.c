@@ -22,6 +22,7 @@
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 
+#include "common.h"
 #include "logger.h"
 #include "reader.h"
 #include "writer.h"
@@ -34,8 +35,6 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(pg_bulkload);
 
 Datum	PGUT_EXPORT pg_bulkload(PG_FUNCTION_ARGS);
-
-const char *PROGRAM_VERSION = "3.0alpha2";
 
 static char *timeval_to_cstring(struct timeval tp);
 
@@ -222,7 +221,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		start = timeval_to_cstring(ru0.tv);
 		LoggerLog(INFO, "\npg_bulkload %s on %s\n\n",
-				   PROGRAM_VERSION, start);
+				   PG_BULKLOAD_VERSION, start);
 
 		ReaderDumpParams(rd);
 		WriterDumpParams(wt);

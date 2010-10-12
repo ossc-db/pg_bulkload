@@ -20,7 +20,7 @@ $$ LANGUAGE SQL;
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''',1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)" -l results/function_e.log
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,A)" -l results/function_e.log
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,--5,'A''')" -l results/function_e.log
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char(1,'0')" -l results/function_e.log
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char('1','0')" -l results/function_e.log
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.lower('A')" -l results/function_e.log
 
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''')" -l results/function1.log -P results/function1.prs -u results/function1.dup -o LOAD=3
@@ -105,7 +105,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2', -2, 2, 4, 6, 8, 10, 12)" -l results/function8.log -P results/function8.prs -u results/function8.dup -o "DUPLICATE_ERRORS=50"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2('216', 0, 'function2', -2, 2, 4, 6, 8, 10, 12)" -l results/function8.log -P results/function8.prs -u results/function8.dup -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function8.log
 
 SET enable_seqscan = on;
@@ -118,7 +118,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2(216, 0, 'function2 duplicate', 1,1,1,1,1)" -l results/function9.log -P results/function9.prs -u results/function9.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50"
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function2('216', 0, 'function2 duplicate', 1,1,1,1,1)" -l results/function9.log -P results/function9.prs -u results/function9.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50"
 \! awk -f data/adjust.awk results/function9.log
 
 SET enable_seqscan = on;

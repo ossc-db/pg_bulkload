@@ -26,8 +26,6 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
-#define IsSpace(c)		(isspace((unsigned char)(c)))
-
 char *
 QuoteString(char *str)
 {
@@ -100,10 +98,8 @@ QuoteSingleChar(char c)
  * @brief Parse boolean expression
  */
 bool
-ParseBoolean(const char *value, bool defaultValue)
+ParseBoolean(const char *value)
 {
-	if (value == NULL || value[0] == '\0')
-		return defaultValue;
 	/* XXX: use parse_bool() instead? */
 	return DatumGetBool(DirectFunctionCall1(boolin, CStringGetDatum(value)));
 }
@@ -154,6 +150,27 @@ ParseInt64(char *value, int64 minValue)
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
              errmsg("value \"%s\" is out of range", value)));
 	return i;
+}
+
+static bool
+IsIdentStart(int c)
+{
+	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		(c >= 0200 &&
+		c <= 0377) ||
+		c == '_')
+		return true;
+
+	return false;
+}
+
+static bool
+IsIdentContent(int c)
+{
+	if (IsIdentStart(c) || (c >= '0' && c <= '9') || c == '$') 
+		return true;
+
+	return false;
 }
 
 static bool
@@ -212,6 +229,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 	*argtype = UNKNOWNOID;
 	if (argistype)
 	{
+		/* argument is data type name */
 		const char *startptr;
 		bool		inparenthesis;
 		int			nparentheses;
@@ -263,6 +281,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 	}
 	else if (*p == '\'')
 	{
+		/* argument is string constants */
 		StringInfoData	buf;
 
 		initStringInfo(&buf);
@@ -291,20 +310,25 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 	}
 	else if (pg_strncasecmp(p, "NULL", strlen("NULL")) == 0)
 	{
+		/* argument is NULL */
 		p += strlen("NULL");
 		*arg = NULL;
 	}
 	else
 	{
+		/* argument is numeric constants */
 		bool		minus;
 		const char *startptr;
 		char	   *str;
+		int64		val64;
 
+		/* parse plus operator and minus operator */
 		minus = false;
 		while (*p == '+' || *p == '-')
 		{
 			if (*p == '-') 
 			{
+				/* this is standard SQL comment */
 				if (*(p + 1) == '-')
 					ereport(ERROR,
 							(errcode(ERRCODE_SYNTAX_ERROR),
@@ -318,7 +342,8 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		}
 
 		startptr = p;
-		while (!isspace((unsigned char) *p) && *p != ',' && *p != ')')
+		while (!isspace((unsigned char) *p) && *p != ',' && *p != ')' &&
+			   *p != '\0')
 			p++;
 
 		len = p - startptr;
@@ -330,9 +355,31 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
+		/* could be an oversize integer as well as a float ... */
+		if (scanint8(str, true, &val64))
+		{
+			/*
+			 * It might actually fit in int32. Probably only INT_MIN can
+			 * occur, but we'll code the test generally just to be sure.
+			 */
+			int32		val32 = (int32) val64;
+
+			if (val64 == (int64) val32)
+				*argtype = INT4OID;
+			else
+				*argtype = INT8OID;
+		}
+		else
+		{
+			/* arrange to report location if numeric_in() fails */
+			DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
+								ObjectIdGetDatum(InvalidOid),
+								Int32GetDatum(-1));
+
+			*argtype = NUMERICOID;
+		}
+
 		/* Check for numeric constants. */
-		DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
-							ObjectIdGetDatum(InvalidOid), -1);
 		*arg = str;
 	}
 
@@ -376,6 +423,7 @@ ParseFunction(const char *value, bool argistype)
 	int					nargs;
 	FuncCandidateList	candidates;
 	FuncCandidateList	find = NULL;
+	int					ncandidates = 0;
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
 	AclResult			aclresult;
@@ -406,21 +454,19 @@ ParseFunction(const char *value, bool argistype)
 			/* nextp now points at the terminating quote */
 			nextp = nextp + 1;
 		}
-		else
+		else if (IsIdentStart((unsigned char) *nextp))
 		{
 			/* Unquoted name */
-			const char *startp;
-
-			startp = nextp;
-			while (*nextp && *nextp != '.' && *nextp != '(' &&
-				   !isspace((unsigned char) *nextp))
+			nextp++;
+			while (IsIdentContent((unsigned char) *nextp))
 				nextp++;
-
-			/* empty unquoted name not allowed */
-			if (startp == nextp)
-				ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("function call syntax error: %s", value)));
+		}
+		else
+		{
+			/* invalid syntax */
+			ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("function call syntax error: %s", value)));
 		}
 
 		while (isspace((unsigned char) *nextp))
@@ -481,39 +527,60 @@ ParseFunction(const char *value, bool argistype)
 		candidates = FuncnameGetCandidates(names, nargs, NIL, true, true);
 	}
 
-	if (candidates == NULL)
+
+	/* so now try to match up candidates */
+	if (!argistype)
+	{
+		FuncCandidateList current_candidates;
+
+		ncandidates = func_match_argtypes(nargs,
+										  ret.argtypes,
+										  candidates,
+										  &current_candidates);
+
+		/* one match only? then run with it... */
+		if (ncandidates == 1)
+			find = current_candidates;
+
+		/* multiple candidates? then better decide or throw an error... */
+		else if (ncandidates > 1)
+		{
+			find = func_select_candidate(nargs, ret.argtypes,
+										 current_candidates);
+		}
+	}
+	else if (nargs > 0)
+	{
+		/* Quickly check if there is an exact match to the input datatypes */
+		for (find = candidates; find; find = find->next)
+		{
+			if (memcmp(find->args, ret.argtypes, nargs * sizeof(Oid)) == 0)
+			{
+				ncandidates = 1;
+				break;
+			}
+		}
+	}
+	else
+	{
+		FuncCandidateList c;
+		for (c = candidates; c; c = c->next)
+			ncandidates++;
+		find = candidates;
+	}
+
+	if (ncandidates == 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_FUNCTION),
 				 errmsg("function %s does not exist",
 						func_signature_string(names, nargs, NIL, ret.argtypes)),
 				 errhint("No function matches the given name and argument types.")));
-	else if (argistype && nargs > 0)
-	{
-		for (find = candidates; find; find = find->next)
-		{
-			if (memcmp(find->args, ret.argtypes, nargs * sizeof(Oid)) == 0)
-				break;
-		}
 
-		if (find == NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_FUNCTION),
-					 errmsg("function %s does not exist",
-							func_signature_string(names, nargs, NIL,
-												  ret.argtypes)),
-				errhint("No function matches the given name and argument types.")));
-	}
-	else if (candidates->next != NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
-				 errmsg("function %s is not unique",
-						func_signature_string(names, nargs, NIL,
-											  ret.argtypes)),
-				 errhint("Could not choose a best candidate function.")));
-	else
-		find = candidates;
-
-	if (!OidIsValid(find->oid))
+	/*
+	 * If we were able to choose a best candidate, we're done.
+	 * Otherwise, ambiguous function call.
+	 */
+	if (ncandidates > 1 || !OidIsValid(find->oid))
 		ereport(ERROR,
 				(errcode(ERRCODE_AMBIGUOUS_FUNCTION),
 				 errmsg("function %s is not unique",

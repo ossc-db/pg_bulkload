@@ -712,7 +712,7 @@ void
 CHECK_FOR_INTERRUPTS(void)
 {
 	if (interrupted && !in_cleanup)
-		ereport(FATAL, (errcode(EINTR), errmsg("interrupted")));
+		ereport(FATAL, (errcode(E_PG_OTHER), errmsg("interrupted")));
 }
 
 /*
@@ -904,7 +904,7 @@ format_elevel(int elevel)
 		return "PANIC";
 	default:
 		ereport(ERROR,
-			(errcode(EINVAL),
+			(errcode(E_PG_OTHER),
 			 errmsg("invalid elevel: %d", elevel)));
 		return "";		/* unknown value; just return an empty string */
 	}
@@ -931,7 +931,7 @@ parse_elevel(const char *value)
 		return PANIC;
 
 	ereport(ERROR,
-		(errcode(EINVAL),
+		(errcode(E_PG_OTHER),
 		 errmsg("invalid elevel: %s", value)));
 	return ERROR;		/* unknown value; just return ERROR */
 }
@@ -1253,7 +1253,7 @@ pgut_malloc(size_t size)
 
 	if ((ret = malloc(size)) == NULL)
 		ereport(FATAL,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not allocate memory (%lu bytes): ",
 				(unsigned long) size)));
 	return ret;
@@ -1266,7 +1266,7 @@ pgut_realloc(void *p, size_t size)
 
 	if ((ret = realloc(p, size)) == NULL)
 		ereport(FATAL,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not re-allocate memory (%lu bytes): ",
 				(unsigned long) size)));
 	return ret;
@@ -1282,7 +1282,7 @@ pgut_strdup(const char *str)
 
 	if ((ret = strdup(str)) == NULL)
 		ereport(FATAL,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not duplicate string \"%s\": ", str)));
 	return ret;
 }
@@ -1355,7 +1355,7 @@ retry:
 		}
 
 		ereport(ERROR,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not open file \"%s\": ", path)));
 	}
 
@@ -1393,7 +1393,7 @@ pgut_mkdir(const char *dirpath)
 			{
 				free(path);
 				ereport(ERROR,
-					(errcode(EINVAL),
+					(errcode(E_PG_OTHER),
 					 errmsg("invalid path \"%s\"", dirpath)));
 				return false;
 			}
@@ -1451,7 +1451,7 @@ retry:
 	if (retval == 0)
 	{
 		ereport(ERROR,
-			(errcode_errno(),
+			(errcode(E_PG_OTHER),
 			 errmsg("could not create directory \"%s\": ", dirpath)));
 		return false;
 	}
@@ -1488,7 +1488,7 @@ wait_for_sockets(int nfds, fd_set *fds, struct timeval *timeout)
 			if (errno != EINTR)
 			{
 				ereport(ERROR,
-					(errcode_errno(),
+					(errcode(E_PG_OTHER),
 					 errmsg("select failed: ")));
 				return -1;
 			}

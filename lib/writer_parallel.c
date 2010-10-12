@@ -81,47 +81,56 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
 	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
-	/* connect to localhost */
-	self->conn = connect_to_localhost();
-
-	/* start transaction */
-	res = PQexec(self->conn, "BEGIN");
-	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	PG_TRY();
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-				 errmsg("could not start transaction"),
-				 errdetail("%s", finish_and_get_message(self))));
+		/* connect to localhost */
+		self->conn = connect_to_localhost();
+
+		/* start transaction */
+		res = PQexec(self->conn, "BEGIN");
+		if (PQresultStatus(res) != PGRES_COMMAND_OK)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+					 errmsg("could not start transaction"),
+					 errdetail("%s", finish_and_get_message(self))));
+		}
+
+		PQclear(res);
+
+		/* async query send */
+		params[0] = queueName;
+		params[1] = relname;
+		params[2] = (options->truncate ? "true" : "no");
+		params[3] = ON_DUPLICATE_NAMES[options->on_duplicate];
+		params[4] = max_dup_errors;
+		params[5] = options->dup_badfile;
+		params[6] = "remote";
+
+		if (1 != PQsendQueryParams(self->conn,
+				"SELECT * FROM pg_bulkload(ARRAY["
+				"'TYPE=TUPLE',"
+				"'INFILE=' || $1,"
+				"'TABLE=' || $2,"
+				"'TRUNCATE=' || $3,"
+				"'ON_DUPLICATE_KEEP=' || $4,"
+				"'DUPLICATE_ERRORS=' || $5,"
+				"'DUPLICATE_BADFILE=' || $6,"
+				"'LOGFILE=' || $7])",
+			7, NULL, params, NULL, NULL, 0))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+					 errmsg("could not send query"),
+					 errdetail("%s", finish_and_get_message(self))));
+		}
 	}
-
-	PQclear(res);
-
-	/* async query send */
-	params[0] = queueName;
-	params[1] = relname;
-	params[2] = (options->truncate ? "true" : "no");
-	params[3] = ON_DUPLICATE_NAMES[options->on_duplicate];
-	params[4] = max_dup_errors;
-	params[5] = options->dup_badfile;
-	params[6] = "remote";
-
-	if (1 != PQsendQueryParams(self->conn,
-			"SELECT * FROM pg_bulkload(ARRAY["
-			"'TYPE=TUPLE',"
-			"'INFILE=' || $1,"
-			"'TABLE=' || $2,"
-			"'TRUNCATE=' || $3,"
-			"'ON_DUPLICATE_KEEP=' || $4,"
-			"'DUPLICATE_ERRORS=' || $5,"
-			"'DUPLICATE_BADFILE=' || $6,"
-			"'LOGFILE=' || $7])",
-		7, NULL, params, NULL, NULL, 0))
+	PG_CATCH();
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-				 errmsg("could not send query"),
-				 errdetail("%s", finish_and_get_message(self))));
+		ParallelWriterClose(self, true);
+		PG_RE_THROW();
 	}
+	PG_END_TRY();
 
 	return (Writer *) self;
 }

@@ -100,6 +100,8 @@ extern int no_such_variable
 #define pgstat_end_function_usage(fcu, finalize)	((void)0)
 #define makeRangeVar(schemaname, relname, location) \
 	makeRangeVar((schemaname), (relname))
+#define tuplestore_gettupleslot(state, forward, copy, slot) \
+	tuplestore_gettupleslot(state, forward, slot)
 #define pgstat_track_activity_query_size	PGBE_ACTIVITY_SIZE
 typedef void *BulkInsertState;
 
@@ -135,6 +137,7 @@ extern char *text_to_cstring(const text *t);
 extern text *cstring_to_text(const char *s);
 extern void tuplestore_putvalues(Tuplestorestate *state, TupleDesc tdesc,
 					 Datum *values, bool *isnull);
+extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 
 #define CStringGetTextDatum(s)		PointerGetDatum(cstring_to_text(s))
 #define TextDatumGetCString(d)		text_to_cstring((text *) DatumGetPointer(d))

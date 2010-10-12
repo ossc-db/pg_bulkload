@@ -9,7 +9,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check1.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data5.csv
 PARSE_BADFILE = .../check1.prs
@@ -34,8 +34,8 @@ WRITER = DIRECT
 Parse error Record 1: Input Record 3: Rejected - column 2. null value in column "str" violates not-null constraint
 Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
 Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
 
   0 Rows skipped.
   5 Rows successfully loaded.
@@ -116,7 +116,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check3.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data5.csv
 PARSE_BADFILE = .../check3.prs
@@ -142,8 +142,8 @@ Parse error Record 1: Input Record 3: Rejected - column 2. null value in column 
 Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
 Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
 Maximum parse error count exceeded - 3 error(s) found in input file
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
 
   0 Rows skipped.
   4 Rows successfully loaded.
@@ -190,7 +190,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check4.log
 
-pg_bulkload 3.0alpha2 on <TIMESTAMP>
+pg_bulkload 3.0beta2 on <TIMESTAMP>
 
 INFILE = .../data5.csv
 PARSE_BADFILE = .../check4.prs
@@ -216,8 +216,8 @@ Parse error Record 1: Input Record 2: Rejected. new row for relation "target" vi
 Parse error Record 2: Input Record 3: Rejected. null value in column "str" violates not-null constraint
 Parse error Record 3: Input Record 6: Rejected. null value in column "id" violates not-null constraint
 Parse error Record 4: Input Record 9: Rejected. null value in column "id" violates not-null constraint
-Duplidate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
-Duplidate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
 
   0 Rows skipped.
   4 Rows successfully loaded.
