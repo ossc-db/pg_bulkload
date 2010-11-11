@@ -6,16 +6,18 @@
 
 #include "pg_bulkload.h"
 
+#include <sys/file.h>
+
 #include "storage/fd.h"
 
 #include "logger.h"
 
 struct Logger
 {
-	bool			verbose;
-	char		   *logfile;
-	FILE		   *fp;
-	StringInfoData	buf;
+	bool	verbose;
+	bool	writer;
+	char   *logfile;
+	FILE   *fp;
 };
 
 static Logger logger;
@@ -25,80 +27,67 @@ static Logger logger;
  * ========================================================================*/
 
 void
-CreateLogger(const char *path, bool verbose)
+CreateLogger(const char *path, bool verbose, bool writer)
 {
 	memset(&logger, 0, sizeof(logger));
 
 	logger.verbose = verbose;
+	logger.writer = writer;
 
-	if (pg_strcasecmp(path, "remote") == 0)
-	{
-		initStringInfo(&logger.buf);
-	}
-	else
-	{
-		if (!is_absolute_path(path))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("relative path not allowed for LOGFILE: %s", path)));
+	if (!is_absolute_path(path))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("relative path not allowed for LOGFILE: %s", path)));
 
-		logger.logfile = pstrdup(path);
-		logger.fp = AllocateFile(logger.logfile, "at");
-		if (logger.fp == NULL)
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not open loader log file \"%s\": %m",
-							logger.logfile)));
-	}
+	logger.logfile = pstrdup(path);
+	logger.fp = AllocateFile(logger.logfile, "at");
+	if (logger.fp == NULL)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not open loader log file \"%s\": %m",
+						logger.logfile)));
 }
 
 void
 LoggerLog(int elevel, const char *fmt,...)
 {
+	int			fd;
 	int			len;
 	va_list		args;
 
-	if (logger.fp)
-	{
-		va_start(args, fmt);
-		len = vfprintf(logger.fp, fmt, args);
-		va_end(args);
+	if (logger.writer && elevel <= INFO)
+		return;
 
-		if (fflush(logger.fp))
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not write loader log file \"%s\": %m",
-							logger.logfile)));
-	}
-	else if (logger.buf.data)
-	{
-		if (elevel <= INFO)
-			return;
-
-		for (;;)
-		{
-			bool		success;
-
-			len = logger.buf.len;
-
-			/* Try to format the data. */
-			va_start(args, fmt);
-			success = appendStringInfoVA(&logger.buf, fmt, args);
-			va_end(args);
-
-			if (success)
-			{
-				len = logger.buf.len - len;
-				break;
-			}
-			/* Double the buffer size and try again. */
-			enlargeStringInfo(&logger.buf, logger.buf.maxlen);
-		}
-	}
-	else
-	{
+	if (!logger.fp)
 		return;		/* logger is not ready */
-	}
+
+	if ((fd = fileno(logger.fp)) == -1 || flock(fd, LOCK_EX) == -1)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not lock loader log file \"%s\": %m",
+						logger.logfile)));
+
+	if (fseek(logger.fp, 0, SEEK_END) != 0)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not seek loader log file \"%s\": %m",
+						logger.logfile)));
+
+	va_start(args, fmt);
+	len = vfprintf(logger.fp, fmt, args);
+	va_end(args);
+
+	if (fflush(logger.fp))
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not write loader log file \"%s\": %m",
+						logger.logfile)));
+
+	if (flock(fd, LOCK_UN) == -1)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not lock loader log file \"%s\": %m",
+						logger.logfile)));
 
 	if (elevel >= ERROR || (logger.verbose && elevel >= WARNING))
 	{
@@ -119,11 +108,9 @@ LoggerLog(int elevel, const char *fmt,...)
 	}
 }
 
-char *
+void
 LoggerClose(void)
 {
-	char *messages;
-
 	if (logger.fp != NULL && FreeFile(logger.fp) < 0)
 		ereport(WARNING,
 				(errcode_for_file_access(),
@@ -133,9 +120,5 @@ LoggerClose(void)
 	if (logger.logfile != NULL)
 		pfree(logger.logfile);
 
-	messages = logger.buf.data;
-
 	memset(&logger, 0, sizeof(logger));
-
-	return messages;
 }

@@ -159,7 +159,6 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	TupleDesc		tupdesc;
 	Datum			values[PG_BULKLOAD_COLS];
 	bool			nulls[PG_BULKLOAD_COLS];
-	char		   *messages;
 	HeapTuple		result;
 
 	/* Build a tuple descriptor for our result type */
@@ -217,7 +216,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	PG_TRY();
 	{
 		/* create logger */
-		CreateLogger(rd->logfile, rd->verbose);
+		CreateLogger(rd->logfile, rd->wo.verbose, rd->infile[0] == ':');
 
 		start = timeval_to_cstring(ru0.tv);
 		LoggerLog(INFO, "\npg_bulkload %s on %s\n\n",
@@ -332,10 +331,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 		"CPU %.2fs/%.2fu sec elapsed %.2f sec\n",
 		start, end, system, user, duration);
 
-	if ((messages = LoggerClose()) != NULL)
-		values[8] = CStringGetTextDatum(messages);
-	else
-		nulls[8] = true;
+	LoggerClose();
 
 	result = heap_form_tuple(tupdesc, values, nulls);
 

@@ -58,7 +58,7 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 	char		queueName[MAXPGPATH];
 	char	   *relname;
 	PGresult   *res;
-	const char *params[7];
+	const char *params[8];
 	char		max_dup_errors[MAXINT8LEN + 1];
 
 	self = palloc0(sizeof(ParallelWriter));
@@ -105,7 +105,8 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 		params[3] = ON_DUPLICATE_NAMES[options->on_duplicate];
 		params[4] = max_dup_errors;
 		params[5] = options->dup_badfile;
-		params[6] = "remote";
+		params[6] = options->logfile;
+		params[7] = (options->verbose ? "true" : "no");
 
 		if (1 != PQsendQueryParams(self->conn,
 				"SELECT * FROM pg_bulkload(ARRAY["
@@ -116,8 +117,9 @@ CreateParallelWriter(Oid relid, const WriterOptions *options)
 				"'ON_DUPLICATE_KEEP=' || $4,"
 				"'DUPLICATE_ERRORS=' || $5,"
 				"'DUPLICATE_BADFILE=' || $6,"
-				"'LOGFILE=' || $7])",
-			7, NULL, params, NULL, NULL, 0))
+				"'LOGFILE=' || $7,"
+				"'VERBOSE=' || $8])",
+			8, NULL, params, NULL, NULL, 0))
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
@@ -194,7 +196,6 @@ ParallelWriterClose(ParallelWriter *self, bool onError)
 				self->base.count = ParseInt64(PQgetvalue(res, 0, 1), 0);
 				ret.num_dup_new = ParseInt64(PQgetvalue(res, 0, 3), 0);
 				ret.num_dup_old = ParseInt64(PQgetvalue(res, 0, 4), 0);
-				LoggerLog(WARNING, "%s", PQgetvalue(res, 0, 8));
 				PQclear(res);
 
 				/* commit transaction */

@@ -21,6 +21,7 @@
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/tqual.h"
 
 #if PG_VERSION_NUM >= 80400
@@ -49,8 +50,6 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #include "nbtree/nbtsort-8.4.c"
 #elif PG_VERSION_NUM >= 80300
 #include "nbtree/nbtsort-8.3.c"
-#elif PG_VERSION_NUM >= 80200
-#include "nbtree/nbtsort-8.2.c"
 #else
 #error unsupported PostgreSQL version
 #endif
@@ -285,11 +284,9 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 
 		indexInfo = indexInfoArray[i];
 
-#if PG_VERSION_NUM >= 80300
 		/* If the index is marked as read-only, ignore it */
 		if (!indexInfo->ii_ReadyForInserts)
 			continue;
-#endif
 
 		/* Check for partial index */
 		if (indexInfo->ii_Predicate != NIL)
@@ -375,10 +372,12 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 		merge ? "with" : "without",
 		wstate.btws_use_wal ? "with" : "without");
 
+	/* Assign a new file node. */
+	RelationSetNewRelfilenode(wstate.index, RecentXmin);
+
 	if (merge || (btspool->isunique && self->max_dup_errors > 0))
 	{
-		/* Assign a new file node and merge two streams into it. */
-		RelationSetNewRelfilenode(wstate.index, RecentXmin);
+		/* Merge two streams into the new file node that we assigned. */
 		BULKLOAD_PROFILE_PUSH();
 		_bt_mergeload(self, &wstate, btspool, &reader, heapRel);
 		BULKLOAD_PROFILE_POP();
@@ -410,7 +409,6 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	ON_DUPLICATE	on_duplicate = self->on_duplicate;
 
 	Assert(btspool != NULL);
-	Assert(btspool2 != NULL);
 
 	/* the preparation of merge */
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
@@ -419,8 +417,14 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 
 	for (;;)
 	{
-		bool	check_unique = false;
 		bool	load1 = true;		/* load BTSpool next ? */
+		bool	hasnull;
+		int32	compare;
+
+		if (self->dup_old + self->dup_new > self->max_dup_errors)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("Maximum duplicate error count exceeded")));
 
 		if (itup2 == NULL)
 		{
@@ -429,101 +433,54 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 		}
 		else if (itup != NULL)
 		{
-			int		i;
+			compare = compare_indextuple(itup, itup2, indexScanKey,
+										 keysz, tupdes, &hasnull);
 
-			check_unique = btspool->isunique;
-
-			for (i = 1; i <= keysz; i++)
+			if (compare == 0 && !hasnull && btspool->isunique)
 			{
-				ScanKey		entry;
-				Datum		attrDatum1,
-							attrDatum2;
-				bool		isNull1,
-							isNull2;
-				int32		compare;
+				ItemPointerData t_tid2;
 
-				entry = indexScanKey + i - 1;
-				attrDatum1 = index_getattr(itup, i, tupdes, &isNull1);
-				attrDatum2 = index_getattr(itup2, i, tupdes, &isNull2);
-				if (isNull1)
-				{
-					check_unique = false;
-					if (isNull2)
-						compare = 0;		/* NULL "=" NULL */
-					else if (entry->sk_flags & SK_BT_NULLS_FIRST)
-						compare = -1;		/* NULL "<" NOT_NULL */
-					else
-						compare = 1;		/* NULL ">" NOT_NULL */
-				}
-				else if (isNull2)
-				{
-					check_unique = false;
-					if (entry->sk_flags & SK_BT_NULLS_FIRST)
-						compare = 1;		/* NOT_NULL ">" NULL */
-					else
-						compare = -1;		/* NOT_NULL "<" NULL */
-				}
-				else
-				{
-					compare = DatumGetInt32(FunctionCall2(&entry->sk_func,
-														  attrDatum1,
-														  attrDatum2));
+				/*
+				 * t_tid is update by heap_is_visible(), because use it for an
+				 * index, t_tid backup
+				 */
+				ItemPointerCopy(&itup2->t_tid, &t_tid2);
 
-					if (entry->sk_flags & SK_BT_DESC)
-						compare = -compare;
-				}
-				if (compare > 0)
+				/* The tuple pointed by the old index should not be visible. */
+				if (!heap_is_visible(heapRel, &itup->t_tid))
 				{
-					load1 = false;
-					check_unique = false;
-					break;
+					itup = BTSpoolGetNextItem(btspool, itup, &should_free);
 				}
-				else if (compare < 0)
+				else if (!heap_is_visible(heapRel, &itup2->t_tid))
 				{
-					check_unique = false;
-					break;
-				}
-			}
-		}
-		else
-			load1 = false;
-
-		if (check_unique)
-		{
-			Assert(load1);
-
-			/* The tuple pointed by the old index should not be visible. */
-			if (heap_is_visible(heapRel, &itup2->t_tid))
-			{
-				if (on_duplicate == ON_DUPLICATE_KEEP_NEW)
-				{
-					self->dup_old++;
-					remove_duplicate(self, heapRel, itup2,
-						RelationGetRelationName(wstate->index));
 					itup2 = BTReaderGetNextItem(btspool2);
 				}
 				else
 				{
-					self->dup_new++;
-					remove_duplicate(self, heapRel, itup,
-						RelationGetRelationName(wstate->index));
-					itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+					if (on_duplicate == ON_DUPLICATE_KEEP_NEW)
+					{
+						self->dup_old++;
+						remove_duplicate(self, heapRel, itup2,
+							RelationGetRelationName(wstate->index));
+						itup2 = BTReaderGetNextItem(btspool2);
+					}
+					else
+					{
+						ItemPointerCopy(&t_tid2, &itup2->t_tid);
+						self->dup_new++;
+						remove_duplicate(self, heapRel, itup,
+							RelationGetRelationName(wstate->index));
+						itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+					}
 				}
 
-				if (self->dup_old + self->dup_new > self->max_dup_errors)
-				{
-					ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Maximum duplicate error count exceeded")));
-				}
 				continue;
 			}
-			else
-			{
-				/* Discard itup2 and read next */
-				itup2 = BTReaderGetNextItem(btspool2);
-			}
+			else if (compare > 0)
+				load1 = false;
 		}
+		else
+			load1 = false;
 
 		BULKLOAD_PROFILE(&prof_merge_unique);
 
@@ -533,59 +490,66 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 
 		if (load1)
 		{
+			IndexTuple	next_itup = NULL;
+			bool		next_should_free = false;
+
+			for (;;)
+			{
+				/* get next item */
+				next_itup = BTSpoolGetNextItem(btspool, next_itup,
+											   &next_should_free);
+
+				if (!btspool->isunique || next_itup == NULL)
+					break;
+
+				compare = compare_indextuple(itup, next_itup, indexScanKey,
+											 keysz, tupdes, &hasnull);
+				if (compare < 0 || hasnull)
+					break;
+
+				if (compare > 0)
+				{
+					/* shouldn't happen */
+					elog(ERROR, "faild in tuplesort_performsort");
+				}
+
+				/*
+				 * If tupple is deleted by other unique indexes, not visible
+				 */
+				if (!heap_is_visible(heapRel, &next_itup->t_tid))
+				{
+					continue;
+				}
+
+				if (!heap_is_visible(heapRel, &itup->t_tid))
+				{
+					if (should_free)
+						pfree(itup);
+
+					itup = next_itup;
+					should_free = next_should_free;
+					next_should_free = false;
+					continue;
+				}
+
+				/* not unique between input files */
+				self->dup_new++;
+				remove_duplicate(self, heapRel, next_itup,
+								 RelationGetRelationName(wstate->index));
+
+				if (self->dup_old + self->dup_new > self->max_dup_errors)
+					ereport(ERROR,
+							(errcode(ERRCODE_INTERNAL_ERROR),
+							 errmsg("Maximum duplicate error count exceeded")));
+			}
+
 			_bt_buildadd(wstate, state, itup);
 
-			/* get next item */
-			if (btspool->isunique)
-			{
-				IndexTuple	next_itup = NULL;
-				bool		next_should_free = false;
+			if (should_free)
+				pfree(itup);
 
-				for (;;)
-				{
-					int32	compare;
-					bool	hasnull;
-
-					next_itup = BTSpoolGetNextItem(btspool, next_itup,
-												   &next_should_free);
-					if (next_itup == NULL)
-						break;
-
-					compare = compare_indextuple(itup, next_itup, indexScanKey,
-												 keysz, tupdes, &hasnull);
-					if (compare < 0 || hasnull)
-						break;
-
-					if (compare > 0)
-					{
-						/* shouldn't happen */
-						elog(ERROR, "faild in tuplesort_performsort");
-					}
-
-					/*
-					 * If tupple is deleted by other unique indexes, not visible
-					 */
-					if (heap_is_visible(heapRel, &itup->t_tid) &&
-						heap_is_visible(heapRel, &next_itup->t_tid))
-					{
-						self->dup_new++;
-						remove_duplicate(self, heapRel, next_itup,
-							RelationGetRelationName(wstate->index));
-
-						if (self->dup_old + self->dup_new > self->max_dup_errors)
-							ereport(ERROR,
-								(errcode(ERRCODE_INTERNAL_ERROR),
-								 errmsg("Maximum duplicate error count exceeded")));
-					}
-				}
-				if (should_free)
-					pfree(itup);
-
-				itup = next_itup;
-				should_free = next_should_free;
-			}
-			else
-				itup = BTSpoolGetNextItem(btspool, itup, &should_free);
+			itup = next_itup;
+			should_free = next_should_free;
 		}
 		else
 		{
@@ -895,11 +859,14 @@ compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
 
 /*
  * heap_is_visible
+ *
+ * If heap is found, heap_hot_search() update *htid to reference that tuple's
+ * offset number, and return TRUE.  If no match, return FALSE without modifying
+ * tid.
  */
 static bool
 heap_is_visible(Relation heapRel, ItemPointer htid)
 {
-#if PG_VERSION_NUM >= 80300
 	SnapshotData	SnapshotDirty;
 
 	InitDirtySnapshot(SnapshotDirty);
@@ -909,17 +876,6 @@ heap_is_visible(Relation heapRel, ItemPointer htid)
 	 * because we have exclusive lock on the relation. (XXX: Is it true?)
 	 */
 	return heap_hot_search(htid, heapRel, &SnapshotDirty, NULL);
-#else
-	bool			visible;
-	HeapTupleData	htup;
-	Buffer			hbuffer;
-
-	htup.t_self = *htid;
-	visible = heap_fetch(heapRel, SnapshotDirty, &htup, &hbuffer, true, NULL);
-	ReleaseBuffer(hbuffer);
-
-	return visible;
-#endif
 }
 
 static void

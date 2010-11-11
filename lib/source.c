@@ -337,8 +337,7 @@ RemoteSourceClose(RemoteSource *self)
 		{"duplicate_old", INT8OID, 8, -1},
 		{"system_time", FLOAT8OID, 8, -1},
 		{"user_time", FLOAT8OID, 8, -1},
-		{"duration", FLOAT8OID, 8, -1},
-		{"messages", TEXTOID, -1, -1}
+		{"duration", FLOAT8OID, 8, -1}
 	};
 
 	SendResultDescriptionMessage(attrs, PG_BULKLOAD_COLS);

@@ -61,15 +61,17 @@ extern const char *ON_DUPLICATE_NAMES[2];
 typedef struct WriterOptions
 {
 	bool			truncate;		/* truncate before load? */
+	bool			verbose;		/* output error message to server log? */
 	ON_DUPLICATE	on_duplicate;	/* behavior when duplicated keys found */
 	int64			max_dup_errors;	/* max ignorable errors in unique indexes */
 	char		   *dup_badfile;	/* duplicate error file name */
+	char		   *logfile;		/* log file name */
 } WriterOptions;
 
 typedef Parser *(*ParserCreate)(void);
 typedef Writer *(*WriterCreate)(Oid relid, const WriterOptions *options);
 
-#define PG_BULKLOAD_COLS	9
+#define PG_BULKLOAD_COLS	8
 
 /*
  * 64bit integer utils

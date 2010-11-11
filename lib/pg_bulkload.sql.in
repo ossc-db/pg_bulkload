@@ -18,8 +18,7 @@ CREATE FUNCTION pg_bulkload(
 	OUT duplicate_old bigint,
 	OUT system_time float8,
 	OUT user_time float8,
-	OUT duration float8,
-	OUT messages text
+	OUT duration float8
 )
 AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C VOLATILE STRICT;
 

@@ -27,45 +27,7 @@
 #include "pg_profile.h"
 #include "pgut/pgut-be.h"
 
-#if PG_VERSION_NUM < 80300
-
-#define toast_insert_or_update(rel, newtup, oldtup, options) \
-	toast_insert_or_update((rel), (newtup), (oldtup))
-
-static XLogRecPtr
-log_newpage(RelFileNode *rnode, int fork, BlockNumber blkno, Page page)
-{
-	xl_heap_newpage xlrec;
-	XLogRecPtr	recptr;
-	XLogRecData rdata[2];
-
-	/* NO ELOG(ERROR) from here till newpage op is logged */
-	START_CRIT_SECTION();
-
-	xlrec.node = *rnode;
-	xlrec.blkno = blkno;
-
-	rdata[0].data = (char *) &xlrec;
-	rdata[0].len = SizeOfHeapNewpage;
-	rdata[0].buffer = InvalidBuffer;
-	rdata[0].next = &(rdata[1]);
-
-	rdata[1].data = (char *) page;
-	rdata[1].len = BLCKSZ;
-	rdata[1].buffer = InvalidBuffer;
-	rdata[1].next = NULL;
-
-	recptr = XLogInsert(RM_HEAP_ID, XLOG_HEAP_NEWPAGE, rdata);
-
-	PageSetLSN(page, recptr);
-	PageSetTLI(page, ThisTimeLineID);
-
-	END_CRIT_SECTION();
-
-	return recptr;
-}
-
-#elif PG_VERSION_NUM < 80400
+#if PG_VERSION_NUM < 80400
 
 #define toast_insert_or_update(rel, newtup, oldtup, options) \
 	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
@@ -251,16 +213,11 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	}
 
 	tuple->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-#if PG_VERSION_NUM >= 80300
 	tuple->t_data->t_infomask2 &= ~(HEAP2_XACT_MASK);
-#endif
 	tuple->t_data->t_infomask |= HEAP_XMAX_INVALID;
 	HeapTupleHeaderSetXmin(tuple->t_data, self->xid);
 	HeapTupleHeaderSetCmin(tuple->t_data, self->cid);
 	HeapTupleHeaderSetXmax(tuple->t_data, 0);
-#if PG_VERSION_NUM < 80300
-	HeapTupleHeaderSetCmax(tuple->t_data, 0);
-#endif
 
 	/* put the tuple on local page. */
 	offnum = PageAddItem(page, (Item) tuple->t_data,

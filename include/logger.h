@@ -18,9 +18,9 @@
 
 typedef struct Logger	Logger;
 
-extern void CreateLogger(const char *path, bool verbose);
+extern void CreateLogger(const char *path, bool verbose, bool writer);
 extern void LoggerLog(int elevel, const char *fmt,...);
-extern char *LoggerClose(void);
+extern void LoggerClose(void);
 
 /*
  * Utilitiy functions

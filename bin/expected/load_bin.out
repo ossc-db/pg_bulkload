@@ -23,6 +23,15 @@ DETAIL: query was: SELECT * FROM pg_bulkload($1)
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
+TRUNCATE customer;
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+ c_id | c_d_id | c_w_id | c_first | c_middle | c_last | c_street_1 | c_street_2 | c_city | c_state | c_zip | c_phone | c_since | c_credit | c_credit_lim | c_discount | c_balance | c_ytd_payment | c_payment_cnt | c_delivery_cnt | c_data 
+------+--------+--------+---------+----------+--------+------------+------------+--------+---------+-------+---------+---------+----------+--------------+------------+-----------+---------------+---------------+----------------+--------
+(0 rows)
+
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i data/data1.bin -l results/bin1.log -P results/bin1.prs -u results/bin1.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END

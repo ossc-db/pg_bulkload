@@ -304,7 +304,8 @@ checkFieldIsNull(CSVParser *self, int field_num, int len)
 	 * the field buffer (field buffer contains character string after these marks
 	 * are handled).
 	 */
-	if (!self->fnn[self->former.attnum[field_num]] &&
+	if (self->former.maxfields != 0 &&
+		!self->fnn[self->former.attnum[field_num]] &&
 		self->null_len == len &&
 		0 == memcmp(self->null, self->fields[field_num], self->null_len))
 	{

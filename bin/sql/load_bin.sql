@@ -7,6 +7,12 @@ TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_dbfile -P pbfile -u logfile_dbfile
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile -P pbfile_dbfile -u pbfile_dbfile
 
+TRUNCATE customer;
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i data/data1.bin -l results/bin1.log -P results/bin1.prs -u results/bin1.dup
 \! awk -f data/adjust.awk results/bin1.log
 

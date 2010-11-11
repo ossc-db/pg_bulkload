@@ -29,6 +29,7 @@
 #include "pgstat.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
@@ -210,6 +211,8 @@ ReaderCreate(Datum options, time_t tm)
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			 errmsg("INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.")));
 
+	self->wo.logfile = self->logfile;
+
 	return self;
 }
 
@@ -362,7 +365,7 @@ ParseOption(Reader *rd, DefElem *opt)
 	}
 	else if (CompareKeyword(keyword, "VERBOSE"))
 	{
-		rd->verbose = ParseBoolean(target);
+		rd->wo.verbose = ParseBoolean(target);
 	}
 	else if (CompareKeyword(keyword, "TRUNCATE"))
 	{
@@ -525,6 +528,8 @@ ReaderNext(Reader *rd)
 									rd->parse_badfile)));
 
 			ParserDumpRecord(parser, rd->parse_fp, rd->parse_badfile);
+
+			MemoryContextReset(ccxt);
 		}
 		PG_END_TRY();
 
@@ -588,7 +593,7 @@ ReaderDumpParams(Reader *self)
 						 self->wo.max_dup_errors);
 	appendStringInfo(&buf, "ON_DUPLICATE_KEEP = %s\n",
 					 ON_DUPLICATE_NAMES[self->wo.on_duplicate]);
-	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
+	appendStringInfo(&buf, "VERBOSE = %s\n", self->wo.verbose ? "YES" : "NO");
 	if (PG_VALID_FE_ENCODING(self->checker.encoding))
 		appendStringInfo(&buf, "ENCODING = %s\n",
 						 pg_encoding_to_char(self->checker.encoding));

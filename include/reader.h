@@ -118,8 +118,6 @@ struct Reader
 	WriterCreate	writer;			/**< writer factory */
 	WriterOptions	wo;				/**< writer options */
 
-	bool			verbose;		/**< logger options */
-
 	/*
 	 * Parser
 	 */

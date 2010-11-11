@@ -103,6 +103,7 @@ NULL = "nullvalue           "
 WRITER = PARALLEL
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;
@@ -240,6 +241,7 @@ WRITER = PARALLEL
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Maximum parse error count exceeded - 1 error(s) found in input file
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Maximum duplicate error count exceeded
 SET enable_seqscan = on;
 SET enable_indexscan = off;

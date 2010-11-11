@@ -32,7 +32,7 @@ CREATE TABLE customer (
     c_data          varchar(500) NOT NULL
 ) WITH (oids, fillfactor=20);
 
-ALTER TABLE customer ADD PRIMARY KEY (c_w_id, c_d_id, c_id);
+ALTER TABLE customer ADD PRIMARY KEY (c_id, c_w_id, c_d_id);
 CREATE INDEX idx_btree ON customer USING btree (c_d_id, c_last);
 CREATE INDEX idx_btree_fn ON customer USING btree ((abs(c_w_id) + c_d_id));
 CREATE INDEX idx_hash ON customer USING hash (c_d_id);
