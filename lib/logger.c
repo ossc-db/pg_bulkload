@@ -12,6 +12,10 @@
 
 #include "logger.h"
 
+#if defined(LOCK_EX) && defined(LOCK_UN)
+#define HAVE_FLOCK		/* no flock in win32 */
+#endif
+
 struct Logger
 {
 	bool	verbose;
@@ -61,11 +65,13 @@ LoggerLog(int elevel, const char *fmt,...)
 	if (!logger.fp)
 		return;		/* logger is not ready */
 
+#ifdef HAVE_FLOCK
 	if ((fd = fileno(logger.fp)) == -1 || flock(fd, LOCK_EX) == -1)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not lock loader log file \"%s\": %m",
 						logger.logfile)));
+#endif
 
 	if (fseek(logger.fp, 0, SEEK_END) != 0)
 		ereport(ERROR,
@@ -83,11 +89,13 @@ LoggerLog(int elevel, const char *fmt,...)
 				 errmsg("could not write loader log file \"%s\": %m",
 						logger.logfile)));
 
+#ifdef HAVE_FLOCK
 	if (flock(fd, LOCK_UN) == -1)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not lock loader log file \"%s\": %m",
 						logger.logfile)));
+#endif
 
 	if (elevel >= ERROR || (logger.verbose && elevel >= WARNING))
 	{

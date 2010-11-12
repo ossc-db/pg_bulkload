@@ -501,11 +501,7 @@ list_copy_tail(List *oldlist, int nskip)
 	return newlist;
 }
 
-/*
- * When using non-GCC compilers, we can't define these as inline
- * functions in pg_list.h, so they are defined here.
- */
-#ifndef __GNUC__
+#ifndef USE_INLINE
 
 ListCell *
 list_head(List *l)
@@ -524,7 +520,8 @@ list_length(List *l)
 {
 	return l ? l->length : 0;
 }
-#endif   /* ! __GNUC__ */
+
+#endif   /* ! USE_INLINE */
 
 /* list_walk - apply walker for each item */
 void

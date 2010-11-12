@@ -1,0 +1,144 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}</ProjectGuid>
+    <RootNamespace>bin</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)/bin\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)/obj/$(ProjectName)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server;C:\Program Files %28x86%29\PostgreSQL\9.0\include;C:\Program Files (x86)\PostgreSQL\9.0\include\internal;$(IncludePath)</IncludePath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\lib;$(LibraryPath)</LibraryPath>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">pg_bulkload</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
+      <OutputFile>$(OutDir)pg_bulkload.exe</OutputFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <TargetMachine>MachineX86</TargetMachine>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\bin\pg_bulkload.c" />
+    <ClCompile Include="..\bin\pgut\pgut-fe.c" />
+    <ClCompile Include="..\bin\pgut\pgut-list.c" />
+    <ClCompile Include="..\bin\pgut\pgut.c" />
+    <ClCompile Include="..\bin\recovery.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\pg_loadstatus.h" />
+    <ClInclude Include="..\bin\pgut\pgut-fe.h" />
+    <ClInclude Include="..\bin\pgut\pgut-list.h" />
+    <ClInclude Include="..\bin\pgut\pgut.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\bin\sql\init.sql" />
+    <None Include="..\bin\sql\load_bin.sql" />
+    <None Include="..\bin\sql\load_check.sql" />
+    <None Include="..\bin\sql\load_csv.sql" />
+    <None Include="..\bin\sql\load_encoding.sql" />
+    <None Include="..\bin\sql\load_filter-8.3.sql" />
+    <None Include="..\bin\sql\load_filter-8.4.sql" />
+    <None Include="..\bin\sql\load_filter-9.0.sql" />
+    <None Include="..\bin\sql\load_filter.sql" />
+    <None Include="..\bin\sql\load_function-8.3.sql" />
+    <None Include="..\bin\sql\load_function-8.4.sql" />
+    <None Include="..\bin\sql\load_function-9.0.sql" />
+    <None Include="..\bin\sql\load_function.sql" />
+    <None Include="..\bin\sql\load_parallel.sql" />
+    <None Include="..\bin\sql\load_remote.sql" />
+    <None Include="..\bin\expected\init.out" />
+    <None Include="..\bin\expected\load_bin.out" />
+    <None Include="..\bin\expected\load_check.out" />
+    <None Include="..\bin\expected\load_csv.out" />
+    <None Include="..\bin\expected\load_encoding.out" />
+    <None Include="..\bin\expected\load_filter-8.3.out" />
+    <None Include="..\bin\expected\load_filter-8.4.out" />
+    <None Include="..\bin\expected\load_filter-9.0.out" />
+    <None Include="..\bin\expected\load_function-8.3.out" />
+    <None Include="..\bin\expected\load_function-8.4.out" />
+    <None Include="..\bin\expected\load_function-9.0.out" />
+    <None Include="..\bin\expected\load_parallel.out" />
+    <None Include="..\bin\expected\load_remote.out" />
+    <None Include="..\bin\data\adjust.awk" />
+    <None Include="..\bin\data\bin1.ctl" />
+    <None Include="..\bin\data\bin2.ctl" />
+    <None Include="..\bin\data\bin3.ctl" />
+    <None Include="..\bin\data\bin4.ctl" />
+    <None Include="..\bin\data\csv1.ctl" />
+    <None Include="..\bin\data\csv2.ctl" />
+    <None Include="..\bin\data\csv3.ctl" />
+    <None Include="..\bin\data\csv4.ctl" />
+    <None Include="..\bin\data\csv5.ctl" />
+    <None Include="..\bin\data\data1.bin" />
+    <None Include="..\bin\data\data1.csv" />
+    <None Include="..\bin\data\data2.bin" />
+    <None Include="..\bin\data\data2.csv" />
+    <None Include="..\bin\data\data3.bin" />
+    <None Include="..\bin\data\data3.csv" />
+    <None Include="..\bin\data\data4.csv" />
+    <None Include="..\bin\data\data5.csv" />
+    <None Include="..\bin\data\data6.csv" />
+    <None Include="..\bin\data\data7.csv" />
+    <None Include="..\bin\data\function1.ctl" />
+    <None Include="..\bin\data\gettime.awk" />
+    <None Include="..\doc\index.html" />
+    <None Include="..\doc\index_ja.html" />
+    <None Include="..\doc\pg_bulkload-ja.html" />
+    <None Include="..\doc\pg_bulkload.html" />
+    <None Include="..\doc\pg_timestamp-ja.html" />
+    <None Include="..\doc\pg_timestamp.html" />
+    <None Include="..\doc\sample_bin.ctl" />
+    <None Include="..\doc\sample_csv.ctl" />
+    <None Include="..\doc\style.css" />
+    <None Include="readme.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

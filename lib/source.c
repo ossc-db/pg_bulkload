@@ -24,6 +24,15 @@
 
 extern PGDLLIMPORT CommandDest		whereToSendOutput;
 
+#ifdef _MSC_VER
+/*
+ * Unfortunately, FrontendProtocol variable is not exported from postgres.a
+ * for MSVC. So, we define own entity of the variable and assume protocol
+ * version is always 3.
+ */
+ProtocolVersion	FrontendProtocol = 3;
+#endif
+
 /* ========================================================================
  * FileSource
  * ========================================================================*/
@@ -144,7 +153,7 @@ FileSourceClose(FileSource *self)
 static Source *
 CreateRemoteSource(const char *path, TupleDesc desc)
 {
-	RemoteSource *self = palloc0(sizeof(RemoteSource));
+	RemoteSource *self = (RemoteSource *) palloc0(sizeof(RemoteSource));
 	self->base.close = (SourceCloseProc) RemoteSourceClose;
 
 	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
@@ -262,7 +271,7 @@ readmessage:
 		avail = self->buffer->len - self->buffer->cursor;
 		if (avail > len)
 			avail = len;
-		pq_copymsgbytes(self->buffer, buffer, avail);
+		pq_copymsgbytes(self->buffer, (char *) buffer, avail);
 		buffer = (void *) ((char *) buffer + avail);
 		len -= avail;
 		bytesread += avail;

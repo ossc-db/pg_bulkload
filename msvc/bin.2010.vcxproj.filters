@@ -1,0 +1,239 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="regress">
+      <UniqueIdentifier>{5f942836-8862-4aa3-8573-a6b80a4fbe4f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="regress\sql">
+      <UniqueIdentifier>{e0adaf77-900d-4307-9a5f-6be049d0d93b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="regress\expected">
+      <UniqueIdentifier>{5cf8792b-6351-4f2c-88db-784d7d8a425c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="regress\data">
+      <UniqueIdentifier>{26ee101e-034a-45e9-a947-d898266b88ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="doc">
+      <UniqueIdentifier>{6a46f2b1-6c15-44c2-bf14-500562f0fc30}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\bin\pg_bulkload.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bin\pgut\pgut-fe.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bin\pgut\pgut-list.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bin\pgut\pgut.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bin\recovery.c">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\pg_loadstatus.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\bin\pgut\pgut-fe.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\bin\pgut\pgut-list.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\bin\pgut\pgut.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\bin\sql\init.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_bin.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_check.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_csv.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_encoding.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_filter-8.3.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_filter-8.4.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_filter-9.0.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_filter.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_function-8.3.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_function-8.4.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_function-9.0.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_function.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_parallel.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\sql\load_remote.sql">
+      <Filter>regress\sql</Filter>
+    </None>
+    <None Include="..\bin\expected\init.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_bin.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_check.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_csv.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_encoding.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_filter-8.3.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_filter-8.4.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_filter-9.0.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_function-8.3.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_function-8.4.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_function-9.0.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_parallel.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\expected\load_remote.out">
+      <Filter>regress\expected</Filter>
+    </None>
+    <None Include="..\bin\data\adjust.awk">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\bin1.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\bin2.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\bin3.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\bin4.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\csv1.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\csv2.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\csv3.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\csv4.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\csv5.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data1.bin">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data1.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data2.bin">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data2.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data3.bin">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data3.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data4.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data5.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data6.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\data7.csv">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\function1.ctl">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\bin\data\gettime.awk">
+      <Filter>regress\data</Filter>
+    </None>
+    <None Include="..\doc\index.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\index_ja.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\pg_bulkload-ja.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\pg_bulkload.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\pg_timestamp-ja.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\pg_timestamp.html">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\sample_bin.ctl">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\sample_csv.ctl">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="..\doc\style.css">
+      <Filter>doc</Filter>
+    </None>
+    <None Include="readme.txt" />
+  </ItemGroup>
+</Project>

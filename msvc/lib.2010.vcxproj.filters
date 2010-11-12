@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\lib\logger.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\parser_binary.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\parser_csv.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\parser_function.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\parser_tuple.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\pg_btree.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\pg_bulkload.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\pg_strutil.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\pgut\pgut-be.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\pgut\pgut-ipc.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\reader.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\source.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\writer_buffered.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\writer_direct.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\writer_parallel.c">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\logger.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pg_btree.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pg_bulkload.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pg_loadstatus.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pg_profile.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\pg_strutil.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\pgut\pgut-be.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\pgut\pgut-ipc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\reader.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\writer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\lib\pg_bulkload.sql.in" />
+    <None Include="..\lib\uninstall_pg_bulkload.sql" />
+  </ItemGroup>
+</Project>

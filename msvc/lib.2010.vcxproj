@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}</ProjectGuid>
+    <RootNamespace>lib</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)/bin\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)/obj/$(ProjectName)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server;C:\Program Files %28x86%29\PostgreSQL\9.0\include;$(IncludePath)</IncludePath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\lib;$(LibraryPath)</LibraryPath>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">pg_bulkload</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;postgres.lib;libpq.lib</AdditionalDependencies>
+      <OutputFile>$(OutDir)pg_bulkload.dll</OutputFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\lib\logger.c" />
+    <ClCompile Include="..\lib\parser_binary.c" />
+    <ClCompile Include="..\lib\parser_csv.c" />
+    <ClCompile Include="..\lib\parser_function.c" />
+    <ClCompile Include="..\lib\parser_tuple.c" />
+    <ClCompile Include="..\lib\pg_btree.c" />
+    <ClCompile Include="..\lib\pg_bulkload.c" />
+    <ClCompile Include="..\lib\pg_strutil.c" />
+    <ClCompile Include="..\lib\pgut\pgut-be.c" />
+    <ClCompile Include="..\lib\pgut\pgut-ipc.c" />
+    <ClCompile Include="..\lib\reader.c" />
+    <ClCompile Include="..\lib\source.c" />
+    <ClCompile Include="..\lib\writer_buffered.c" />
+    <ClCompile Include="..\lib\writer_direct.c" />
+    <ClCompile Include="..\lib\writer_parallel.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\logger.h" />
+    <ClInclude Include="..\include\pg_btree.h" />
+    <ClInclude Include="..\include\pg_bulkload.h" />
+    <ClInclude Include="..\include\pg_loadstatus.h" />
+    <ClInclude Include="..\include\pg_profile.h" />
+    <ClInclude Include="..\include\pg_strutil.h" />
+    <ClInclude Include="..\lib\pgut\pgut-be.h" />
+    <ClInclude Include="..\lib\pgut\pgut-ipc.h" />
+    <ClInclude Include="..\include\reader.h" />
+    <ClInclude Include="..\include\writer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\lib\pg_bulkload.sql.in" />
+    <None Include="..\lib\uninstall_pg_bulkload.sql" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
