@@ -12,6 +12,6 @@
 #ifndef COMMON_H_INCLUDED
 #define COMMON_H_INCLUDED
 
-#define PG_BULKLOAD_VERSION "3.0beta2"
+#define PG_BULKLOAD_VERSION "3.0.0"
 
 #endif   /* COMMON_H_INCLUDED */
