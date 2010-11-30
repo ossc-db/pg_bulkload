@@ -1,19 +1,29 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual C++ Express 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bin", "bin.2010.vcxproj", "{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bin.2010", "bin.2010.vcxproj", "{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lib", "lib.2010.vcxproj", "{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lib.2010", "lib.2010.vcxproj", "{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Release|Win32 = Release|Win32
+		8.3|Win32 = 8.3|Win32
+		8.4|Win32 = 8.4|Win32
+		9.0|Win32 = 9.0|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.Release|Win32.ActiveCfg = Release|Win32
-		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.Release|Win32.Build.0 = Release|Win32
-		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.Release|Win32.ActiveCfg = Release|Win32
-		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.Release|Win32.Build.0 = Release|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.8.3|Win32.ActiveCfg = 8.3|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.8.3|Win32.Build.0 = 8.3|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.8.4|Win32.ActiveCfg = 8.4|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.8.4|Win32.Build.0 = 8.4|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.9.0|Win32.ActiveCfg = 9.0|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C1E2}.9.0|Win32.Build.0 = 9.0|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.8.3|Win32.ActiveCfg = 8.3|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.8.3|Win32.Build.0 = 8.3|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.8.4|Win32.ActiveCfg = 8.4|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.8.4|Win32.Build.0 = 8.4|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.9.0|Win32.ActiveCfg = 9.0|Win32
+		{B6B37F22-9E44-4240-AAA0-650D4AC2C2E2}.9.0|Win32.Build.0 = 9.0|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
