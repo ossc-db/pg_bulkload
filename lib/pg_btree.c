@@ -13,6 +13,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/nbtree.h"
+#include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "executor/executor.h"
@@ -373,7 +374,7 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 		wstate.btws_use_wal ? "with" : "without");
 
 	/* Assign a new file node. */
-	RelationSetNewRelfilenode(wstate.index, RecentXmin);
+	RelationSetNewRelfilenode(wstate.index, InvalidTransactionId);
 
 	if (merge || (btspool->isunique && self->max_dup_errors > 0))
 	{

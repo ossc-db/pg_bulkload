@@ -501,7 +501,7 @@ list_copy_tail(List *oldlist, int nskip)
 	return newlist;
 }
 
-#ifndef USE_INLINE
+#if !defined(USE_INLINE) && PG_VERSION_NUM < 80400 && !defined(__GNUC__)
 
 ListCell *
 list_head(List *l)
