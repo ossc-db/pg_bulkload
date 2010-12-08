@@ -316,13 +316,22 @@ set_datum_tuple(FunctionParser *self, Datum datum)
 
 	if (!self->tupledesc_matched)
 	{
-		TupleDesc		resultDesc;
+		/*
+		 * We must not call lookup_rowtype_tupdesc, because parallel writer
+		 * process a deadlock could occur, when typeid same target table's row
+		 * type.
+		 */
+		if (self->desc->tdtypeid != HeapTupleHeaderGetTypeId(td))
+		{
+			TupleDesc		resultDesc;
 
-		resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
-											HeapTupleHeaderGetTypMod(td));
-		tupledesc_match(self->desc, resultDesc);
+			resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
+												HeapTupleHeaderGetTypMod(td));
+			tupledesc_match(self->desc, resultDesc);
+			ReleaseTupleDesc(resultDesc);
+		}
+
 		self->tupledesc_matched = true;
-		ReleaseTupleDesc(resultDesc);
 	}
 
 	self->tuple.t_data = td;

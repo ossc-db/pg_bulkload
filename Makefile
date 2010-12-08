@@ -8,7 +8,7 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = pg_statsinfo
+subdir = contrib/pg_bulkload
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 endif

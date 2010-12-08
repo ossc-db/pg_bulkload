@@ -42,7 +42,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin1.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data1.bin
 PARSE_BADFILE = .../bin1.prs
@@ -136,7 +136,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin2.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data2.bin
 PARSE_BADFILE = .../bin2.prs
@@ -251,7 +251,7 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin3.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data2.bin
 PARSE_BADFILE = .../bin3.prs
@@ -366,7 +366,7 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin4.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../bin3.dup
 PARSE_BADFILE = .../bin4.prs
@@ -463,7 +463,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin5.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../bin4.dup
 PARSE_BADFILE = .../bin5.prs
@@ -555,7 +555,7 @@ ERROR: query failed: ERROR:  integer out of range
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/bin6.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data3.bin
 PARSE_BADFILE = .../bin6.prs
@@ -615,7 +615,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin7.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data3.bin
 PARSE_BADFILE = .../bin7.prs
@@ -738,7 +738,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin8.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data1.bin
 PARSE_BADFILE = .../pbfile
@@ -800,7 +800,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin9.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data1.bin
 PARSE_BADFILE = .../pbfile

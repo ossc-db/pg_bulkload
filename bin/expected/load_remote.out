@@ -10,7 +10,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/remote1.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = stdin
 PARSE_BADFILE = .../remote1.prs
@@ -79,7 +79,7 @@ NOTICE: BULK LOAD START
 ERROR: copy failed: ERROR:  Maximum duplicate error count exceeded
 \! awk -f data/adjust.awk results/remote2.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = stdin
 PARSE_BADFILE = .../remote2.prs
@@ -143,7 +143,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/remote3.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = stdin
 PARSE_BADFILE = .../remote3.prs

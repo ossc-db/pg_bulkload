@@ -143,7 +143,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter1.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data6.csv
 PARSE_BADFILE = .../filter1.prs
@@ -216,7 +216,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter2.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data6.csv
 PARSE_BADFILE = .../filter2.prs
@@ -289,7 +289,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter3.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data6.csv
 PARSE_BADFILE = .../filter3.prs
@@ -356,7 +356,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/filter4.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data7.csv
 PARSE_BADFILE = .../filter4.prs

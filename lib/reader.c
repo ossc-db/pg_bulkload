@@ -38,6 +38,7 @@
 
 #include "logger.h"
 #include "pg_loadstatus.h"
+#include "pg_profile.h"
 #include "pg_strutil.h"
 #include "reader.h"
 #include "writer.h"
@@ -535,6 +536,7 @@ ReaderNext(Reader *rd)
 
 	} while (!eof && !tuple);
 
+	BULKLOAD_PROFILE(&prof_reader_parser);
 	return tuple;
 }
 
@@ -1166,32 +1168,43 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	if (!filter->tupledesc_matched)
 	{
 		HeapTupleHeader	td = DatumGetHeapTupleHeader(datum);
-		TupleDesc		resultDesc;
 
-		resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
-											HeapTupleHeaderGetTypMod(td));
-#ifdef ALL_RESULTDESC_CHECK
-		PG_TRY();
+		/*
+		 * We must not call lookup_rowtype_tupdesc, because parallel writer
+		 * process a deadlock could occur, when typeid same target table's row
+		 * type.
+		 */
+		if (former->desc->tdtypeid != HeapTupleHeaderGetTypeId(td))
 		{
+			TupleDesc		resultDesc;
+
+			resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
+												HeapTupleHeaderGetTypMod(td));
+#ifdef ALL_RESULTDESC_CHECK
+			PG_TRY();
+			{
 #endif
-			tupledesc_match(former->desc, resultDesc);
+				tupledesc_match(former->desc, resultDesc);
 #ifdef ALL_RESULTDESC_CHECK
-		}
-		PG_CATCH();
-		{
+			}
+			PG_CATCH();
+			{
+				ReleaseTupleDesc(resultDesc);
+				if (filter->fn_rettype == RECORDOID)
+					*parsing_field = 0;
+
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
+
+			if (filter->fn_rettype != RECORDOID)
+#endif
+				filter->tupledesc_matched = true;
+
 			ReleaseTupleDesc(resultDesc);
-			if (filter->fn_rettype == RECORDOID)
-				*parsing_field = 0;
-
-			PG_RE_THROW();
 		}
-		PG_END_TRY();
-
-		if (filter->fn_rettype != RECORDOID)
-#endif
+		else
 			filter->tupledesc_matched = true;
-
-		ReleaseTupleDesc(resultDesc);
 	}
 
 	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);

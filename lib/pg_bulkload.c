@@ -42,10 +42,12 @@ static char *timeval_to_cstring(struct timeval tp);
 static instr_time prof_init;
 static instr_time prof_reader;
 static instr_time prof_writer;
+static instr_time prof_reset;
 instr_time prof_flush;
 instr_time prof_merge;
 instr_time prof_index;
 instr_time prof_reindex;
+instr_time prof_fini;
 
 instr_time prof_reader_source;
 instr_time prof_reader_parser;
@@ -84,7 +86,7 @@ BULKLOAD_PROFILE_PRINT()
 {
 	int		i;
 	double	seconds[10];
-	const char *GLOBALs[] = { "INIT", "READER", "WRITER", "FLUSH", "MERGE", "INDEX", "REINDEX" };
+	const char *GLOBALs[] = { "INIT", "READER", "WRITER", "RESET", "FLUSH", "MERGE", "INDEX", "REINDEX", "FINI" };
 	const char *READERs[] = { "SOURCE", "PARSER" };
 	const char *WRITERs[] = { "TOAST", "TABLE", "INDEX" };
 	const char *MERGEs[] = { "UNIQUE", "INSERT", "TERM" };
@@ -94,10 +96,12 @@ BULKLOAD_PROFILE_PRINT()
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_init);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reader);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_writer);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reset);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_flush);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_merge);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_index);
 	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_reindex);
+	seconds[i++] = INSTR_TIME_GET_DOUBLE(prof_fini);
 	print_profiles("GLOBAL", i, GLOBALs, seconds);
 
 	/* READER */
@@ -258,6 +262,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 			BULKLOAD_PROFILE(&prof_writer);
 
 			MemoryContextReset(wt->context);
+			BULKLOAD_PROFILE(&prof_reset);
 		}
 
 		MemoryContextSwitchTo(ctx);
@@ -335,6 +340,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 	result = heap_form_tuple(tupdesc, values, nulls);
 
+	BULKLOAD_PROFILE(&prof_fini);
 	BULKLOAD_PROFILE_POP();
 	BULKLOAD_PROFILE_PRINT();
 

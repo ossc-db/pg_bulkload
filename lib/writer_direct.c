@@ -229,7 +229,9 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	item = PageGetItem(page, itemId);
 	((HeapTupleHeader) item)->t_ctid = tuple->t_self;
 
+	BULKLOAD_PROFILE(&prof_writer_table);
 	SpoolerInsert(&self->spooler, tuple);
+	BULKLOAD_PROFILE(&prof_writer_index);
 }
 
 /**

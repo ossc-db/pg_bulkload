@@ -11,7 +11,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/parallel1.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data1.csv
 PARSE_BADFILE = .../parallel1.prs
@@ -80,7 +80,7 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel2.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel2.prs
@@ -142,7 +142,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/parallel3.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel3.prs
@@ -217,7 +217,7 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/parallel4.log
 
-pg_bulkload 3.0.0 on <TIMESTAMP>
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
 
 INFILE = .../data2.csv
 PARSE_BADFILE = .../parallel4.prs
