@@ -127,6 +127,8 @@ typedef struct BinaryParser
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
 	int		nfield;				/**< number of fields */
 	Field  *fields;				/**< array of field descriptor */
+
+	bool	async_read;			/**< enable asynchronous input file read? */
 } BinaryParser;
 
 /*
@@ -178,6 +180,10 @@ BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, Tuple
 	int			i;
 	size_t		maxlen;
 
+	if (pg_strcasecmp(infile, "stdin") == 0 && self->async_read)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("do not support ASYNC_READ in the case of \"INFILE = STDIN\".")));
+
 	/*
 	 * set default values
 	 */
@@ -190,7 +196,7 @@ BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, Tuple
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no COL specified")));
 
-	self->source = CreateSource(infile, desc);
+	self->source = CreateSource(infile, desc, self->async_read);
 
 	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);
@@ -729,6 +735,10 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(!self->filter.funcstr);
 		self->filter.funcstr = pstrdup(value);
 	}
+	else if (CompareKeyword(keyword, "ASYNC_READ"))
+	{
+		self->async_read = ParseBoolean(value);
+	}
 	else
 		return false;	/* unknown parameter */
 
@@ -745,6 +755,8 @@ BinaryParserDumpParams(BinaryParser *self)
 	initStringInfo(&buf);
 	appendStringInfoString(&buf, "TYPE = BINARY\n");
 	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
+	appendStringInfo(&buf, "ASYNC_READ = %s\n",
+					 self->async_read ? "YES" : "NO");
 	appendStringInfo(&buf, "PRESERVE_BLANKS = %s\n",
 			   self->preserve_blanks ? "YES" : "NO");
 	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);

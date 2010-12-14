@@ -32,7 +32,7 @@ struct Source
 	SourceCloseProc		close;	/** close */
 };
 
-extern Source *CreateSource(const char *path, TupleDesc desc);
+extern Source *CreateSource(const char *path, TupleDesc desc, bool async_read);
 
 #define SourceRead(self, buffer, len)	((self)->read((self), (buffer), (len)))
 #define SourceClose(self)				((self)->close((self)))

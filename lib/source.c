@@ -7,6 +7,7 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "access/htup.h"
 #include "catalog/pg_type.h"
@@ -32,6 +33,40 @@ extern PGDLLIMPORT CommandDest		whereToSendOutput;
  */
 ProtocolVersion	FrontendProtocol = 3;
 #endif
+
+/* ========================================================================
+ * AsyncSource
+ * ========================================================================*/
+#define SPIN_SLEEP_MSEC		10
+#define READ_UNIT_SIZE		(1024 * 1024)
+#define INITIAL_BUF_LEN		(16 * READ_UNIT_SIZE)
+#define ERROR_MESSAGE_LEN	1024
+
+typedef struct AsyncSource
+{
+	Source	base;
+
+	FILE   *fd;
+	bool	eof;
+
+	char   *buffer;		/* read buffer */
+	int		size;		/* buffer size */
+	int		begin;		/* begin of the buffer finished with reading */
+	int		end;		/* end of the buffer finished with reading */
+
+	/*
+	 * because ereport() does not support multi-thread, the read thread stores
+	 * away error messsage in a message buffer.
+	 */
+	char	errmsg[ERROR_MESSAGE_LEN];
+
+	pthread_t		th;
+	pthread_mutex_t	lock;
+} AsyncSource;
+
+static size_t AsyncSourceRead(AsyncSource *self, void *buffer, size_t len);
+static void AsyncSourceClose(AsyncSource *self);
+static void *AsyncSourceMain(void *arg);
 
 /* ========================================================================
  * FileSource
@@ -63,11 +98,12 @@ static size_t RemoteSourceRead(RemoteSource *self, void *buffer, size_t len);
 static size_t RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len);
 static void RemoteSourceClose(RemoteSource *self);
 
+static Source *CreateAsyncSource(const char *path, TupleDesc desc);
 static Source *CreateFileSource(const char *path, TupleDesc desc);
 static Source *CreateRemoteSource(const char *path, TupleDesc desc);
 
 Source *
-CreateSource(const char *path, TupleDesc desc)
+CreateSource(const char *path, TupleDesc desc, bool async_read)
 {
 	if (pg_strcasecmp(path, "stdin") == 0)
 	{
@@ -92,8 +128,256 @@ CreateSource(const char *path, TupleDesc desc)
 				 errmsg("must be superuser to use pg_bulkload from a file"),
 				 errhint("Anyone can use pg_bulkload from stdin")));
 
+		if (async_read)
+			return CreateAsyncSource(path, desc);
+
 		return CreateFileSource(path, desc);
 	}
+}
+
+/* ========================================================================
+ * AsyncSource
+ * ========================================================================*/
+
+static Source *
+CreateAsyncSource(const char *path, TupleDesc desc)
+{
+	AsyncSource *self = palloc0(sizeof(AsyncSource));
+	self->base.read = (SourceReadProc) AsyncSourceRead;
+	self->base.close = (SourceCloseProc) AsyncSourceClose;
+
+	self->size = INITIAL_BUF_LEN;
+	self->begin = 0;
+	self->end = 0;
+	self->buffer = palloc0(self->size);
+	self->errmsg[0] = '\0';
+
+	self->eof = false;
+	self->fd = AllocateFile(path, "r");
+	if (self->fd == NULL)
+		ereport(ERROR, (errcode_for_file_access(),
+			errmsg("could not open \"%s\" %m", path)));
+
+#if defined(USE_POSIX_FADVISE)
+	posix_fadvise(fileno(self->fd), 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE | POSIX_FADV_WILLNEED);
+#endif
+
+	pthread_mutex_init(&self->lock, NULL);
+
+	if (pthread_create(&self->th, NULL, AsyncSourceMain, self) != 0)
+		elog(ERROR, "pthread_create");
+
+	return (Source *) self;
+}
+
+static size_t
+AsyncSourceRead(AsyncSource *self, void *buffer, size_t len)
+{
+	char   *data;
+	int		size;
+	int		begin;
+	int		end;
+	char	errhead;
+	size_t	bytesread;
+	int		n;
+
+	/* 4 times of the needs size allocate a buffer at least */
+	if (self->size < len * 4)
+	{
+		char   *newbuf;
+		int		newsize;
+
+		/* read buffer a multiple of READ_UNIT_SIZE */
+		newsize = (len * 4 - 1) -
+				  ((len * 4 - 1) / READ_UNIT_SIZE) +
+				  READ_UNIT_SIZE;
+		newbuf = palloc0(newsize);
+
+		pthread_mutex_lock(&self->lock);
+
+		/* copy it in new buffer from old buffer */
+		if (self->begin > self->end)
+		{
+			memcpy(newbuf, self->buffer + self->begin,
+				   self->size - self->begin);
+			memcpy(newbuf + self->size - self->begin, self->buffer, self->end);
+			self->end = self->size - self->begin + self->end;
+		}
+		else
+		{
+			memcpy(newbuf, self->buffer + self->begin, self->end - self->begin);
+			self->end = self->end - self->begin;
+		}
+
+		pfree(self->buffer);
+		self->buffer = newbuf;
+		self->size = newsize;
+		self->begin = 0;
+
+		pthread_mutex_unlock(&self->lock);
+	}
+
+	/* this value that a read thread does not change */
+	data = self->buffer;
+	size = self->size;
+	begin = self->begin;
+
+	bytesread = 0;
+retry:
+	end = self->end;
+	errhead = self->errmsg[0];
+
+	/* error in read thread */
+	if (errhead != '\0')
+	{
+		/* wait for error message to be set */
+		pthread_mutex_lock(&self->lock);
+		pthread_mutex_unlock(&self->lock);
+
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("%s", self->errmsg)));
+	}
+
+	if (begin < end)
+	{
+		n = Min(len - bytesread, end - begin);
+		memcpy((char *) buffer + bytesread, data + begin, n);
+		begin += n;
+		bytesread += n;
+	}
+	else if (begin > end)
+	{
+		n = Min(len - bytesread, size - begin);
+		memcpy((char *) buffer + bytesread, data + begin, n);
+		begin += n;
+		bytesread += n;
+
+		if (begin == size)
+		{
+			self->begin = begin = 0;
+
+			if (bytesread < len)
+				goto retry;
+		}
+	}
+
+	self->begin = begin;
+
+	if (bytesread == len || (self->eof && begin == end))
+		return bytesread;
+
+	/* not enough data yet */
+	CHECK_FOR_INTERRUPTS();
+	pg_usleep(SPIN_SLEEP_MSEC * 1000);
+
+	goto retry;
+}
+
+static void
+AsyncSourceClose(AsyncSource *self)
+{
+	self->eof = true;
+
+	pthread_mutex_unlock(&self->lock);
+	pthread_join(self->th, NULL);
+
+	if (self->fd != NULL && FreeFile(self->fd) < 0)
+	{
+		ereport(WARNING, (errcode_for_file_access(),
+			errmsg("could not close source file: %m")));
+	}
+	self->fd = NULL;
+
+	if (self->buffer != NULL)
+		pfree(self->buffer);
+	self->buffer = NULL;
+
+	pfree(self);
+}
+
+static void *
+AsyncSourceMain(void *arg)
+{
+	AsyncSource   *self = (AsyncSource *) arg;
+	size_t			bytesread;
+	int				begin;
+	int				end;
+	int				size;
+	int				len;
+	char		   *data;
+
+	Assert(self->begin == 0);
+	Assert(self->end == 0);
+
+	for (;;)
+	{
+		pthread_mutex_lock(&self->lock);
+
+		begin = self->begin;
+		end = self->end;
+		size = self->size;
+		data = self->buffer;
+
+		if (begin > end)
+		{
+			len = begin - end;
+			if (len <= READ_UNIT_SIZE)
+				len = 0;
+		}
+		else
+		{
+			len = size - end;
+			if (begin == 0 && len <= READ_UNIT_SIZE)
+				len = 0;
+		}
+
+		if (len == 0)
+		{
+			pthread_mutex_unlock(&self->lock);
+
+			if (self->eof)
+				break;
+
+			pg_usleep(SPIN_SLEEP_MSEC * 1000);
+
+			continue;
+			/* retry */
+		}
+
+		len = Min(len, READ_UNIT_SIZE);
+
+		bytesread = fread(data + end, 1, len, self->fd);
+
+		if (ferror(self->fd))
+		{
+			snprintf(self->errmsg, ERROR_MESSAGE_LEN,
+					 "could not read from source file: %m");
+			pthread_mutex_unlock(&self->lock);
+			return NULL;
+		}
+
+		end += bytesread;
+		if (end == self->size)
+			end = 0;
+
+		self->end = end;
+
+		if (feof(self->fd))
+		{
+			self->eof = true;
+			break;
+		}
+
+		if (self->eof)
+			break;
+
+		pthread_mutex_unlock(&self->lock);
+	}
+
+	pthread_mutex_unlock(&self->lock);
+
+	return NULL;
 }
 
 /* ========================================================================
@@ -128,7 +412,7 @@ FileSourceRead(FileSource *self, void *buffer, size_t len)
 	if (ferror(self->fd))
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not read from COPY file: %m")));
+				 errmsg("could not read from source file: %m")));
 
 	return bytesread;
 }
@@ -139,7 +423,7 @@ FileSourceClose(FileSource *self)
 	if (self->fd != NULL && FreeFile(self->fd) < 0)
 	{
 		ereport(WARNING, (errcode_for_file_access(),
-			errmsg("could not close source file%m")));
+			errmsg("could not close source file: %m")));
 	}
 	pfree(self);
 }

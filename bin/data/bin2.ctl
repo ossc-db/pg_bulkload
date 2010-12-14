@@ -8,6 +8,7 @@ LIMIT = INFINITE
 LOGFILE=../results/bin3.log
 PARSE_BADFILE=../results/bin3.prs
 DUPLICATE_BADFILE=../results/bin3.dup
+ASYNC_READ=YES
 
 COL = CHAR(10) # c_id
 COL = CHAR(4)  # c_d_id

@@ -1,9 +1,9 @@
-#INFILE = data.bin
 TABLE = customer
 TYPE = FIXED
 PRESERVE_BLANKS = NO
 SKIP = 1
 LIMIT = 8
+ASYNC_READ=YES
 
 COL = CHAR(10) # c_id
 COL = CHAR(4)  # c_d_id
