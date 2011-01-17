@@ -42,6 +42,8 @@ static Datum Read_float8(TupleFormer *former, char *in, const Field* field, int 
  */
 #define READ_LINE_NUM		100
 
+#define MAX_CONVERSION_GROWTH  4
+
 typedef enum TypeId
 {
 	T_CHAR,
@@ -105,6 +107,7 @@ struct Field
 	char   *nullif;		/**< null pattern, if any */
 	int		nulllen;	/**< length of nullif */
 	char   *in;			/**< pointer to the character string or binary */
+	char   *str;		/**< work buffer */
 };
 
 typedef struct BinaryParser
@@ -144,7 +147,7 @@ static void BinaryParserDumpRecord(BinaryParser *self, FILE *fp, char *badfile);
 static void ExtractValuesFromFixed(BinaryParser *self, char *record);
 
 /**
- * @brief Create a new CSV parser.
+ * @brief Create a new Binary parser.
  */
 Parser *
 CreateBinaryParser(void)
@@ -354,15 +357,13 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 	}
 	else
 	{
-		record = self->buffer + (self->rec_len  *self->used_rec_cnt);
-		record[0] = self->next_head;	/* restore the head */
+		record = self->buffer + (self->rec_len * self->used_rec_cnt);
 	}
 
 	/*
 	 * Increment the position *before* parsing the record so that we can
 	 * skip it when there are some errors on parsing it.
 	 */
-	self->next_head = record[self->rec_len];
 	self->used_rec_cnt++;
 	self->base.count++;
 
@@ -372,15 +373,16 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 		if (self->fields[i].read == Read_char ||
 			self->fields[i].read == Read_varchar)
 		{
-			int		len = self->fields[i].len;
-			char   *str;
+			char   *str = record + self->fields[i].offset;
+			int		next_head = self->fields[i].offset + self->fields[i].len;
 
-			str = palloc(len + 1);
-			memcpy(str, record + self->fields[i].offset, len);
-			str[len] = '\0';
+			self->next_head = record[next_head];
+			record[next_head] = '\0';
 			self->base.parsing_field = i + 1;
 
 			self->fields[i].in = CheckerConversion(checker, str);
+
+			record[next_head] = self->next_head;
 		}
 		else
 		{
@@ -389,6 +391,7 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 	}
 
 	ExtractValuesFromFixed(self, record);
+	self->next_head = '\0';
 	self->base.parsing_field = -1;
 
 	if (self->filter.funcstr)
@@ -451,7 +454,7 @@ ParseLengthAndOffset(const char *value, Field *field)
 	unsigned long	n2;
 	char		   *p1;
 	char		   *p2;
-	
+
 	n1 = strtoul(value, &p1, 0);
 	if (value < p1)
 	{
@@ -713,6 +716,9 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 			ParseFormat(value, field);
 		}
 
+		if (field->read == Read_char || field->read == Read_varchar)
+			field->str = palloc(field->len * MAX_CONVERSION_GROWTH + 1);
+
 		self->nfield++;
 	}
 	else if (CompareKeyword(keyword, "PRESERVE_BLANKS"))
@@ -757,8 +763,6 @@ BinaryParserDumpParams(BinaryParser *self)
 	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
 	appendStringInfo(&buf, "ASYNC_READ = %s\n",
 					 self->async_read ? "YES" : "NO");
-	appendStringInfo(&buf, "PRESERVE_BLANKS = %s\n",
-			   self->preserve_blanks ? "YES" : "NO");
 	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);
 	if (self->filter.funcstr)
 		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);
@@ -823,10 +827,20 @@ BinaryParserDumpParams(BinaryParser *self)
 static void
 BinaryParserDumpRecord(BinaryParser *self, FILE *fp, char *badfile)
 {
-	int	len;
+	int		len;
+	char   *record = self->buffer + (self->rec_len * (self->used_rec_cnt - 1));
 
-	len = fwrite(self->buffer + (self->rec_len * (self->used_rec_cnt - 1)), 1,
-				 self->rec_len, fp);
+	if (self->base.parsing_field > 0 && self->next_head != '\0')
+	{
+		int	next_head;
+
+		next_head = self->fields[self->base.parsing_field - 1].offset +
+					self->fields[self->base.parsing_field - 1].len;
+
+		record[next_head] = self->next_head;
+	}
+
+	len = fwrite(record, 1, self->rec_len, fp);
 	if (len < self->rec_len || fflush(fp))
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -840,31 +854,27 @@ static Datum
 Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
-	const int	len = strlen(in);
-	char	   *str;
 
-	str = palloc(len + 1);
-	memcpy(str, in, len);
-	str[len] = '\0';
-	if (str[field->nulllen] == '\0' &&
-		strncmp(str, field->nullif, field->nulllen) == 0)
+	if (in[field->nulllen] == '\0' &&
+		strncmp(in, field->nullif, field->nulllen) == 0)
 	{
 		*isnull = true;
 		value = 0;
 	}
 	else
 	{
-		int			k;
+		int	len = strlen(in);
 
 		/* Trim trailing spaces */
-		for (k = len - 1; k >= 0 && IsWhiteSpace(str[k]); k--);
-		str[k + 1] = '\0';
+		for (; len > 0 && IsWhiteSpace(in[len - 1]); len--);
+
+		memcpy(field->str, in, len);
+		field->str[len] = '\0';
 
 		*isnull = false;
-		value = TupleFormerValue(former, str, idx);
+		value = TupleFormerValue(former, field->str, idx);
 	}
 
-	pfree(str);
 	return value;
 }
 
@@ -872,14 +882,9 @@ static Datum
 Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
 {
 	Datum		value;
-	const int	len = strlen(in);
-	char	   *str;
 
-	str = palloc(len + 1);
-	memcpy(str, in, len);
-	str[len] = '\0';
-	if (str[field->nulllen] == '\0' &&
-		strncmp(str, field->nullif, field->nulllen) == 0)
+	if (in[field->nulllen] == '\0' &&
+		strncmp(in, field->nullif, field->nulllen) == 0)
 	{
 		*isnull = true;
 		value = 0;
@@ -887,10 +892,9 @@ Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *i
 	else
 	{
 		*isnull = false;
-		value = TupleFormerValue(former, str, idx);
+		value = TupleFormerValue(former, in, idx);
 	}
 
-	pfree(str);
 	return value;
 }
 
@@ -1000,10 +1004,16 @@ ExtractValuesFromFixed(BinaryParser *self, char *record)
 		int			j = self->former.attnum[i];	/* Index of physical fields */
 		bool		isnull;
 		Datum		value;
+		int			next_head = self->fields[i].offset + self->fields[i].len;
 
+		self->next_head = record[next_head];
+		record[next_head] = '\0';
 		self->base.parsing_field = i + 1;	/* 1 origin */
+
 		value = self->fields[i].read(&self->former,
 			self->fields[i].in, &self->fields[i], j, &isnull);
+
+		record[next_head] = self->next_head;
 
 		self->former.isnull[j] = isnull;
 		self->former.values[j] = value;
