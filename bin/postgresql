@@ -20,7 +20,7 @@ CMDNAME=`basename $0`
 
 # postgresql help message (allmost all of the following is as same as pg_ctl)
 help="\
-postgresql is a utility to start pg_bulkload -r and to start, stop, restart,
+$CMDNAME is a utility to start pg_bulkload -r and to start, stop, restart,
 reload configuration files, report the status of a PostgreSQL server, 
 or signal a PostgreSQL process.
 
@@ -287,7 +287,7 @@ if [ "$op" = "kill" ];then
     fi
 fi
 
-# restart option in this script is exececuted as the following 3 steps:
+# restart option in this script is executed as the following 3 steps:
 #    1. pg_ctl stop
 #    2. pg_bulkload recovery
 #    3. pg_ctl start
