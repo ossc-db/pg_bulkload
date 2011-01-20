@@ -329,7 +329,7 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
-	if (ls->ls.create_cnt == 0 && !loader->rel->rd_istemp)
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->rel))
 	{
 		XLogRecPtr	recptr;
 
@@ -355,7 +355,7 @@ flush_pages(DirectWriter *loader)
 			close_data_file(loader);
 		if (loader->datafd == -1)
 			loader->datafd = open_data_file(ls->ls.rnode,
-											loader->rel->rd_istemp,
+											RELATION_IS_LOCAL(loader->rel),
 											relblks);
 
 		/* Number of blocks to be added to the current file. */

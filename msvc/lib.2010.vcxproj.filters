@@ -56,6 +56,9 @@
     <ClCompile Include="..\lib\writer_parallel.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="..\lib\pgut\pgut-pthread.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\logger.h">
@@ -86,6 +89,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="..\include\writer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\pgut\pgut-pthread.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

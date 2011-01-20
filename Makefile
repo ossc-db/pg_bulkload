@@ -3,14 +3,22 @@
 #
 #    Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
+ifndef USE_PGXS
+top_builddir = ../..
+makefile_global = $(top_builddir)/src/Makefile.global
+ifeq "$(wildcard $(makefile_global))" ""
+USE_PGXS = 1	# use pgxs if not in contrib directory
+endif
+endif
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = contrib/pg_bulkload
-top_builddir = ../..
-include $(top_builddir)/src/Makefile.global
+subdir = pg_bulkload
+include $(makefile_global)
+include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
 SUBDIRS = bin lib util

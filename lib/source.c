@@ -7,7 +7,7 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
-#include <pthread.h>
+#include "pgut/pgut-pthread.h"
 
 #include "access/htup.h"
 #include "catalog/pg_type.h"

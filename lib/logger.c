@@ -55,7 +55,9 @@ CreateLogger(const char *path, bool verbose, bool writer)
 void
 LoggerLog(int elevel, const char *fmt,...)
 {
+#ifdef HAVE_FLOCK
 	int			fd;
+#endif
 	int			len;
 	va_list		args;
 

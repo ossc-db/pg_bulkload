@@ -350,7 +350,7 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	 * it's not a temp index.
 	 */
 	wstate.btws_use_wal = self->use_wal &&
-		XLogArchivingActive() && !wstate.index->rd_istemp;
+		XLogArchivingActive() && !RELATION_IS_LOCAL(wstate.index);
 
 	/* reserve the metapage */
 	wstate.btws_pages_alloced = BTREE_METAPAGE + 1;
@@ -579,7 +579,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * fsync those pages here, they might still not be on disk when the crash
 	 * occurs.
 	 */
-	if (!wstate->index->rd_istemp)
+	if (!RELATION_IS_LOCAL(wstate->index))
 	{
 		RelationOpenSmgr(wstate->index);
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
@@ -634,7 +634,7 @@ BTReaderInit(BTReader *reader, Relation rel)
 #if PG_VERSION_NUM >= 90100
 	reader->smgr.smgr_rnode.node = rel->rd_node;
 	reader->smgr.smgr_rnode.backend =
-		rel->rd_istemp ? MyBackendId : InvalidBackendId;
+		rel->rd_backend == MyBackendId ? MyBackendId : InvalidBackendId;
 #else
 	reader->smgr.smgr_rnode = rel->rd_node;
 #endif

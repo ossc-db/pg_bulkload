@@ -12,13 +12,21 @@ REGRESS = init load_bin load_csv load_remote load_function load_encoding load_ch
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 PG_LIBS = $(libpq)
 
+ifndef USE_PGXS
+top_builddir = ../../..
+makefile_global = $(top_builddir)/src/Makefile.global
+ifeq "$(wildcard $(makefile_global))" ""
+USE_PGXS = 1	# use pgxs if not in contrib directory
+endif
+endif
+
 ifdef USE_PGXS
-PGXS := $(shell pg_config --pgxs)
+PG_CONFIG = pg_config
+PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = contrib/pg_bulkload
-top_builddir = ../../..
-include $(top_builddir)/src/Makefile.global
+subdir = contrib/$(MODULE_big)
+include $(makefile_global)
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 

@@ -5,13 +5,25 @@
       <Configuration>8.3</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="8.3|x64">
+      <Configuration>8.3</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="8.4|Win32">
       <Configuration>8.4</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="8.4|x64">
+      <Configuration>8.4</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="9.0|Win32">
       <Configuration>9.0</Configuration>
       <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="9.0|x64">
+      <Configuration>9.0</Configuration>
+      <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -24,16 +36,37 @@
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='9.0|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='8.4|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='8.3|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -41,33 +74,60 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='9.0|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='8.4|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='8.3|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">$(SolutionDir)/bin\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">$(SolutionDir)/bin\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">$(SolutionDir)/bin\</OutDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">$(SolutionDir)/obj/$(ProjectName)\</IntDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">$(SolutionDir)/obj/$(ProjectName)\</IntDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">$(SolutionDir)/obj/$(ProjectName)\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">$(SolutionDir)/bin/$(Platform)/$(Configuration)/bin/</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">$(SolutionDir)/obj/$(Platform)/$(Configuration)/$(ProjectName)/</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">false</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">false</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">false</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">false</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">false</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">false</LinkIncremental>
     <IncludePath Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\9.0\include\server;C:\Program Files %28x86%29\PostgreSQL\9.0\include;C:\Program Files (x86)\PostgreSQL\9.0\include\internal;$(IncludePath)</IncludePath>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">C:\Program Files\PostgreSQL\9.0\include\server\port\win32_msvc;C:\Program Files\PostgreSQL\9.0\include\server\port\win32;C:\Program Files\PostgreSQL\9.0\include\server;C:\Program Files\PostgreSQL\9.0\include;C:\Program Files\PostgreSQL\9.0\include\internal;$(IncludePath)</IncludePath>
     <IncludePath Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server;C:\Program Files %28x86%29\PostgreSQL\8.4\include;C:\Program Files (x86)\PostgreSQL\8.4\include\internal;$(IncludePath)</IncludePath>
-    <IncludePath Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server;C:\Program Files %28x86%29\PostgreSQL\8.4\include;C:\Program Files (x86)\PostgreSQL\8.4\include\internal;$(IncludePath)</IncludePath>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server;C:\Program Files %28x86%29\PostgreSQL\8.4\include;C:\Program Files (x86)\PostgreSQL\8.4\include\internal;$(IncludePath)</IncludePath>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.3\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\8.3\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\8.3\include\server;C:\Program Files %28x86%29\PostgreSQL\8.3\include;C:\Program Files (x86)\PostgreSQL\8.3\include\internal;$(IncludePath)</IncludePath>
+    <IncludePath Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32_msvc;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server\port\win32;C:\Program Files %28x86%29\PostgreSQL\8.4\include\server;C:\Program Files %28x86%29\PostgreSQL\8.4\include;C:\Program Files (x86)\PostgreSQL\8.4\include\internal;$(IncludePath)</IncludePath>
     <LibraryPath Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">C:\Program Files %28x86%29\PostgreSQL\9.0\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">C:\Program Files\PostgreSQL\9.0\lib;$(LibraryPath)</LibraryPath>
     <LibraryPath Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.4\lib;$(LibraryPath)</LibraryPath>
-    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.4\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">C:\Program Files %28x86%29\PostgreSQL\8.4\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">C:\Program Files %28x86%29\PostgreSQL\8.3\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">C:\Program Files %28x86%29\PostgreSQL\8.4\lib;$(LibraryPath)</LibraryPath>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">pg_bulkload</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">pg_bulkload</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='8.4|Win32'">pg_bulkload</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">pg_bulkload</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='8.3|Win32'">pg_bulkload</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">pg_bulkload</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='9.0|Win32'">
     <ClCompile>
@@ -83,16 +143,45 @@
       <DebugInformationFormat>
       </DebugInformationFormat>
       <CompileAs>CompileAsC</CompileAs>
-      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
-      <OutputFile>$(OutDir)pg_bulkload.exe</OutputFile>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <TargetMachine>MachineX86</TargetMachine>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='9.0|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl.lib</AdditionalDependencies>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <IgnoreAllDefaultLibraries>
@@ -113,16 +202,45 @@
       <DebugInformationFormat>
       </DebugInformationFormat>
       <CompileAs>CompileAsC</CompileAs>
-      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
-      <OutputFile>$(OutDir)pg_bulkload.exe</OutputFile>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <TargetMachine>MachineX86</TargetMachine>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='8.4|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <IgnoreAllDefaultLibraries>
@@ -143,16 +261,45 @@
       <DebugInformationFormat>
       </DebugInformationFormat>
       <CompileAs>CompileAsC</CompileAs>
-      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
-      <OutputFile>$(OutDir)pg_bulkload.exe</OutputFile>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <TargetMachine>MachineX86</TargetMachine>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='8.3|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_USE_32BIT_TIME_T;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4005;4996;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ws2_32.lib;libpq.lib;libpgport.lib;libintl-8.lib</AdditionalDependencies>
+      <OutputFile>$(OutDir)/$(TargetFileName)</OutputFile>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <IgnoreAllDefaultLibraries>
