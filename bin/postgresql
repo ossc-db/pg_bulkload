@@ -69,6 +69,7 @@ ARGUMENTS=$*
 
 # Arguments passed to pg_ctl
 PG_CTL_ARGS=
+WAIT_ARGS=
 
 # Default value of "-m" option
 shutdown_mode=smart
@@ -138,10 +139,10 @@ while [ $# -gt 0 ];do
         silent_mode="yes"
         ;;
     -w)
-        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+				WAIT_ARGS="$WAIT_ARGS $1"
         ;;
     -W)
-        PG_CTL_ARGS="$PG_CTL_ARGS $1"
+				WAIT_ARGS="$WAIT_ARGS $1"
         ;;
     -*)
         # Exit by 1 if invalid options are given.
@@ -303,7 +304,13 @@ if [ "$op" = "restart" ];then
     ##ARGUMENTS=`echo "$ARGUMENTS" | sed 's/restart/stop/g'`
     ##pg_ctl $ARGUMENTS
     ##ARGUMENTS=`echo "$ARGUMENTS" | sed 's/stop/start/g'`
-    eval "pg_ctl $PG_CTL_ARGS stop"
+
+		# If "restart" is given, we must ensure that the server shutdown has
+		# been completed before starting pg_bulkload recovery.
+    eval "pg_ctl $PG_CTL_ARGS -w stop"
+		if [ "$?" -ne 0 ]; then
+			exit 1
+		fi
 fi
 
 # If "start" or "restart" is given, pg_bulkload recovery is executed before 
@@ -330,11 +337,11 @@ fi
 # If "restart" is given, pg_ctl start is executed here.
 ##pg_ctl $ARGUMENTS
 if [ "$op" = "kill" ];then
-    eval "pg_ctl $PG_CTL_ARGS $op $kill_signame $kill_pid"
+    eval "pg_ctl $PG_CTL_ARGS $WAIT_ARGS $op $kill_signame $kill_pid"
 elif [ "$op" = "restart" ];then
-    eval "pg_ctl $PG_CTL_ARGS start"
+    eval "pg_ctl $PG_CTL_ARGS $WAIT_ARGS start"
 else
-    eval "pg_ctl $PG_CTL_ARGS $op"
+    eval "pg_ctl $PG_CTL_ARGS $WAIT_ARGS $op"
 fi
 
 # Exit 1 if the process exits abnormally.
