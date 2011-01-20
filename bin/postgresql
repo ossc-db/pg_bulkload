@@ -226,13 +226,13 @@ fi
 
 # Exit 1 if PGDATA path is not specified.
 if [ -z "$PGDATA" ];then
-    echo "no postgreSQL database directory specified"
+    echo "$CMDNAME: no PostgreSQL database directory specified"
     echo "$advice" 1>&2
     exit 1
 
 # Exit 1 if PGDATA path is not invalid.
 elif [ ! -d $PGDATA ];then
-    echo "$PGDATA : Not a directory"
+    echo "$CMDNAME: specified database directory \"$PGDATA\" is not a directory"
     echo "$advice" 1>&2
     exit 1
 fi
