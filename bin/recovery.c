@@ -247,14 +247,13 @@ GetLSFList(void)
 	Assert(DataDir != NULL);
 
 	/*
-	 * check $PGDATA/pg_bulkload/ directory
-	 *	   and find files whose name end with ".loadstatus".
-	 *	   if exists, add file name to List.
+	 * If neither $PGDATA/pg_bulkload directory nor ".loadstatus"
+	 * file in it exists, we return the empty list and skip doing
+	 * recovery. Otherwise, we add the name of found LSF into
+	 * the list, then return it.
 	 */
 	if ((dir = opendir(BULKLOAD_LSF_DIR)) == NULL)
-		elog(ERROR,
-			 "could not open LSF Directory \"%s\": %s",
-			 BULKLOAD_LSF_DIR, strerror(errno));
+		return NIL;
 
 	while ((dp = readdir(dir)) != NULL)
 	{
