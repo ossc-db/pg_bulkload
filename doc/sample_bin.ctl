@@ -1,5 +1,5 @@
 #
-# sample_bin.ctl -- Control file to load CSV input data
+# sample_bin.ctl -- Control file to load fixed binary input data
 #
 #    Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
