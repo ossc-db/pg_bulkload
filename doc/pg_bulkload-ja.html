@@ -260,7 +260,10 @@ INFILE = generate_series(1, 1000)  # 1から1,000の連番をロードする
 <ul>
   <li>DIRECT   : 高速ですが特殊なリカバリ手順が必要です。WALをスキップし、共有バッファも汚しません。</li>
   <li>BUFFERED : 特殊なリカバリは不要です。ただし、WALを書き、共有バッファも汚します。</li>
-  <li>PARALLEL : 基本的には DIRECT と同じですが、データの読み取りと書き出しをそれぞれ異なるプロセスで実行します。</li>
+  <li>PARALLEL : 基本的には DIRECT と同じですが、データの読み取りと書き出しをそれぞれ異なるプロセスで実行します。なお、ロード先のデータベースに対してパスワード認証を必要とする場合には
+.pgpassを設定しなければなりません。詳細は<a href="#restrictions">使用上の注意と制約</a>を参照して下さい。
+  
+  </li>
 </ul>
 </dd>
 
@@ -534,6 +537,17 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 
 <h4>kill -9は使わない</h4>
 <p>pg_bulkload を "kill -9" を使って停止させるのはできる限りやめてください。もし実行すると postgresql スクリプトによるリカバリが実行されます。</p>
+
+<h4>WRITER=PARALLEL指定時の認証における制約</h4>
+<p> WRITER=PARALLELかつロード対象のデータベースにlocalhostから接続するのにパスワードが必要な場合、
+たとえパスワードを正しくプロンプトに入力しても、パスワード認証に失敗してしまいます。
+この問題を回避するには、パスワードを<a href="http://www.postgresql.jp/document/current/html/libpq-pgpass.html">.pgpassファイル</a>に指定しなければなりません。
+ただし、.pgpassファイルは、PostgreSQLサーバを起動したOSユーザ(典型的には"postgres"ユーザ)のホームディレクトリに配置する必要があります。
+例えば、pg_bulkloadが、ポート番号5432で稼働しているサーバに、パスワードが"foopass"であるユーザ"foo"として接続する場合では、
+管理者は以下の行を.pgpassファイルに追加します。</p>
+
+<pre>localhost:5432:*:foo:foopass</pre>
+
 
 <h3>データベース制約の扱い</h3>
 <p>

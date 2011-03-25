@@ -269,7 +269,13 @@ The method to load data. The default is DIRECT.
   <li>DIRECT   : Bypass the shared buffers and skip WAL records, but need the own recovery procedure.
                  This is the default, and original older version's mode.</li>
   <li>BUFFERED : Use shared buffers, write WALs,  and use the original PostgreSQL WAL recovery.</li>
-  <li>PARALLEL : Same as DIRECT, but uses two processes for reading and writing data.</li>
+  <li>PARALLEL : Same as DIRECT, but uses two processes for reading and writing data. 
+    If password authentication is configured to the database to load,
+    you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+  
+  
+  </li>
+
 </ul>
 </dd>
 
@@ -570,6 +576,20 @@ Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as pos
 must invoke postgresql script to perform pg_bulkload recovery and restart 
 PostgreSQL to continue.
 <p>  
+
+<h4>Authentication can fail when WRITER=PARALLEL</h4>
+<p> When WRITER=PARALLEL and password is required to connect from localhost
+to the database to load, the authentication will fail even if you enter
+the password correctly in the prompt. To avoid this, specify the password in
+<a href="http://www.postgresql.org/docs/current/static/libpq-pgpass.html">.pgpass file</a>.
+Note that the .pgpass file must be in the home directory of the OS user
+(typically "postgres" user) who ran PostgreSQL server. For example,
+if pg_bulkload connects to the server that is running on port 5432 as
+the DB user "foo" whose password is "foopass", the administrator can add
+the following line to the .pgpass file:</p>
+
+<pre>localhost:5432:*:foo:foopass</pre>
+
 
 <h3>Database Constraints</h3>
 <p>
