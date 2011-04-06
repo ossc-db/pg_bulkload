@@ -22,7 +22,6 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "utils/typcache.h"
 
 #include "logger.h"
 #include "pg_profile.h"
@@ -43,10 +42,9 @@ typedef struct FunctionParser
 	ReturnSetInfo			rsinfo;
 	HeapTupleData			tuple;
 	TupleTableSlot		   *funcResultSlot;
-	bool					tupledesc_matched;
 } FunctionParser;
 
-static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
 static HeapTuple FunctionParserRead(FunctionParser *self, Checker *checker);
 static int64	FunctionParserTerm(FunctionParser *self);
 static bool FunctionParserParam(FunctionParser *self, const char *keyword, char *value);
@@ -75,7 +73,7 @@ CreateFunctionParser(void)
 }
 
 static void
-FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc)
+FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
 {
 	int					i;
 	ParsedFunction		function;
@@ -83,6 +81,7 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	Oid					funcid;
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
+	bool				tupledesc_matched = false;
 
 	if (pg_strcasecmp(infile, "stdin") == 0)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -106,21 +105,8 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	pp = (Form_pg_proc) GETSTRUCT(ftup);
 
 	/* Check data type of the function result value */
-	if (pp->prorettype == desc->tdtypeid)
-	{
-		/*
-		 * If the return value of the input function is a targer table,
-		 * lookup_rowtype_tupdesc grab AccessShareLock on the table in the
-		 * first call.  We call lookup_rowtype_tupdesc here to avoid deadlock
-		 * when lookup_rowtype_tupdesc is called by the internal routine of the
-		 * input function, because a parallel writer process holds an
-		 * AccessExclusiveLock.
-		 */
-		TupleDesc	resultDesc = lookup_rowtype_tupdesc(pp->prorettype, -1);
-		ReleaseTupleDesc(resultDesc);
-
-		self->tupledesc_matched = true;
-	}
+	if (pp->prorettype == desc->tdtypeid && desc->tdtypeid != RECORDOID)
+		tupledesc_matched = true;
 	else if (pp->prorettype == RECORDOID)
 	{
 		TupleDesc	resultDesc = NULL;
@@ -131,7 +117,7 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 		if (resultDesc)
 		{
 			tupledesc_match(desc, resultDesc);
-			self->tupledesc_matched = true;
+			tupledesc_matched = true;
 			FreeTupleDesc(resultDesc);
 		}
 	}
@@ -139,6 +125,9 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 		ereport(ERROR,
 				(errcode(ERRCODE_DATATYPE_MISMATCH),
 				 errmsg("function return data type and target table data type do not match")));
+
+	if (tupledesc_matched && checker->tchecker)
+		checker->tchecker->status = NO_COERCION;
 
 	/*
 	 * assign arguments
@@ -326,26 +315,6 @@ static void
 set_datum_tuple(FunctionParser *self, Datum datum)
 {
 	HeapTupleHeader	td = DatumGetHeapTupleHeader(datum);
-
-	if (!self->tupledesc_matched)
-	{
-		/*
-		 * We must not call lookup_rowtype_tupdesc, because parallel writer
-		 * process a deadlock could occur, when typeid same target table's row
-		 * type.
-		 */
-		if (self->desc->tdtypeid != HeapTupleHeaderGetTypeId(td))
-		{
-			TupleDesc		resultDesc;
-
-			resultDesc = lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(td),
-												HeapTupleHeaderGetTypMod(td));
-			tupledesc_match(self->desc, resultDesc);
-			ReleaseTupleDesc(resultDesc);
-		}
-
-		self->tupledesc_matched = true;
-	}
 
 	self->tuple.t_data = td;
 	self->tuple.t_len = HeapTupleHeaderGetDatumLength(td);

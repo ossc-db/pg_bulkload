@@ -119,7 +119,7 @@ CreateSource(const char *path, TupleDesc desc, bool async_read)
 		if (!is_absolute_path(path))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("relative path not allowed for INFILE: %s", path)));
+					 errmsg("relative path not allowed for INPUT: %s", path)));
 
 		/* must be the super user if load from a file */
 		if (!superuser())

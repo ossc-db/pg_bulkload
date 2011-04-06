@@ -14,28 +14,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv1.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data1.csv
+INPUT = .../data1.csv
 PARSE_BADFILE = .../csv1.prs
-DUPLICATE_BADFILE = .../csv1.dup
 LOGFILE = .../csv1.log
-TABLE = public.customer
-TRUNCATE = YES
 LIMIT = 5
 PARSE_ERRORS = 3
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv1.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
 
 Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
 Parse error Record 2: Input Record 4: Rejected - column 15. invalid input syntax for type numeric: "BAD-DATA"
@@ -85,28 +85,28 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/csv1-2.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data1.csv
+INPUT = .../data1.csv
 PARSE_BADFILE = .../csv1-2.prs
-DUPLICATE_BADFILE = .../csv1-2.dup
 LOGFILE = .../csv1-2.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 2
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 9
-ASYNC_READ = YES
 DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv1-2.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   9 Rows skipped.
@@ -151,28 +151,28 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv2.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.csv
+INPUT = .../data2.csv
 PARSE_BADFILE = .../csv2.prs
-DUPLICATE_BADFILE = .../csv2.dup
 LOGFILE = .../csv2.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv2.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -214,28 +214,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv3.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.csv
+INPUT = .../data2.csv
 PARSE_BADFILE = .../csv3.prs
-DUPLICATE_BADFILE = .../csv3.dup
 LOGFILE = .../csv3.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv3.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -298,28 +298,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv4.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.csv
+INPUT = .../data2.csv
 PARSE_BADFILE = .../csv4.prs
-DUPLICATE_BADFILE = .../csv4.dup
 LOGFILE = .../csv4.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv4.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Maximum parse error count exceeded - 1 error(s) found in input file
@@ -351,28 +351,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv5.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.csv
+INPUT = .../data2.csv
 PARSE_BADFILE = .../csv5.prs
-DUPLICATE_BADFILE = .../csv5.dup
 LOGFILE = .../csv5.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 10
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv5.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -427,33 +427,37 @@ SELECT * FROM customer ORDER BY c_id;
 -- do not error skip an error after of toast_insert_or_update.
 \! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "SKIP=1" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv6.log -P results/csv6.prs -u results/csv6.dup
 NOTICE: BULK LOAD START
+WARNING:  Parse error Record 1: Input Record 2: Rejected - column 3. invalid input syntax for integer: "int4"
+WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
 ERROR: query failed: ERROR:  integer out of range
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv6.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data3.csv
+INPUT = .../data3.csv
 PARSE_BADFILE = .../csv6.prs
-DUPLICATE_BADFILE = .../csv6.dup
 LOGFILE = .../csv6.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 1
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv6.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
+Parse error Record 1: Input Record 2: Rejected - column 3. invalid input syntax for integer: "int4"
+Maximum parse error count exceeded - 1 error(s) found in input file
 integer out of range
 \! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data3.csv -o "SKIP=2" -o "LOAD=4" -o "VERBOSE=YES" -l results/csv7.log -P results/csv7.prs -u results/csv7.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
@@ -479,28 +483,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv7.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data3.csv
+INPUT = .../data3.csv
 PARSE_BADFILE = .../csv7.prs
-DUPLICATE_BADFILE = .../csv7.dup
 LOGFILE = .../csv7.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../csv7.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "int4"
 Parse error Record 2: Input Record 2: Rejected - column 2. value "32768" is out of range for type smallint

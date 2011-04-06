@@ -13,10 +13,9 @@
 #include "commands/dbcommands.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
-#include "utils/builtins.h"
 #include "utils/guc.h"
-#include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/typcache.h"
 
 #include "pgut/pgut-be.h"
 #include "pgut/pgut-ipc.h"
@@ -32,15 +31,18 @@ typedef struct ParallelWriter
 {
 	Writer	base;
 
-	PGconn	   *conn;
-	Queue	   *queue;
+	PGconn *conn;
+	Queue  *queue;
+	Writer *writer;
 } ParallelWriter;
 
+static void	ParallelWriterInit(ParallelWriter *self);
 static void	ParallelWriterInsert(ParallelWriter *self, HeapTuple tuple);
 static WriterResult	ParallelWriterClose(ParallelWriter *self, bool onError);
+static bool	ParallelWriterParam(ParallelWriter *self, const char *keyword, char *value);
 static void	ParallelWriterDumpParams(ParallelWriter *self);
+static int	ParallelWriterSendQuery(ParallelWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose);
 static const char *finish_and_get_message(ParallelWriter *self);
-static char *get_relation_name(Oid relid);
 static void write_queue(ParallelWriter *self, const void *buffer, uint32 len);
 static void transfer_message(void *arg, const PGresult *res);
 static PGconn *connect_to_localhost(void);
@@ -48,93 +50,102 @@ static PGconn *connect_to_localhost(void);
 /* ========================================================================
  * Implementation
  * ========================================================================*/
-#define MAXINT8LEN		25
 
 Writer *
-CreateParallelWriter(Oid relid, const WriterOptions *options)
+CreateParallelWriter(void *opt)
 {
 	ParallelWriter *self;
-	unsigned	queryKey;
-	char		queueName[MAXPGPATH];
-	char	   *relname;
-	PGresult   *res;
-	const char *params[8];
-	char		max_dup_errors[MAXINT8LEN + 1];
 
 	self = palloc0(sizeof(ParallelWriter));
+	self->base.init = (WriterInitProc) ParallelWriterInit;
 	self->base.insert = (WriterInsertProc) ParallelWriterInsert,
 	self->base.close = (WriterCloseProc) ParallelWriterClose,
+	self->base.param = (WriterParamProc) ParallelWriterParam;
 	self->base.dumpParams = (WriterDumpParamsProc) ParallelWriterDumpParams,
+	self->base.sendQuery = (WriterSendQueryProc) ParallelWriterSendQuery;
+	self->writer = opt;
+
+	return (Writer *) self;
+}
+
+/**
+ * @brief Initialize a ParallelWriter
+ */
+static void
+ParallelWriterInit(ParallelWriter *self)
+{
+	unsigned	queryKey;
+	char		queueName[MAXPGPATH];
+	PGresult   *res;
+
+	Assert(self->base.truncate == false);
+
+	if (self->base.relid != InvalidOid)
+	{
+		TupleDesc	resultDesc;
+
+		/* open relation without any relation locks */
+		self->base.rel = heap_open(self->base.relid, NoLock);
+		self->base.desc = RelationGetDescr(self->base.rel);
+		self->base.tchecker = CreateTupleChecker(self->base.desc);
+		self->base.tchecker->checker = (CheckerTupleProc) CoercionCheckerTuple;
+
+		/*
+		 * If the return value of the filter function or input function is a
+		 * targer table, lookup_rowtype_tupdesc grab AccessShareLock on the
+		 * table in the first call.  We call lookup_rowtype_tupdesc here to
+		 * avoid deadlock when lookup_rowtype_tupdesc is called by the internal
+		 * routine of the filter function or input function, because a parallel
+		 * writer process holds an AccessExclusiveLock.
+		 */
+		resultDesc = lookup_rowtype_tupdesc(self->base.desc->tdtypeid, -1);
+		ReleaseTupleDesc(resultDesc);
+	}
+	else
+	{
+		self->writer->init(self->writer);
+		self->base.desc = self->writer->desc;
+		self->base.tchecker = self->writer->tchecker;
+	}
+
 	self->base.context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"ParallelWriter",
 							ALLOCSET_DEFAULT_MINSIZE,
 							ALLOCSET_DEFAULT_INITSIZE,
 							ALLOCSET_DEFAULT_MAXSIZE);
-	self->base.count = 0;
-
-	relname = get_relation_name(relid);
-
-	snprintf(max_dup_errors, MAXINT8LEN, INT64_FORMAT, options->max_dup_errors);
 
 	/* create queue */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
 	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
-	PG_TRY();
+	/* connect to localhost */
+	self->conn = connect_to_localhost();
+
+	/* start transaction */
+	res = PQexec(self->conn, "BEGIN");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
 	{
-		/* connect to localhost */
-		self->conn = connect_to_localhost();
+		ereport(ERROR,
+				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+				 errmsg("could not start transaction"),
+				 errdetail("%s", finish_and_get_message(self))));
+	}
 
-		/* start transaction */
-		res = PQexec(self->conn, "BEGIN");
-		if (PQresultStatus(res) != PGRES_COMMAND_OK)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-					 errmsg("could not start transaction"),
-					 errdetail("%s", finish_and_get_message(self))));
-		}
+	PQclear(res);
 
-		PQclear(res);
+	if (!self->writer->dup_badfile)
+		self->writer->dup_badfile = self->base.dup_badfile;
 
-		/* async query send */
-		params[0] = queueName;
-		params[1] = relname;
-		params[2] = (options->truncate ? "true" : "no");
-		params[3] = ON_DUPLICATE_NAMES[options->on_duplicate];
-		params[4] = max_dup_errors;
-		params[5] = options->dup_badfile;
-		params[6] = options->logfile;
-		params[7] = (options->verbose ? "true" : "no");
-
-		if (1 != PQsendQueryParams(self->conn,
-				"SELECT * FROM pg_bulkload(ARRAY["
-				"'TYPE=TUPLE',"
-				"'INFILE=' || $1,"
-				"'TABLE=' || $2,"
-				"'TRUNCATE=' || $3,"
-				"'ON_DUPLICATE_KEEP=' || $4,"
-				"'DUPLICATE_ERRORS=' || $5,"
-				"'DUPLICATE_BADFILE=' || $6,"
-				"'LOGFILE=' || $7,"
-				"'VERBOSE=' || $8])",
-			8, NULL, params, NULL, NULL, 0))
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
+	if (1 != self->writer->sendQuery(self->writer, self->conn, queueName,
+									 self->base.logfile,
+									 self->base.verbose))
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
 					 errmsg("could not send query"),
 					 errdetail("%s", finish_and_get_message(self))));
-		}
 	}
-	PG_CATCH();
-	{
-		ParallelWriterClose(self, true);
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-
-	return (Writer *) self;
 }
 
 static void
@@ -147,6 +158,9 @@ static WriterResult
 ParallelWriterClose(ParallelWriter *self, bool onError)
 {
 	WriterResult	ret = { 0 };
+
+	if (!self->base.rel)
+		self->writer->close(self->writer, onError);
 
 	/* wait for reader */
 	if (self->conn)
@@ -233,15 +247,44 @@ ParallelWriterClose(ParallelWriter *self, bool onError)
 	self->queue = NULL;
 
 	if (!onError)
+	{
 		MemoryContextDelete(self->base.context);
 
+		if (self->base.rel)
+			heap_close(self->base.rel, NoLock);
+	}
+
 	return ret;
+}
+
+static bool
+ParallelWriterParam(ParallelWriter *self, const char *keyword, char *value)
+{
+	bool	result;
+
+	result = self->writer->param(self->writer, keyword, value);
+
+	/* copy a writer output parameter */
+	self->base.output = self->writer->output;
+	self->base.relid = self->writer->relid;
+	self->base.dup_badfile = self->writer->dup_badfile;
+
+	return result;
 }
 
 static void
 ParallelWriterDumpParams(ParallelWriter *self)
 {
-	LoggerLog(INFO, "WRITER = PARALLEL\n\n");
+	self->writer->dumpParams(self->writer);
+}
+
+static int
+ParallelWriterSendQuery(ParallelWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose)
+{
+	/* not support */
+	Assert(false);
+
+	return 0;
 }
 
 static const char *
@@ -253,14 +296,6 @@ finish_and_get_message(ParallelWriter *self)
 	PQfinish(self->conn);
 	self->conn = NULL;
 	return msg;
-}
-
-static char *
-get_relation_name(Oid relid)
-{
-	return quote_qualified_identifier(
-		get_namespace_name(get_rel_namespace(relid)),
-		get_rel_name(relid));
 }
 
 static void

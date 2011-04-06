@@ -12,30 +12,16 @@
 
 #include "access/heapam.h"
 #include "access/htup.h"
-#include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "mb/pg_wchar.h"
 #include "nodes/execnodes.h"
-#include "utils/builtins.h"
 #include "utils/rel.h"
 
+#include "binary.h"
 #include "logger.h"
 #include "reader.h"
 #include "pg_strutil.h"
 #include "pg_profile.h"
-
-typedef struct Field	Field;
-typedef Datum (*Read)(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-
-static Datum Read_char(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_varchar(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int16(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int32(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_int64(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint16(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_uint32(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float4(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
-static Datum Read_float8(TupleFormer *former, char *in, const Field* field, int i, bool *isnull);
 
 /**
  * @brief  The number of records read at one time
@@ -43,68 +29,6 @@ static Datum Read_float8(TupleFormer *former, char *in, const Field* field, int 
 #define READ_LINE_NUM		100
 
 #define MAX_CONVERSION_GROWTH  4
-
-typedef enum TypeId
-{
-	T_CHAR,
-	T_VARCHAR,
-	T_INT2,
-	T_INT4,
-	T_INT8,
-	T_UINT2,
-	T_UINT4,
-	T_FLOAT4,
-	T_FLOAT8,
-} TypeId;
-
-struct TypeInfo
-{
-	const char *name;
-	Read		read;
-	int			len;
-}
-TYPES[] =
-{
-	{ "CHAR"				, Read_char		, 0				},
-	{ "VARCHAR"				, Read_varchar	, 0				},
-	{ "SMALLINT"			, Read_int16	, sizeof(int16)	},
-	{ "INTEGER"				, Read_int32	, sizeof(int32)	},
-	{ "BIGINT"				, Read_int64	, sizeof(int64)	},
-	{ "UNSIGNED SMALLINT"	, Read_uint16	, sizeof(uint16)},
-	{ "UNSIGNED INTEGER"	, Read_uint32	, sizeof(uint32)},
-	{ "FLOAT"				, Read_float4	, sizeof(float4)},
-	{ "DOUBLE"				, Read_float8	, sizeof(float8)},
-};
-
-struct TypeAlias
-{
-	const char *name;
-	TypeId		id;
-}
-ALIASES[] =
-{
-	/* aliases (SQL) */
-	{ "CHARACTER"			, T_CHAR },
-	{ "CHARACTER VARYING"	, T_VARCHAR },
-	{ "REAL"				, T_FLOAT4 },
-	/* aliases (C) */
-	{ "SHORT"				, T_INT2 },
-	{ "INT"					, T_INT4 },
-	{ "LONG"				, T_INT8 },
-	{ "UNSIGNED SHORT"		, T_UINT2 },
-	{ "UNSIGNED INT"		, T_UINT4 },
-};
-
-struct Field
-{
-	Read	read;		/**< parse function of the field */
-	int		offset;		/**< offset from head */
-	int		len;		/**< byte length of the field */
-	char   *nullif;		/**< null pattern, if any */
-	int		nulllen;	/**< length of nullif */
-	char   *in;			/**< pointer to the character string or binary */
-	char   *str;		/**< work buffer */
-};
 
 typedef struct BinaryParser
 {
@@ -126,14 +50,12 @@ typedef struct BinaryParser
 	bool	preserve_blanks;	/**< preserve trailing spaces? */
 	int		nfield;				/**< number of fields */
 	Field  *fields;				/**< array of field descriptor */
-
-	bool	async_read;			/**< enable asynchronous input file read? */
 } BinaryParser;
 
 /*
  * Prototype declaration for local functions
  */
-static void	BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static void	BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
 static HeapTuple BinaryParserRead(BinaryParser *self, Checker *checker);
 static int64	BinaryParserTerm(BinaryParser *self);
 static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
@@ -174,14 +96,11 @@ CreateBinaryParser(void)
  * function.
  */
 static void
-BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc)
+BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
 {
-	int			i;
-	size_t		maxlen;
-
-	if (pg_strcasecmp(infile, "stdin") == 0 && self->async_read)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("do not support ASYNC_READ in the case of \"INFILE = STDIN\".")));
+	int					i;
+	size_t				maxlen;
+	TupleCheckStatus	status;
 
 	/*
 	 * set default values
@@ -195,9 +114,12 @@ BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, Tuple
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("no COL specified")));
 
-	self->source = CreateSource(infile, desc, self->async_read);
+	self->source = CreateSource(infile, desc, multi_process);
 
-	FilterInit(&self->filter, desc);
+	status = FilterInit(&self->filter, desc);
+	if (checker->tchecker)
+		checker->tchecker->status = status;
+
 	TupleFormerInit(&self->former, &self->filter, desc);
 
 	/*
@@ -366,8 +288,7 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 	for (i = 0; i < self->nfield; i++)
 	{
 		/* Convert it to server encoding. */
-		if (self->fields[i].read == Read_char ||
-			self->fields[i].read == Read_varchar)
+		if (self->fields[i].character)
 		{
 			char   *str = record + self->fields[i].offset;
 			int		next_head = self->fields[i].offset + self->fields[i].len;
@@ -399,357 +320,16 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 	return tuple;
 }
 
-/*
- * Parse typename and return the type id.
- */
-static TypeId
-ParseTypeName(const char *value)
-{
-	int		i;
-
-	/* Search from types. */
-	for (i = 0; i < lengthof(TYPES); i++)
-	{
-		if (pg_strcasecmp(value, TYPES[i].name) == 0)
-			return (TypeId) i;
-	}
-
-	/* Search from aliases. */
-	for (i = 0; i < lengthof(ALIASES); i++)
-	{
-		if (pg_strcasecmp(value, ALIASES[i].name) == 0)
-			return ALIASES[i].id;
-	}
-
-	/* not found */
-	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-		errmsg("invalid typename : %s", value)));
-	return 0;	/* keep complier quiet */
-}
-
-/*
- * Is string terminated with ')' ?
- */
-static bool
-CheckRightparenthesis(const char *s)
-{
-	while (isspace((unsigned char) *s))
-		s++;
-	return *s == ')';
-}
-
-/*
- * Parse length and offset from the field description.
- */
-static char *
-ParseLengthAndOffset(const char *value, Field *field)
-{
-	unsigned long	n1;
-	unsigned long	n2;
-	char		   *p1;
-	char		   *p2;
-
-	n1 = strtoul(value, &p1, 0);
-	if (value < p1)
-	{
-		/* skip spaces */
-		while (isspace((unsigned char) *p1))
-			p1++;
-		switch (*p1)
-		{
-		case ')': /* TYPE(LEN) */
-			field->len = n1;
-			return p1;
-		case '+': /* TYPE(OFFSET+LEN)*/
-			p1++;
-			n2 = strtoul(p1, &p2, 0);
-			if (p1 < p2 && CheckRightparenthesis(p2))
-			{
-				field->offset = (int) (n1 - 1);	/* start with 1 */
-				field->len = n2;
-				return p2;
-			}
-			break;
-		case ':': /* TYPE(BEGIN:END) */
-			p1++;
-			n2 = strtoul(p1, &p2, 0);
-			if (p1 < p2 && CheckRightparenthesis(p2))
-			{
-				field->offset = (int) (n1 - 1);	/* start with 1 */
-				field->len = (n2 - n1 + 1);
-				return p2;
-			}
-			break;
-		}
-	}
-
-	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-		errmsg("TYPE argument must be ( { L | B+L | B:E } )")));
-	return 0;	/* keep complier quiet */
-}
-
-static int
-hex_in(char c)
-{
-	if ('0' <= c && c <= '9')
-		return c - '0';
-	else if ('A' <= c && c <= 'F')
-		return 0xA + c - 'A';
-	else if ('a' <= c && c <= 'f')
-		return 0xA + c - 'a';
-	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-		errmsg("NULLIF argument must be '...' or hex digits")));
-	return 0;
-}
-
-static char
-hex_out(int c)
-{
-	if (0 <= c && c <= 9)
-		return '0' + c;
-	else if (0xA <= c && c <= 0xF)
-		return 'A' + c - 0xA;
-	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-		errmsg("NULLIF argument must be '...' or hex digits")));
-	return '0';
-}
-
-/*
- * Parse field format like "TYPE(STRIDE) NULLIF { 'str' | hex }"
- */
-static void
-ParseFormat(const char *value, Field *field)
-{
-	StringInfoData	buf;
-	TypeId		id;
-	size_t		nulliflen;
-	const char *p;
-	const struct TypeInfo *type;
-
-	initStringInfo(&buf);
-	nulliflen = strlen("NULLIF");
-
-	/* parse typename */
-	p = value;
-	while (1)
-	{
-		int	n = 0;
-
-		while (!isspace(p[n]) && p[n] != '(' && p[n] != '\0')
-			n++;
-
-		if (p != value)
-			appendStringInfoChar(&buf, ' ');
-
-		appendBinaryStringInfo(&buf, p, n);
-
-		p += n;
-		while (isspace((unsigned char) *p))
-			p++;
-
-		if (*p == '(' || *p == '\0' ||
-			pg_strncasecmp(p, "NULLIF", nulliflen) == 0)
-			break;
-	}
-
-	id = ParseTypeName(buf.data);
-	type = &TYPES[id];
-
-	/* parse length and offset */
-	field->len = 0;
-	if (*p == '(')
-	{
-		/* typename (N | B:E) */
-		p = ParseLengthAndOffset(p + 1, field);
-		if (field->len <= 0)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("TYPE length must be positive")));
-		if (field->offset < 0)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("TYPE offset must be positive")));
-
-		/* skip spaces and ')' */
-		while (isspace((unsigned char) *p))
-			p++;
-		p++;
-		while (isspace((unsigned char) *p))
-			p++;
-	}
-	else
-		field->len = type->len;	/* use default */
-
-	switch (id)
-	{
-	case T_CHAR:
-	case T_VARCHAR:
-		if (field->len <= 0)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					errmsg("length of %s should be specified", type->name)));
-		break;
-	case T_INT2:
-	case T_INT8:
-	case T_UINT2:
-	case T_FLOAT8:
-		if (field->len != type->len)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of %s should be %d or default", type->name, type->len)));
-		break;
-	case T_INT4:
-		switch (field->len)
-		{
-		case sizeof(int16):		/* INTEGER(2) */
-			type = &TYPES[T_INT2];
-			break;
-		case sizeof(int32):		/* INTEGER(4) */
-			type = &TYPES[T_INT4];
-			break;
-		case sizeof(int64):		/* INTEGER(8) */
-			type = &TYPES[T_INT8];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of INTEGER should be 2, 4 or 8")));
-		}
-		break;
-	case T_UINT4:
-		switch (field->len)
-		{
-		case sizeof(uint16):	/* UNSIGNED INTEGER(2) */
-			type = &TYPES[T_UINT2];
-			break;
-		case sizeof(uint32):	/* UNSIGNED INTEGER(4) */
-			type = &TYPES[T_UINT4];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of UNSIGNED INTEGER should be 2 or 4")));
-		}
-		break;
-	case T_FLOAT4:
-		switch (field->len)
-		{
-		case sizeof(float4):	/* FLOAT(4) */
-			type = &TYPES[T_FLOAT4];
-			break;
-		case sizeof(float8):	/* FLOAT(8) */
-			type = &TYPES[T_FLOAT8];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of FLOAT should be 4 or 8")));
-		}
-		break;
-	default:
-		break;
-	}
-
-	/* parse nullif */
-	if (pg_strncasecmp(p, "NULLIF", nulliflen) == 0 && isspace(p[nulliflen]))
-	{
-		/* Seek to the argument of NULLIF */
-		p += nulliflen + 1;
-		while (isspace((unsigned char) *p))
-			p++;
-
-		if (*p == '\'' || *p == '"')
-		{
-			/* string format */
-			char		quote = *p;
-			int			n;
-
-			p++;
-			for (n = 0; p[n] != quote; n++)
-			{
-				if (p[n] == '\0')
-					ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-						errmsg("NULLIF argument is not terminated : %s", value)));
-			}
-
-			field->nulllen = n;
-			field->nullif = palloc(n + 1);
-			memcpy(field->nullif, p, n);
-			field->nullif[n] = '\0';
-			p += n + 1;
-		}
-		else
-		{
-			/* hex format */
-			int		i;
-			size_t	n = strlen(p);
-
-			while (isspace((unsigned char) p[n - 1]))
-				n--;
-			n = (1 + n) / 2;
-
-			field->nulllen = n;
-			field->nullif = palloc(n + 1);
-			field->nullif[n] = '\0';
-			for (i = 0; i < n; i++)
-			{
-				field->nullif[i] = (char)
-					((hex_in(p[i*2]) << 4) + hex_in(p[i*2+1]));
-			}
-			p += n * 2;
-		}
-
-		while (isspace((unsigned char) *p))
-			p++;
-	}
-
-	if (*p != '\0')
-		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-			errmsg("syntax error at or near \"%s\" : %s", p, value)));
-
-	field->read = type->read;
-
-	if ((type->len == 0 && field->len < field->nulllen) ||
-        (type->len > 0 && field->nulllen > 0 && field->len != field->nulllen))
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			errmsg("length of NULLIF argument should be %d bytes %s(%d bytes given) : %s",
-				field->len, (type->len == 0 ? "or less " : ""),
-				field->nulllen, value)));
-	}
-
-	pfree(buf.data);
-}
-
 static bool
 BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 {
 	if (CompareKeyword(keyword, "COL"))
 	{
-		Field  *field;
+		BinaryParam(&self->fields, &self->nfield, value, self->preserve_blanks, false);
 
-		if (self->fields)
-			self->fields = repalloc(self->fields, sizeof(Field) * (self->nfield + 1));
-		else
-			self->fields = palloc(sizeof(Field) * (self->nfield + 1));
-		field = &self->fields[self->nfield];
-
-		if (self->nfield > 0)
-			field->offset = field[-1].offset + field[-1].len;
-		else
-			field->offset = 0;
-		field->nullif = "";
-		field->nulllen = 0;
-
-		if (isdigit((unsigned char) value[0]))
-		{
-			/* default is CHAR or VARCHAR (compatible with 2.2.x) */
-			field->read = (self->preserve_blanks ? Read_varchar : Read_char);
-			field->len = ParseInt32(value, 1);
-		}
-		else
-		{
-			/* Overwrite field parameters */
-			ParseFormat(value, field);
-		}
-
-		if (field->read == Read_char || field->read == Read_varchar)
-			field->str = palloc(field->len * MAX_CONVERSION_GROWTH + 1);
-
-		self->nfield++;
+		if (self->fields[self->nfield - 1].character)
+			self->fields[self->nfield - 1].str =
+				palloc(self->fields[self->nfield - 1].len * MAX_CONVERSION_GROWTH + 1);
 	}
 	else if (CompareKeyword(keyword, "PRESERVE_BLANKS"))
 	{
@@ -771,10 +351,6 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(!self->filter.funcstr);
 		self->filter.funcstr = pstrdup(value);
 	}
-	else if (CompareKeyword(keyword, "ASYNC_READ"))
-	{
-		self->async_read = ParseBoolean(value);
-	}
 	else
 		return false;	/* unknown parameter */
 
@@ -784,71 +360,16 @@ BinaryParserParam(BinaryParser *self, const char *keyword, char *value)
 static void
 BinaryParserDumpParams(BinaryParser *self)
 {
-	int				i;
-	int				j;
 	StringInfoData	buf;
 
 	initStringInfo(&buf);
 	appendStringInfoString(&buf, "TYPE = BINARY\n");
 	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
-	appendStringInfo(&buf, "ASYNC_READ = %s\n",
-					 self->async_read ? "YES" : "NO");
 	appendStringInfo(&buf, "STRIDE = %ld\n", (long) self->rec_len);
 	if (self->filter.funcstr)
 		appendStringInfo(&buf, "FILTER = %s\n", self->filter.funcstr);
 
-	for (i = 0; i < self->nfield; i++)
-	{
-		Field  *field;
-
-		field = &self->fields[i];
-
-		for (j = 0; j < lengthof(TYPES); j++)
-		{
-			if (TYPES[j].read == field->read)
-			{
-				appendStringInfo(&buf, "COL = \"%s\" (%d + %d)", TYPES[j].name,
-					field->offset + 1, field->len);
-				break;
-			}
-		}
-
-		if (j == lengthof(TYPES))
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("invalid type")));
-
-		if (field->nulllen > 0)
-		{
-			bool	hex;
-
-			hex = false;
-			for (j = 0; j < field->nulllen; j++)
-			{
-				if (!isalnum(field->nullif[j]) && !isspace(field->nullif[j]))
-				{
-					hex = true;
-					break;
-				}
-			}
-
-			if (hex)
-			{
-				appendStringInfoString(&buf, " NULLIF ");
-				for (j = 0; j < field->nulllen; j++)
-				{
-					appendStringInfoCharMacro(&buf,
-											  hex_out((unsigned char) field->nullif[j] >> 4));
-					appendStringInfoCharMacro(&buf,
-											  hex_out((unsigned char) field->nullif[j] % 0x10));
-				}
-				appendStringInfoCharMacro(&buf, '\n');
-			}
-			else
-				appendStringInfo(&buf, " NULLIF '%s'\n", field->nullif);
-		}
-		else
-			appendStringInfoCharMacro(&buf, '\n');
-	}
+	BinaryDumpParams(self->fields, self->nfield, &buf, "COL");
 
 	LoggerLog(INFO, buf.data);
 	pfree(buf.data);
@@ -877,124 +398,6 @@ BinaryParserDumpRecord(BinaryParser *self, FILE *fp, char *badfile)
 				 errmsg("could not write parse badfile \"%s\": %m",
 						badfile)));
 }
-
-#define IsWhiteSpace(c)	((c) == ' ' || (c) == '\0')
-
-static Datum
-Read_char(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
-{
-	Datum		value;
-
-	if (in[field->nulllen] == '\0' &&
-		strncmp(in, field->nullif, field->nulllen) == 0)
-	{
-		*isnull = true;
-		value = 0;
-	}
-	else
-	{
-		int	len = strlen(in);
-
-		/* Trim trailing spaces */
-		for (; len > 0 && IsWhiteSpace(in[len - 1]); len--);
-
-		memcpy(field->str, in, len);
-		field->str[len] = '\0';
-
-		*isnull = false;
-		value = TupleFormerValue(former, field->str, idx);
-	}
-
-	return value;
-}
-
-static Datum
-Read_varchar(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull)
-{
-	Datum		value;
-
-	if (in[field->nulllen] == '\0' &&
-		strncmp(in, field->nullif, field->nulllen) == 0)
-	{
-		*isnull = true;
-		value = 0;
-	}
-	else
-	{
-		*isnull = false;
-		value = TupleFormerValue(former, in, idx);
-	}
-
-	return value;
-}
-
-#define int16_numeric	int2_numeric
-#define int32_numeric	int4_numeric
-#define int64_numeric	int8_numeric
-#define uint16_numeric	int4_numeric
-#define uint32_numeric	int8_numeric
-/* float4_numeric exists */
-/* float8_numeric exists */
-#define int16_GetDatum		Int16GetDatum
-#define int32_GetDatum		Int32GetDatum
-#define int64_GetDatum		Int64GetDatum
-#define uint16_GetDatum(v)	Int32GetDatum((int32)v)
-#define uint32_GetDatum(v)	Int64GetDatum((int64)v)
-#define float4_GetDatum		Float4GetDatum
-#define float8_GetDatum		Float8GetDatum
-#define int16_FMT		"%d"
-#define int32_FMT		"%d"
-#define uint16_FMT		"%u"
-#define uint32_FMT		"%u"
-#define float4_FMT		"%f"
-#define float8_FMT		"%f"
-
-/*
- * Use direct convertion (C-cast) for integers and floats.
- * Use cast operator for numeric.
- * Use indirect conversion through string representation in other case.
- */
-#define DefineRead(T) \
-static Datum \
-Read_##T(TupleFormer *former, char *in, const Field* field, int idx, bool *isnull) \
-{ \
-	char	str[32]; \
-	T		v; \
-	if (field->len == field->nulllen && \
-		memcmp(in, field->nullif, field->nulllen) == 0) \
-	{ \
-		*isnull = true; \
-		return 0; \
-	} \
-	memcpy(&v, in, sizeof(v)); \
-	*isnull = false; \
-	switch (former->typId[idx]) \
-	{ \
-	case INT2OID: \
-		return Int16GetDatum((int16)v); \
-	case INT4OID: \
-		return Int32GetDatum((int32)v); \
-	case INT8OID: \
-		return Int64GetDatum((int64)v); \
-	case FLOAT4OID: \
-		return Float4GetDatum((float4)v); \
-	case FLOAT8OID: \
-		return Float8GetDatum((float8)v); \
-	case NUMERICOID: \
-		return DirectFunctionCall1(T##_numeric, T##_GetDatum(v)); \
-	default: \
-		snprintf(str, lengthof(str), T##_FMT, v); \
-		return TupleFormerValue(former, str, idx); \
-	} \
-}
-
-DefineRead(int16)
-DefineRead(int32)
-DefineRead(int64)
-DefineRead(uint16)
-DefineRead(uint32)
-DefineRead(float4)
-DefineRead(float8)
 
 /**
  * @brief Extract internal format for each column from string data in a record

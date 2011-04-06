@@ -103,11 +103,9 @@ typedef struct CSVParser
 	char	   *null;			/**< NULL value string */
 	List	   *fnn_name;		/**< list of NOT NULL column names */
 	bool	   *fnn;			/**< array of NOT NULL column flag */
-
-	bool		async_read;		/**< enable asynchronous input file read? */
 } CSVParser;
 
-static void	CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static void	CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
 static HeapTuple	CSVParserRead(CSVParser *self, Checker *checker);
 static int64	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
@@ -180,8 +178,10 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc)
+CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
 {
+	TupleCheckStatus	status;
+
 	/*
 	 * set default values
 	 */
@@ -209,14 +209,13 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg
 				 ("cannot use FILTER with FORCE_NOT_NULL")));
-	if (pg_strcasecmp(infile, "stdin") == 0 && self->async_read)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("do not support ASYNC_READ in the case of \"INFILE = STDIN\".")));
 
+	self->source = CreateSource(infile, desc, multi_process);
 
-	self->source = CreateSource(infile, desc, self->async_read);
+	status = FilterInit(&self->filter, desc);
+	if (checker->tchecker)
+		checker->tchecker->status = status;
 
-	FilterInit(&self->filter, desc);
 	TupleFormerInit(&self->former, &self->filter, desc);
 
 	/*
@@ -763,10 +762,6 @@ CSVParserParam(CSVParser *self, const char *keyword, char *value)
 		ASSERT_ONCE(!self->filter.funcstr);
 		self->filter.funcstr = pstrdup(value);
 	}
-	else if (CompareKeyword(keyword, "ASYNC_READ"))
-	{
-		self->async_read = ParseBoolean(value);
-	}
 	else
 		return false;	/* unknown parameter */
 
@@ -785,9 +780,6 @@ CSVParserDumpParams(CSVParser *self)
 	appendStringInfoString(&buf, "TYPE = CSV\n");
 
 	appendStringInfo(&buf, "SKIP = " int64_FMT "\n", self->offset);
-
-	appendStringInfo(&buf, "ASYNC_READ = %s\n",
-					 self->async_read ? "YES" : "NO");
 
 	str = QuoteSingleChar(self->delim);
 	appendStringInfo(&buf, "DELIMITER = %s\n", str);

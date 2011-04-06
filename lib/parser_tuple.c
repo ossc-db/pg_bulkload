@@ -27,7 +27,7 @@ typedef struct TupleParser
 	uint32			buflen;
 } TupleParser;
 
-static void	TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc);
+static void	TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
 static HeapTuple TupleParserRead(TupleParser *self, Checker *checker);
 static int64 TupleParserTerm(TupleParser *self);
 static bool TupleParserParam(TupleParser *self, const char *keyword, char *value);
@@ -52,7 +52,7 @@ CreateTupleParser(void)
 }
 
 static void
-TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc)
+TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
 {
 	unsigned		key;
 	char			junk[2];
@@ -64,6 +64,8 @@ TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDe
 	if (checker->encoding != -1)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("does not support parameter \"ENCODING\" in \"TYPE = TUPLE\"")));
+
+	checker->tchecker = NULL;
 
 	if (sscanf(infile, ":%u%1s", &key, junk) != 1)
 		elog(ERROR, "invalid shmem key format: %s", infile);

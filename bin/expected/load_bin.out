@@ -1,27 +1,27 @@
 TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_logfile -l infile_logfile -P pbfile -u dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_pbfile -l logfile -P infile_pbfile -u dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile_dbfile -l logfile -P pbfile -u infile_dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_pbfile -P logfile_pbfile -u dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile_dbfile -P pbfile -u logfile_dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/bin1.ctl -i infile -l logfile -P pbfile_dbfile -u pbfile_dbfile
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  INFILE, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, DUPLICATE_BADFILE and LOGFILE cannot set the same file name.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 TRUNCATE customer;
 SET enable_seqscan = off;
@@ -42,46 +42,46 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin1.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data1.bin
+INPUT = .../data1.bin
 PARSE_BADFILE = .../bin1.prs
-DUPLICATE_BADFILE = .../bin1.dup
 LOGFILE = .../bin1.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 8
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 1
-ASYNC_READ = YES
 STRIDE = 232
-COL = "CHAR" (1 + 10)
-COL = "CHAR" (11 + 4)
-COL = "CHAR" (15 + 1)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2)
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (70 + 20)
-COL = "VARCHAR" (50 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "UNSIGNED SMALLINT" (158 + 2)
-COL = "INTEGER" (160 + 4)
-COL = "BIGINT" (164 + 8)
-COL = "FLOAT" (172 + 4)
-COL = "DOUBLE" (176 + 8)
-COL = "CHAR" (184 + 10)
-COL = "CHAR" (194 + 39)
+COL = CHAR (10)
+COL = CHAR (4)
+COL = CHAR (1)
+COL = CHAR (16)
+COL = CHAR (2)
+COL = CHAR (16)
+COL = CHAR (70 + 20)
+COL = VARCHAR (50 + 20)
+COL = CHAR (90 + 20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = UNSIGNED SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+COL = CHAR (39)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin1.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   1 Rows skipped.
@@ -136,46 +136,46 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin2.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.bin
+INPUT = .../data2.bin
 PARSE_BADFILE = .../bin2.prs
-DUPLICATE_BADFILE = .../bin2.dup
 LOGFILE = .../bin2.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 8
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 1
-ASYNC_READ = YES
 STRIDE = 232
-COL = "CHAR" (1 + 10)
-COL = "CHAR" (11 + 4)
-COL = "CHAR" (15 + 1)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2)
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (70 + 20)
-COL = "VARCHAR" (50 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "UNSIGNED SMALLINT" (158 + 2)
-COL = "INTEGER" (160 + 4)
-COL = "BIGINT" (164 + 8)
-COL = "FLOAT" (172 + 4)
-COL = "DOUBLE" (176 + 8)
-COL = "CHAR" (184 + 10)
-COL = "CHAR" (194 + 39)
+COL = CHAR (10)
+COL = CHAR (4)
+COL = CHAR (1)
+COL = CHAR (16)
+COL = CHAR (2)
+COL = CHAR (16)
+COL = CHAR (70 + 20)
+COL = VARCHAR (50 + 20)
+COL = CHAR (90 + 20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = UNSIGNED SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+COL = CHAR (39)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin2.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   1 Rows skipped.
@@ -251,46 +251,46 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin3.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data2.bin
+INPUT = .../data2.bin
 PARSE_BADFILE = .../bin3.prs
-DUPLICATE_BADFILE = .../bin3.dup
 LOGFILE = .../bin3.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 10
-DUPLICATE_ERRORS = 10
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 2
-ASYNC_READ = YES
 STRIDE = 232
-COL = "CHAR" (1 + 10)
-COL = "CHAR" (11 + 4)
-COL = "CHAR" (15 + 1)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2)
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (70 + 20)
-COL = "VARCHAR" (50 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "UNSIGNED SMALLINT" (158 + 2)
-COL = "INTEGER" (160 + 4)
-COL = "BIGINT" (164 + 8)
-COL = "FLOAT" (172 + 4)
-COL = "DOUBLE" (176 + 8)
-COL = "CHAR" (184 + 10)
-COL = "CHAR" (194 + 39)
+COL = CHAR (10)
+COL = CHAR (4)
+COL = CHAR (1)
+COL = CHAR (16)
+COL = CHAR (2)
+COL = CHAR (16)
+COL = CHAR (70 + 20)
+COL = VARCHAR (50 + 20)
+COL = CHAR (90 + 20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = UNSIGNED SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+COL = CHAR (39)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin3.dup
+DUPLICATE_ERRORS = 10
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -366,28 +366,28 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin4.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../bin3.dup
+INPUT = .../bin3.dup
 PARSE_BADFILE = .../bin4.prs
-DUPLICATE_BADFILE = .../bin4.dup
 LOGFILE = .../bin4.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin4.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -464,28 +464,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin5.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../bin4.dup
+INPUT = .../bin4.dup
 PARSE_BADFILE = .../bin5.prs
-DUPLICATE_BADFILE = .../bin5.dup
 LOGFILE = .../bin5.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = OLD
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin5.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = OLD
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -553,51 +553,55 @@ SELECT * FROM customer ORDER BY c_id;
 -- do not error skip an error after of toast_insert_or_update.
 \! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=3" -o "DUPLICATE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin6.log -P results/bin6.prs -u results/bin6.dup
 NOTICE: BULK LOAD START
+WARNING:  Parse error Record 1: Input Record 2: Rejected - column 3. invalid input syntax for integer: "172270229a"
+WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
 ERROR: query failed: ERROR:  integer out of range
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/bin6.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data3.bin
+INPUT = .../data3.bin
 PARSE_BADFILE = .../bin6.prs
-DUPLICATE_BADFILE = .../bin6.dup
 LOGFILE = .../bin6.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 3
-ASYNC_READ = YES
 STRIDE = 236
-COL = "CHAR" (1 + 2)
-COL = "CHAR" (3 + 3)
-COL = "CHAR" (6 + 10)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2) NULLIF 'BB'
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (50 + 20)
-COL = "VARCHAR" (70 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "CHAR" (158 + 10)
-COL = "CHAR" (168 + 10)
-COL = "CHAR" (178 + 10)
-COL = "CHAR" (188 + 10)
-COL = "CHAR" (198 + 10)
-COL = "CHAR" (208 + 10)
-COL = "CHAR" (218 + 19)
+COL = CHAR (2)
+COL = CHAR (3)
+COL = CHAR (10)
+COL = CHAR (16)
+COL = CHAR (2) NULLIF 'BB'
+COL = CHAR (16)
+COL = CHAR (20)
+COL = VARCHAR (20)
+COL = CHAR (20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (19)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin6.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
+Parse error Record 1: Input Record 2: Rejected - column 3. invalid input syntax for integer: "172270229a"
+Maximum parse error count exceeded - 1 error(s) found in input file
 integer out of range
 \! pg_bulkload -d contrib_regression data/bin3.ctl -i data/data3.bin -o "SKIP=4" -o "DUPLICATE_ERRORS=50" -o "PARSE_ERRORS=50" -o "LOAD=4" -o "VERBOSE=YES" -l results/bin7.log -P results/bin7.prs -u results/bin7.dup
 NOTICE: BULK LOAD START
@@ -617,46 +621,46 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/bin7.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data3.bin
+INPUT = .../data3.bin
 PARSE_BADFILE = .../bin7.prs
-DUPLICATE_BADFILE = .../bin7.dup
 LOGFILE = .../bin7.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 4
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = YES
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 4
-ASYNC_READ = YES
 STRIDE = 236
-COL = "CHAR" (1 + 2)
-COL = "CHAR" (3 + 3)
-COL = "CHAR" (6 + 10)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2) NULLIF 'BB'
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (50 + 20)
-COL = "VARCHAR" (70 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "CHAR" (158 + 10)
-COL = "CHAR" (168 + 10)
-COL = "CHAR" (178 + 10)
-COL = "CHAR" (188 + 10)
-COL = "CHAR" (198 + 10)
-COL = "CHAR" (208 + 10)
-COL = "CHAR" (218 + 19)
+COL = CHAR (2)
+COL = CHAR (3)
+COL = CHAR (10)
+COL = CHAR (16)
+COL = CHAR (2) NULLIF 'BB'
+COL = CHAR (16)
+COL = CHAR (20)
+COL = VARCHAR (20)
+COL = CHAR (20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (10)
+COL = CHAR (19)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = YES
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin7.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 1: Rejected - column 3. invalid input syntax for integer: "172270229a"
 Parse error Record 2: Input Record 2: Rejected - column 3. value "2147483648" is out of range for type integer
@@ -740,46 +744,46 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin8.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data1.bin
+INPUT = .../data1.bin
 PARSE_BADFILE = .../pbfile
-DUPLICATE_BADFILE = .../dbfile
 LOGFILE = .../bin8.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 0
 PARSE_ERRORS = INFINITE
-DUPLICATE_ERRORS = INFINITE
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 0
-ASYNC_READ = YES
 STRIDE = 232
-COL = "CHAR" (1 + 10)
-COL = "CHAR" (11 + 4)
-COL = "CHAR" (15 + 1)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2)
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (70 + 20)
-COL = "VARCHAR" (50 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "UNSIGNED SMALLINT" (158 + 2)
-COL = "INTEGER" (160 + 4)
-COL = "BIGINT" (164 + 8)
-COL = "FLOAT" (172 + 4)
-COL = "DOUBLE" (176 + 8)
-COL = "CHAR" (184 + 10)
-COL = "CHAR" (194 + 39)
+COL = CHAR (10)
+COL = CHAR (4)
+COL = CHAR (1)
+COL = CHAR (16)
+COL = CHAR (2)
+COL = CHAR (16)
+COL = CHAR (70 + 20)
+COL = VARCHAR (50 + 20)
+COL = CHAR (90 + 20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = UNSIGNED SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+COL = CHAR (39)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../dbfile
+DUPLICATE_ERRORS = INFINITE
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -802,46 +806,46 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin9.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../data1.bin
+INPUT = .../data1.bin
 PARSE_BADFILE = .../pbfile
-DUPLICATE_BADFILE = .../dbfile
 LOGFILE = .../bin9.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 0
 PARSE_ERRORS = INFINITE
-DUPLICATE_ERRORS = INFINITE
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 0
-ASYNC_READ = YES
 STRIDE = 232
-COL = "CHAR" (1 + 10)
-COL = "CHAR" (11 + 4)
-COL = "CHAR" (15 + 1)
-COL = "CHAR" (16 + 16)
-COL = "CHAR" (32 + 2)
-COL = "CHAR" (34 + 16)
-COL = "CHAR" (70 + 20)
-COL = "VARCHAR" (50 + 20)
-COL = "CHAR" (90 + 20)
-COL = "CHAR" (110 + 2)
-COL = "CHAR" (112 + 9)
-COL = "CHAR" (121 + 16)
-COL = "CHAR" (137 + 19)
-COL = "CHAR" (156 + 2)
-COL = "UNSIGNED SMALLINT" (158 + 2)
-COL = "INTEGER" (160 + 4)
-COL = "BIGINT" (164 + 8)
-COL = "FLOAT" (172 + 4)
-COL = "DOUBLE" (176 + 8)
-COL = "CHAR" (184 + 10)
-COL = "CHAR" (194 + 39)
+COL = CHAR (10)
+COL = CHAR (4)
+COL = CHAR (1)
+COL = CHAR (16)
+COL = CHAR (2)
+COL = CHAR (16)
+COL = CHAR (70 + 20)
+COL = VARCHAR (50 + 20)
+COL = CHAR (90 + 20)
+COL = CHAR (2)
+COL = CHAR (9)
+COL = CHAR (16)
+COL = CHAR (19)
+COL = CHAR (2)
+COL = UNSIGNED SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+COL = CHAR (39)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../dbfile
+DUPLICATE_ERRORS = INFINITE
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -864,47 +868,47 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin10.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = stdin
+INPUT = stdin
 PARSE_BADFILE = .../bin5.prs
-DUPLICATE_BADFILE = .../bin5.dup
 LOGFILE = .../bin10.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 0
-ASYNC_READ = NO
 STRIDE = 114
-COL = "CHAR" (1 + 13) NULLIF ' 	null 	str 	'
-COL = "VARCHAR" (14 + 4) NULLIF ' 	 	'
-COL = "SMALLINT" (18 + 2) NULLIF 0000
-COL = "SMALLINT" (20 + 2) NULLIF 0123
-COL = "INTEGER" (22 + 4) NULLIF 01234567
-COL = "BIGINT" (26 + 8) NULLIF 0123456789ABCDEF
-COL = "BIGINT" (34 + 8) NULLIF 0123456789ABCDEF
-COL = "UNSIGNED SMALLINT" (42 + 2) NULLIF 0123
-COL = "UNSIGNED INTEGER" (44 + 4) NULLIF 01234567
-COL = "FLOAT" (48 + 4) NULLIF 01234567
-COL = "DOUBLE" (52 + 8) NULLIF 0123456789ABCDEF
-COL = "CHAR" (60 + 13) NULLIF '	 null	 str	 '
-COL = "VARCHAR" (73 + 4) NULLIF ' 	 	'
-COL = "FLOAT" (77 + 4) NULLIF 01234567
-COL = "SMALLINT" (81 + 2) NULLIF 0000
-COL = "INTEGER" (83 + 4) NULLIF 01234567
-COL = "BIGINT" (87 + 8) NULLIF 0123456789ABCDEF
-COL = "UNSIGNED SMALLINT" (95 + 2) NULLIF 0123
-COL = "UNSIGNED INTEGER" (97 + 4) NULLIF 01234567
-COL = "INTEGER" (101 + 4) NULLIF 01234567
-COL = "VARCHAR" (105 + 10)
+COL = CHAR (13) NULLIF ' 	null 	str 	'
+COL = VARCHAR (4) NULLIF ' 	 	'
+COL = SMALLINT (2) NULLIF 0000
+COL = SMALLINT (2) NULLIF 0123
+COL = INTEGER (4) NULLIF 01234567
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = UNSIGNED SMALLINT (2) NULLIF 0123
+COL = UNSIGNED INTEGER (4) NULLIF 01234567
+COL = FLOAT (4) NULLIF 01234567
+COL = DOUBLE (8) NULLIF 0123456789ABCDEF
+COL = CHAR (13) NULLIF '	 null	 str	 '
+COL = VARCHAR (4) NULLIF ' 	 	'
+COL = FLOAT (4) NULLIF 01234567
+COL = SMALLINT (2) NULLIF 0000
+COL = INTEGER (4) NULLIF 01234567
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = UNSIGNED SMALLINT (2) NULLIF 0123
+COL = UNSIGNED INTEGER (4) NULLIF 01234567
+COL = INTEGER (4) NULLIF 01234567
+COL = VARCHAR (10)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin5.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -927,47 +931,47 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/bin11.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = stdin
+INPUT = stdin
 PARSE_BADFILE = .../bin5.prs
-DUPLICATE_BADFILE = .../bin5.dup
 LOGFILE = .../bin11.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = BINARY
 SKIP = 0
-ASYNC_READ = NO
 STRIDE = 114
-COL = "CHAR" (1 + 13) NULLIF ' 	null 	str 	'
-COL = "VARCHAR" (14 + 4) NULLIF ' 	 	'
-COL = "SMALLINT" (18 + 2) NULLIF 0000
-COL = "SMALLINT" (20 + 2) NULLIF 0123
-COL = "INTEGER" (22 + 4) NULLIF 01234567
-COL = "BIGINT" (26 + 8) NULLIF 0123456789ABCDEF
-COL = "BIGINT" (34 + 8) NULLIF 0123456789ABCDEF
-COL = "UNSIGNED SMALLINT" (42 + 2) NULLIF 0123
-COL = "UNSIGNED INTEGER" (44 + 4) NULLIF 01234567
-COL = "FLOAT" (48 + 4) NULLIF 01234567
-COL = "DOUBLE" (52 + 8) NULLIF 0123456789ABCDEF
-COL = "CHAR" (60 + 13) NULLIF '	 null	 str	 '
-COL = "VARCHAR" (73 + 4) NULLIF ' 	 	'
-COL = "FLOAT" (77 + 4) NULLIF 01234567
-COL = "SMALLINT" (81 + 2) NULLIF 0000
-COL = "INTEGER" (83 + 4) NULLIF 01234567
-COL = "BIGINT" (87 + 8) NULLIF 0123456789ABCDEF
-COL = "UNSIGNED SMALLINT" (95 + 2) NULLIF 0123
-COL = "UNSIGNED INTEGER" (97 + 4) NULLIF 01234567
-COL = "INTEGER" (101 + 4) NULLIF 01234567
-COL = "CHAR" (105 + 10)
+COL = CHAR (13) NULLIF ' 	null 	str 	'
+COL = VARCHAR (4) NULLIF ' 	 	'
+COL = SMALLINT (2) NULLIF 0000
+COL = SMALLINT (2) NULLIF 0123
+COL = INTEGER (4) NULLIF 01234567
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = UNSIGNED SMALLINT (2) NULLIF 0123
+COL = UNSIGNED INTEGER (4) NULLIF 01234567
+COL = FLOAT (4) NULLIF 01234567
+COL = DOUBLE (8) NULLIF 0123456789ABCDEF
+COL = CHAR (13) NULLIF '	 null	 str	 '
+COL = VARCHAR (4) NULLIF ' 	 	'
+COL = FLOAT (4) NULLIF 01234567
+COL = SMALLINT (2) NULLIF 0000
+COL = INTEGER (4) NULLIF 01234567
+COL = BIGINT (8) NULLIF 0123456789ABCDEF
+COL = UNSIGNED SMALLINT (2) NULLIF 0123
+COL = UNSIGNED INTEGER (4) NULLIF 01234567
+COL = INTEGER (4) NULLIF 01234567
+COL = CHAR (10)
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../bin5.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   0 Rows skipped.

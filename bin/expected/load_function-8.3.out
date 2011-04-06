@@ -61,22 +61,23 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function1.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = public.load_function1(1,5,'A''')
+INPUT = public.load_function1(1,5,'A''')
 PARSE_BADFILE = .../function1.prs
-DUPLICATE_BADFILE = .../function1.dup
 LOGFILE = .../function1.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 3
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function1.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -122,22 +123,23 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function2.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = "public.load_function1( - - - 3, -+- 5,'''B')"
+INPUT = "public.load_function1( - - - 3, -+- 5,'''B')"
 PARSE_BADFILE = .../function2.prs
-DUPLICATE_BADFILE = .../function2.dup
 LOGFILE = .../function2.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = OLD
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function2.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = OLD
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -198,22 +200,23 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function3.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = "public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
+INPUT = "public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function3.prs
-DUPLICATE_BADFILE = .../function3.dup
 LOGFILE = .../function3.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 3
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function3.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 1: Rejected - column 21. null value in column "c_data" violates not-null constraint
 Parse error Record 2: Input Record 2: Rejected - column 21. null value in column "c_data" violates not-null constraint
@@ -276,28 +279,28 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function4.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function3.prs
+INPUT = .../function3.prs
 PARSE_BADFILE = .../function4.prs
-DUPLICATE_BADFILE = .../function4.dup
 LOGFILE = .../function4.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function4.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 1: Rejected - column 21. null value in column "c_data" violates not-null constraint
 Parse error Record 2: Input Record 2: Rejected - column 21. null value in column "c_data" violates not-null constraint
@@ -324,28 +327,28 @@ NOTICE: BULK LOAD END
 	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function5.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function3.prs
+INPUT = .../function3.prs
 PARSE_BADFILE = .../function5.prs
-DUPLICATE_BADFILE = .../function5.dup
 LOGFILE = .../function5.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = NULL
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function5.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -408,22 +411,23 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function6.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = "public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
+INPUT = "public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function6.prs
-DUPLICATE_BADFILE = .../function6.dup
 LOGFILE = .../function6.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = FUNCTION
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function6.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -488,28 +492,28 @@ NOTICE: BULK LOAD END
 	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function10.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function6.dup
+INPUT = .../function6.dup
 PARSE_BADFILE = .../function10.prs
-DUPLICATE_BADFILE = .../function10.dup
 LOGFILE = .../function10.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 1
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function10.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
@@ -595,28 +599,28 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function13.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function6.dup
+INPUT = .../function6.dup
 PARSE_BADFILE = .../function13.prs
-DUPLICATE_BADFILE = .../function13.dup
 LOGFILE = .../function13.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 1
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function13.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Maximum duplicate error count exceeded
@@ -631,28 +635,28 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function6.dup
+INPUT = .../function6.dup
 PARSE_BADFILE = .../function14.prs
-DUPLICATE_BADFILE = .../function14.dup
 LOGFILE = .../function14.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 1
-ON_DUPLICATE_KEEP = OLD
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function14.dup
+DUPLICATE_ERRORS = 1
+ON_DUPLICATE_KEEP = OLD
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -671,28 +675,28 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function6.dup
+INPUT = .../function6.dup
 PARSE_BADFILE = .../function14.prs
-DUPLICATE_BADFILE = .../function14.dup
 LOGFILE = .../function14.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 1
-ON_DUPLICATE_KEEP = OLD
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function14.dup
+DUPLICATE_ERRORS = 1
+ON_DUPLICATE_KEEP = OLD
+TRUNCATE = NO
 
 
   0 Rows skipped.
@@ -706,28 +710,28 @@ Run ended on <TIMESTAMP>
 
 CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = .../function6.dup
+INPUT = .../function6.dup
 PARSE_BADFILE = .../function14.prs
-DUPLICATE_BADFILE = .../function14.dup
 LOGFILE = .../function14.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = INFINITE
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 3
-ON_DUPLICATE_KEEP = OLD
-VERBOSE = NO
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
-ASYNC_READ = YES
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = 
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../function14.dup
+DUPLICATE_ERRORS = 3
+ON_DUPLICATE_KEEP = OLD
+TRUNCATE = NO
 
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"

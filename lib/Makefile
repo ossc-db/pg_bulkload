@@ -4,6 +4,7 @@
 #    Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
+	binary.c \
 	logger.c \
 	parser_binary.c \
 	parser_csv.c \
@@ -14,6 +15,8 @@ SRCS = \
 	pg_strutil.c \
 	reader.c \
 	source.c \
+	writer.c \
+	writer_binary.c \
 	writer_buffered.c \
 	writer_direct.c \
 	writer_parallel.c \

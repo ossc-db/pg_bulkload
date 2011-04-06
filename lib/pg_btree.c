@@ -101,16 +101,18 @@ void
 SpoolerOpen(Spooler *self,
 			Relation rel,
 			bool use_wal,
-			const WriterOptions *options)
+			ON_DUPLICATE on_duplicate,
+			int64 max_dup_errors,
+			const char *dup_badfile)
 {
 	memset(self, 0, sizeof(Spooler));
 
-	self->on_duplicate = options->on_duplicate;
+	self->on_duplicate = on_duplicate;
 	self->use_wal = use_wal;
-	self->max_dup_errors = options->max_dup_errors;
+	self->max_dup_errors = max_dup_errors;
 	self->dup_old = 0;
 	self->dup_new = 0;
-	self->dup_badfile = pstrdup(options->dup_badfile);
+	self->dup_badfile = pstrdup(dup_badfile);
 	self->dup_fp = NULL;
 
 	self->relinfo = makeNode(ResultRelInfo);
@@ -129,7 +131,7 @@ SpoolerOpen(Spooler *self,
 	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
 
 	self->spools = IndexSpoolBegin(self->relinfo,
-								   options->max_dup_errors == 0);
+								   max_dup_errors == 0);
 }
 
 void
@@ -873,7 +875,7 @@ heap_is_visible(Relation heapRel, ItemPointer htid)
 	InitDirtySnapshot(SnapshotDirty);
 
 	/*
-	 * Visiblilty checking is simplifed comapred with _bt_check_unique
+	 * Visibility checking is simplified compared with _bt_check_unique
 	 * because we have exclusive lock on the relation. (XXX: Is it true?)
 	 */
 	return heap_hot_search(htid, heapRel, &SnapshotDirty, NULL);

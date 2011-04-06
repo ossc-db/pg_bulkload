@@ -15,17 +15,21 @@
 #include "access/transam.h"
 #include "access/tuptoaster.h"
 #include "catalog/catalog.h"
+#include "catalog/namespace.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
 #include "storage/fd.h"
+#include "utils/builtins.h"
 #include "utils/rel.h"
 
 #include "logger.h"
 #include "pg_loadstatus.h"
+#include "reader.h"
 #include "writer.h"
 #include "pg_btree.h"
 #include "pg_profile.h"
+#include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
 #if PG_VERSION_NUM < 80400
@@ -45,7 +49,6 @@ typedef struct DirectWriter
 {
 	Writer			base;
 
-	Relation		rel;
 	Spooler			spooler;
 
 	LoadStatus		ls;
@@ -66,9 +69,12 @@ typedef struct DirectWriter
  */
 #define BLOCK_BUF_NUM		1024
 
+static void	DirectWriterInit(DirectWriter *self);
 static void	DirectWriterInsert(DirectWriter *self, HeapTuple tuple);
 static WriterResult	DirectWriterClose(DirectWriter *self, bool onError);
+static bool	DirectWriterParam(DirectWriter *self, const char *keyword, char *value);
 static void	DirectWriterDumpParams(DirectWriter *self);
+static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
 
@@ -90,30 +96,50 @@ static void ValidateLSFDirectory(const char *path);
  * ========================================================================*/
 
 /**
- * @brief Initialize a new DirectWriter
- * Create load status file
- * @param rel [in] Relation for loading
+ * @brief Create a new DirectWriter
  */
 Writer *
-CreateDirectWriter(Oid relid, const WriterOptions *options)
+CreateDirectWriter(void *opt)
 {
 	DirectWriter	   *self;
-	LoadStatus		   *ls;
 
 	self = palloc0(sizeof(DirectWriter));
+	self->base.init = (WriterInitProc) DirectWriterInit;
 	self->base.insert = (WriterInsertProc) DirectWriterInsert,
 	self->base.close = (WriterCloseProc) DirectWriterClose,
+	self->base.param = (WriterParamProc) DirectWriterParam;
 	self->base.dumpParams = (WriterDumpParamsProc) DirectWriterDumpParams,
-	self->base.count = 0;
+	self->base.sendQuery = (WriterSendQueryProc) DirectWriterSendQuery;
+	self->base.max_dup_errors = -2;
 	self->lsf_fd = -1;
 	self->datafd = -1;
 	self->blocks = palloc(BLCKSZ * BLOCK_BUF_NUM);
 	self->curblk = 0;
 
-	self->rel = heap_open(relid, AccessExclusiveLock);
-	VerifyTarget(self->rel);
+	return (Writer *) self;
+}
 
-	SpoolerOpen(&self->spooler, self->rel, false, options);
+/**
+ * @brief Initialize a DirectWriter
+ */
+static void
+DirectWriterInit(DirectWriter *self)
+{
+	LoadStatus		   *ls;
+
+	/*
+	 * Set defaults to unspecified parameters.
+	 */
+	if (self->base.max_dup_errors < -1)
+		self->base.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
+
+	self->base.rel = heap_open(self->base.relid, AccessExclusiveLock);
+	VerifyTarget(self->base.rel);
+
+	self->base.desc = RelationGetDescr(self->base.rel);
+
+	SpoolerOpen(&self->spooler, self->base.rel, false, self->base.on_duplicate,
+				self->base.max_dup_errors, self->base.dup_badfile);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	/* Verify DataDir/pg_bulkload directory */
@@ -131,9 +157,9 @@ CreateDirectWriter(Oid relid, const WriterOptions *options)
 	 * Initialize load status information
 	 */
 	ls = &self->ls;
-	ls->ls.relid = relid;
-	ls->ls.rnode = self->rel->rd_node;
-	ls->ls.exist_cnt = RelationGetNumberOfBlocks(self->rel);
+	ls->ls.relid = self->base.relid;
+	ls->ls.rnode = self->base.rel->rd_node;
+	ls->ls.exist_cnt = RelationGetNumberOfBlocks(self->base.rel);
 	ls->ls.create_cnt = 0;
 
 	/*
@@ -157,7 +183,8 @@ CreateDirectWriter(Oid relid, const WriterOptions *options)
 			errmsg("could not write loadstatus file \"%s\": %m", self->lsf_path)));
 	}
 
-	return (Writer *) self;
+	self->base.tchecker = CreateTupleChecker(self->base.desc);
+	self->base.tchecker->checker = (CheckerTupleProc) CoercionCheckerTuple;
 }
 
 /**
@@ -175,14 +202,14 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 
 	/* Compress the tuple data if needed. */
 	if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
-		tuple = toast_insert_or_update(self->rel, tuple, NULL, 0);
+		tuple = toast_insert_or_update(self->base.rel, tuple, NULL, 0);
 	BULKLOAD_PROFILE(&prof_writer_toast);
 
 	/* Assign oids if needed. */
-	if (self->rel->rd_rel->relhasoids)
+	if (self->base.rel->rd_rel->relhasoids)
 	{
 		Assert(!OidIsValid(HeapTupleGetOid(tuple)));
-		HeapTupleSetOid(tuple, GetNewOid(self->rel));
+		HeapTupleSetOid(tuple, GetNewOid(self->base.rel));
 	}
 
 	/* Assume the tuple has been toasted already. */
@@ -196,7 +223,7 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	/* Fill current page, or go to next page if the page is full. */
 	page = GetCurrentPage(self);
 	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
-		RelationGetTargetPageFreeSpace(self->rel, HEAP_DEFAULT_FILLFACTOR))
+		RelationGetTargetPageFreeSpace(self->base.rel, HEAP_DEFAULT_FILLFACTOR))
 	{
 		if (self->curblk < BLOCK_BUF_NUM - 1)
 			self->curblk++;
@@ -260,8 +287,8 @@ DirectWriterClose(DirectWriter *self, bool onError)
 		ret.num_dup_new = self->spooler.dup_new;
 		ret.num_dup_old = self->spooler.dup_old;
 
-		if (self->rel)
-			heap_close(self->rel, AccessExclusiveLock);
+		if (self->base.rel)
+			heap_close(self->base.rel, AccessExclusiveLock);
 
 		if (self->blocks)
 			pfree(self->blocks);
@@ -272,10 +299,115 @@ DirectWriterClose(DirectWriter *self, bool onError)
 	return ret;
 }
 
+static bool
+DirectWriterParam(DirectWriter *self, const char *keyword, char *value)
+{
+	if (CompareKeyword(keyword, "TABLE") ||
+		CompareKeyword(keyword, "OUTPUT"))
+	{
+		ASSERT_ONCE(self->base.output == NULL);
+
+		self->base.relid = RangeVarGetRelid(makeRangeVarFromNameList(
+						stringToQualifiedNameList(value)), false);
+		self->base.output = get_relation_name(self->base.relid);
+	}
+	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
+	{
+		ASSERT_ONCE(self->base.dup_badfile == NULL);
+		self->base.dup_badfile = pstrdup(value);
+	}
+	else if (CompareKeyword(keyword, "DUPLICATE_ERRORS"))
+	{
+		ASSERT_ONCE(self->base.max_dup_errors < -1);
+		self->base.max_dup_errors = ParseInt64(value, -1);
+		if (self->base.max_dup_errors == -1)
+			self->base.max_dup_errors = INT64_MAX;
+	}
+	else if (CompareKeyword(keyword, "ON_DUPLICATE_KEEP"))
+	{
+		const ON_DUPLICATE values[] =
+		{
+			ON_DUPLICATE_KEEP_NEW,
+			ON_DUPLICATE_KEEP_OLD
+		};
+
+		self->base.on_duplicate = values[choice(keyword, value, ON_DUPLICATE_NAMES, lengthof(values))];
+	}
+	else if (CompareKeyword(keyword, "TRUNCATE"))
+	{
+		self->base.truncate = ParseBoolean(value);
+	}
+	else
+		return false;	/* unknown parameter */
+
+	return true;
+}
+
 static void
 DirectWriterDumpParams(DirectWriter *self)
 {
-	LoggerLog(INFO, "WRITER = DIRECT\n\n");
+	char		   *str;
+	StringInfoData	buf;
+
+	initStringInfo(&buf);
+
+	appendStringInfoString(&buf, "WRITER = DIRECT\n");
+
+	str = QuoteString(self->base.dup_badfile);
+	appendStringInfo(&buf, "DUPLICATE_BADFILE = %s\n", str);
+	pfree(str);
+
+	if (self->base.max_dup_errors == INT64_MAX)
+		appendStringInfo(&buf, "DUPLICATE_ERRORS = INFINITE\n");
+	else
+		appendStringInfo(&buf, "DUPLICATE_ERRORS = " int64_FMT "\n",
+						 self->base.max_dup_errors);
+
+	appendStringInfo(&buf, "ON_DUPLICATE_KEEP = %s\n",
+					 ON_DUPLICATE_NAMES[self->base.on_duplicate]);
+
+	appendStringInfo(&buf, "TRUNCATE = %s\n",
+					 self->base.truncate ? "YES" : "NO");
+
+	LoggerLog(INFO, buf.data);
+	pfree(buf.data);
+}
+
+static int
+DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose)
+{
+	const char *params[8];
+	char		max_dup_errors[MAXINT8LEN + 1];
+
+	if (self->base.max_dup_errors < -1)
+		self->base.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
+
+	snprintf(max_dup_errors, MAXINT8LEN, INT64_FORMAT,	
+			 self->base.max_dup_errors);
+
+	/* async query send */
+	params[0] = queueName;
+	params[1] = self->base.output;
+	params[2] = ON_DUPLICATE_NAMES[self->base.on_duplicate];
+	params[3] = max_dup_errors;
+	params[4] = self->base.dup_badfile;
+	params[5] = logfile;
+	params[6] = verbose ? "true" : "no";
+	params[7] = (self->base.truncate ? "true" : "no");
+
+	return PQsendQueryParams(conn,
+		"SELECT * FROM pg_bulkload(ARRAY["
+		"'TYPE=TUPLE',"
+		"'INPUT=' || $1,"
+		"'WRITER=DIRECT',"
+		"'OUTPUT=' || $2,"
+		"'ON_DUPLICATE_KEEP=' || $3,"
+		"'DUPLICATE_ERRORS=' || $4,"
+		"'DUPLICATE_BADFILE=' || $5,"
+		"'LOGFILE=' || $6,"
+		"'VERBOSE=' || $7,"
+		"'TRUNCATE=' || $8])",
+		8, NULL, params, NULL, NULL, 0);
 }
 
 /**
@@ -329,7 +461,7 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
-	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->rel))
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel))
 	{
 		XLogRecPtr	recptr;
 
@@ -355,7 +487,7 @@ flush_pages(DirectWriter *loader)
 			close_data_file(loader);
 		if (loader->datafd == -1)
 			loader->datafd = open_data_file(ls->ls.rnode,
-											RELATION_IS_LOCAL(loader->rel),
+											RELATION_IS_LOCAL(loader->base.rel),
 											relblks);
 
 		/* Number of blocks to be added to the current file. */

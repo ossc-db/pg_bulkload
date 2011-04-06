@@ -32,11 +32,14 @@ char *DataDir = NULL;
 static bool		recovery = false;
 
 static char *infile = NULL;				/* INFILE */
+static char *input = NULL;				/* INPUT */
+static char *output = NULL;				/* OUTPUT */
 static char *logfile = NULL;			/* LOGFILE */
 static char *parse_badfile = NULL;		/* PARSE_BADFILE */
 static char *duplicate_badfile = NULL;	/* DUPLICATE_BADFILE */
 static List *bulkload_options = NIL;
 static bool	type_function = false;
+static bool	writer_binary = false;
 
 /*
  * The length of the database cluster directory name should be short enough
@@ -70,12 +73,17 @@ parse_option(pgut_option *opt, char *arg)
 
 	if (pg_strcasecmp(arg, "TYPE=FUNCTION") == 0)
 		type_function = true;
+
+	if (pg_strcasecmp(arg, "WRITER=BINARY") == 0)
+		writer_binary = true;
 }
 
 static pgut_option options[] =
 {
 	/* Dataload options */
 	{ 's', 'i', "infile"			, &infile },
+	{ 's', 'i', "input"				, &input },
+	{ 's', 'O', "output"			, &output },
 	{ 's', 'l', "logfile"			, &logfile },
 	{ 's', 'P', "parse-badfile"		, &parse_badfile },
 	{ 's', 'u', "duplicate-badfile"	, &duplicate_badfile },
@@ -86,7 +94,7 @@ static pgut_option options[] =
 	{ 0 }
 };
 
-#define NUM_PATH_OPTIONS		4
+#define NUM_PATH_OPTIONS		6
 
 /**
  * @brief Entry point for pg_bulkload command.
@@ -177,12 +185,13 @@ main(int argc, char *argv[])
 			if (path == NULL)
 				continue;
 
-			if (i == 0 && (pg_strcasecmp(path, "stdin") == 0 || type_function))
+			if ((i == 0 || i == 1) &&
+				(pg_strcasecmp(path, "stdin") == 0 || type_function))
 			{
-				/* special case for stdin */
+				/* special case for stdin and input from function */
 				strlcpy(abspath, path, lengthof(abspath));
 			}
-			else if (is_absolute_path(path))
+			else if (is_absolute_path(path) || (i == 2 && !writer_binary))
 			{
 				/* absolute path */
 				strlcpy(abspath, path, lengthof(abspath));
@@ -219,7 +228,8 @@ pgut_help(bool details)
 		return;
 
 	printf("\nDataload options:\n");
-	printf("  -i, --infile=INFILE       INFILE path\n");
+	printf("  -i, --input=INPUT         INPUT path or function\n");
+	printf("  -O, --output=OUTPUT       OUTPUT path or table\n");
 	printf("  -l, --logfile=LOGFILE     LOGFILE path\n");
 	printf("  -P, --parse-badfile=*     PARSE_BADFILE path\n");
 	printf("  -u, --duplicate-badfile=* DUPLICATE_BADFILE path\n");
@@ -488,6 +498,9 @@ ParseControlFile(const char *path)
 
 			if (pg_strcasecmp(item, "TYPE=FUNCTION") == 0)
 				type_function = true;
+
+			if (pg_strcasecmp(item, "WRITER=BINARY") == 0)
+				writer_binary = true;
 		}
 	}
 

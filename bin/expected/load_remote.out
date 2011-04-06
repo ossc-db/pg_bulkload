@@ -10,29 +10,29 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/remote1.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = stdin
+INPUT = stdin
 PARSE_BADFILE = .../remote1.prs
-DUPLICATE_BADFILE = .../remote1.dup
 LOGFILE = .../remote1.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = NO
 DELIMITER = |
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../remote1.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 3: Rejected - column 8. null value in column "c_street_2" violates not-null constraint
 Parse error Record 2: Input Record 4: Rejected - column 15. invalid input syntax for type numeric: "BAD-DATA"
@@ -80,29 +80,29 @@ NOTICE: BULK LOAD START
 ERROR: copy failed: ERROR:  Maximum duplicate error count exceeded
 \! awk -f data/adjust.awk results/remote2.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = stdin
+INPUT = stdin
 PARSE_BADFILE = .../remote2.prs
-DUPLICATE_BADFILE = .../remote2.dup
 LOGFILE = .../remote2.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 0
-DUPLICATE_ERRORS = 0
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = NO
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../remote2.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Maximum parse error count exceeded - 1 error(s) found in input file
@@ -145,29 +145,29 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/remote3.log
 
-pg_bulkload 3.1alpha1 on <TIMESTAMP>
+pg_bulkload 3.1alpha2 on <TIMESTAMP>
 
-INFILE = stdin
+INPUT = stdin
 PARSE_BADFILE = .../remote3.prs
-DUPLICATE_BADFILE = .../remote3.dup
 LOGFILE = .../remote3.log
-TABLE = public.customer
-TRUNCATE = NO
 LIMIT = 5
 PARSE_ERRORS = 50
-DUPLICATE_ERRORS = 50
-ON_DUPLICATE_KEEP = NEW
-VERBOSE = NO
 ENCODING = UTF8
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 2
-ASYNC_READ = NO
 DELIMITER = ,
 QUOTE = "\""
 ESCAPE = "\""
 NULL = "nullvalue           "
+OUTPUT = public.customer
+MULTI_PROCESS = YES
+VERBOSE = NO
 WRITER = DIRECT
+DUPLICATE_BADFILE = .../remote3.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
 
 Parse error Record 1: Input Record 2: Rejected - column 13. invalid input syntax for type timestamp: "BAD-DATA"
 Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "customer_pkey"

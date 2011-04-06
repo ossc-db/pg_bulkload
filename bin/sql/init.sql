@@ -154,4 +154,4 @@ CREATE INDEX i_target ON target (id);
 \i ../lib/pg_bulkload.sql
 \set ECHO all
 
-\! rm -f results/*.log results/*.prs results/*.dup
+\! rm -f results/*.log results/*.prs results/*.dup results/*.bin results/*.ctl

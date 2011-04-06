@@ -36,7 +36,7 @@ INSERT INTO target VALUES(1, 'dummy', 1);
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=overload_f'
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f()'
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, text)'
-\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=outarg_f()'
+\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=outarg_f()'
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=setof_f()'
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, int4)' -o FORCE_NOT_NULL=id
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=type_mismatch_f()'

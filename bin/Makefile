@@ -7,7 +7,7 @@ SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
 PROGRAM = pg_bulkload
 SCRIPTS = postgresql
-REGRESS = init load_bin load_csv load_remote load_function load_encoding load_check load_filter load_parallel
+REGRESS = init load_bin load_csv load_remote load_function load_encoding load_check load_filter load_parallel write_bin
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 PG_LIBS = $(libpq)

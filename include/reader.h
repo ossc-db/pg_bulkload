@@ -43,7 +43,7 @@ typedef struct Checker	Checker;
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, Checker *checker, const char *infile, TupleDesc desc);
+typedef void (*ParserInitProc)(Parser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
 typedef HeapTuple (*ParserReadProc)(Parser *self, Checker *checker);
 typedef int64 (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
@@ -68,7 +68,7 @@ extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
 extern Parser *CreateFunctionParser(void);
 
-#define ParserInit(self, checker, infile, relid)		((self)->init((self), (checker), (infile), (relid)))
+#define ParserInit(self, checker, infile, relid, multi_process)		((self)->init((self), (checker), (infile), (relid), (multi_process)))
 #define ParserRead(self, checker)					((self)->read((self), (checker)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
@@ -76,6 +76,46 @@ extern Parser *CreateFunctionParser(void);
 #define ParserDumpRecord(self, fp, fname)	((self)->dumpRecord((self), (fp), (fname)))
 
 /* Checker */
+
+typedef enum
+{
+	NEED_COERCION_CHECK,
+	NEED_COERCION,
+	NO_COERCION
+} TupleCheckStatus;
+
+typedef struct TupleChecker TupleChecker;
+typedef struct CoercionChecker CoercionChecker;
+
+typedef HeapTuple (*CheckerTupleProc)(TupleChecker *self, HeapTuple tuple, int *parsing_field);
+extern TupleChecker *CreateTupleChecker(TupleDesc desc);
+extern void UpdateTupleCheckStatus(TupleChecker *self, HeapTuple tuple);
+extern void CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field);
+extern HeapTuple CoercionCheckerTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field);
+
+struct TupleChecker
+{
+	CheckerTupleProc	checker;
+	TupleCheckStatus	status;
+	TupleDesc			sourceDesc;
+	TupleDesc			targetDesc;
+	MemoryContext		context;
+	Datum			   *values;
+	bool			   *nulls;
+	void			   *opt;
+	CoercionChecker	   *coercionChecker;
+	bool			   *typIsVarlena;
+	FmgrInfo		   *typOutput;
+	Oid				   *typIOParam;
+	FmgrInfo		   *typInput;
+};
+
+#define CheckerTuple(self, tuple, parsing_field) \
+	((self)->tchecker) ? \
+		((self)->tchecker->checker((self)->tchecker, \
+								   (tuple), \
+								   (parsing_field))) : \
+		(tuple)
 
 struct Checker
 {
@@ -92,12 +132,13 @@ struct Checker
 	EState		   *estate;
 	TupleTableSlot *slot;
 	TupleDesc		desc;
+	TupleChecker   *tchecker;
 };
 
-extern void CheckerInit(Checker *checker, Relation rel);
+extern void CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker);
 extern void CheckerTerm(Checker *checker);
 extern char *CheckerConversion(Checker *checker, char *src);
-extern void CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field);
+extern HeapTuple CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field);
 
 /**
  * @brief Reader
@@ -106,17 +147,12 @@ struct Reader
 {
 	/*
 	 * Information from control file.
-	 *	XXX: writer and logger options should be moved to another place?
 	 */
-	Oid			relid;				/**< target relation id */
 	char	   *infile;				/**< input file name */
 	char	   *logfile;			/**< log file name */
 	char	   *parse_badfile;		/**< parse error file name */
 	int64		limit;				/**< max input lines */
 	int64		max_parse_errors;	/**< max ignorable errors in parse */
-
-	WriterCreate	writer;			/**< writer factory */
-	WriterOptions	wo;				/**< writer options */
 
 	/*
 	 * Parser
@@ -127,7 +163,6 @@ struct Reader
 	 * Checker
 	 */
 	Checker			checker;		/**< load data checker */
-	Relation		rel;
 
 	/*
 	 * Internal status
@@ -136,7 +171,9 @@ struct Reader
 	FILE		   *parse_fp;
 };
 
-extern Reader *ReaderCreate(Datum options, time_t tm);
+extern Reader *ReaderCreate(char *type);
+extern void ReaderInit(Reader *self);
+extern bool ReaderParam(Reader *rd, const char *keyword, char *value);
 extern HeapTuple ReaderNext(Reader *rd);
 extern void ReaderDumpParams(Reader *rd);
 extern int64 ReaderClose(Reader *rd, bool onError);
@@ -181,8 +218,8 @@ struct Filter
 	Oid				fn_rettype;
 };
 
-extern void tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc);
-extern void FilterInit(Filter *filter, TupleDesc desc);
+extern bool tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc);
+extern TupleCheckStatus FilterInit(Filter *filter, TupleDesc desc);
 extern void FilterTerm(Filter *filter);
 extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field);
 
@@ -195,5 +232,7 @@ extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_f
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), \
 						errmsg("duplicate %s specified", keyword))); \
 	} while(0)
+
+extern size_t choice(const char *name, const char *key, const char *keys[], size_t nkeys);
 
 #endif   /* READER_H_INCLUDED */

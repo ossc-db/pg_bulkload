@@ -3,6 +3,7 @@ TYPE = BINARY
 INFILE = stdin
 PARSE_BADFILE = ../results/bin5.prs
 DUPLICATE_BADFILE = ../results/bin5.dup
+MULTI_PROCESS = YES
 
 COL = chaR 	( 	13 	) 	nulliF 	' 	null 	str 	'
 COL = varchaR 	( 	4 	) 	nulliF 	' 	 	'
