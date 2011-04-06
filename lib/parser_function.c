@@ -107,7 +107,20 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 	/* Check data type of the function result value */
 	if (pp->prorettype == desc->tdtypeid)
+	{
+		/*
+		 * If the return value of the input function is a targer table,
+		 * lookup_rowtype_tupdesc grab AccessShareLock on the table in the
+		 * first call.  We call lookup_rowtype_tupdesc here to avoid deadlock
+		 * when lookup_rowtype_tupdesc is called by the internal routine of the
+		 * input function, because a parallel writer process holds an
+		 * AccessExclusiveLock.
+		 */
+		TupleDesc	resultDesc = lookup_rowtype_tupdesc(pp->prorettype, -1);
+		ReleaseTupleDesc(resultDesc);
+
 		self->tupledesc_matched = true;
+	}
 	else if (pp->prorettype == RECORDOID)
 	{
 		TupleDesc	resultDesc = NULL;

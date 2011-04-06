@@ -113,3 +113,15 @@ SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
+
+\! pg_bulkload -d contrib_regression data/bin6.ctl -i data/data4.bin -l results/filter5.log -P results/filter5.prs -u results/filter5.dup -o "PARSE_ERRORS=4" -o FILTER=plpgsql_f
+\! awk -f data/adjust.awk results/filter5.log
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target_like ORDER BY id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target_like ORDER BY id;

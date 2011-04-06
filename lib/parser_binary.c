@@ -76,10 +76,6 @@ TYPES[] =
 	{ "DOUBLE"				, Read_float8	, sizeof(float8)},
 };
 
-/*
- * TODO: Recognize blanks flexibly like "CHARACTER[\b]+VARYING" and
- * "UNSIGNED[\b]+TYPE".
- */
 struct TypeAlias
 {
 	const char *name;
@@ -407,23 +403,21 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
  * Parse typename and return the type id.
  */
 static TypeId
-ParseTypeName(const char *value, int n)
+ParseTypeName(const char *value)
 {
 	int		i;
 
 	/* Search from types. */
 	for (i = 0; i < lengthof(TYPES); i++)
 	{
-		if (pg_strncasecmp(value, TYPES[i].name, n) == 0 &&
-			TYPES[i].name[n] == '\0')
+		if (pg_strcasecmp(value, TYPES[i].name) == 0)
 			return (TypeId) i;
 	}
 
 	/* Search from aliases. */
 	for (i = 0; i < lengthof(ALIASES); i++)
 	{
-		if (pg_strncasecmp(value, ALIASES[i].name, n) == 0 &&
-			ALIASES[i].name[n] == '\0')
+		if (pg_strcasecmp(value, ALIASES[i].name) == 0)
 			return ALIASES[i].id;
 	}
 
@@ -447,7 +441,7 @@ CheckRightparenthesis(const char *s)
 /*
  * Parse length and offset from the field description.
  */
-static int
+static char *
 ParseLengthAndOffset(const char *value, Field *field)
 {
 	unsigned long	n1;
@@ -464,14 +458,16 @@ ParseLengthAndOffset(const char *value, Field *field)
 		switch (*p1)
 		{
 		case ')': /* TYPE(LEN) */
-			return (int) n1;
+			field->len = n1;
+			return p1;
 		case '+': /* TYPE(OFFSET+LEN)*/
 			p1++;
 			n2 = strtoul(p1, &p2, 0);
 			if (p1 < p2 && CheckRightparenthesis(p2))
 			{
 				field->offset = (int) (n1 - 1);	/* start with 1 */
-				return (int) n2;
+				field->len = n2;
+				return p2;
 			}
 			break;
 		case ':': /* TYPE(BEGIN:END) */
@@ -480,7 +476,8 @@ ParseLengthAndOffset(const char *value, Field *field)
 			if (p1 < p2 && CheckRightparenthesis(p2))
 			{
 				field->offset = (int) (n1 - 1);	/* start with 1 */
-				return (int) (n2 - n1 + 1);
+				field->len = (n2 - n1 + 1);
+				return p2;
 			}
 			break;
 		}
@@ -488,7 +485,7 @@ ParseLengthAndOffset(const char *value, Field *field)
 
 	ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 		errmsg("TYPE argument must be ( { L | B+L | B:E } )")));
-	return 0;
+	return 0;	/* keep complier quiet */
 }
 
 static int
@@ -523,19 +520,135 @@ hex_out(int c)
 static void
 ParseFormat(const char *value, Field *field)
 {
+	StringInfoData	buf;
 	TypeId		id;
-	int			len;
-	const char *nullif;
+	size_t		nulliflen;
 	const char *p;
 	const struct TypeInfo *type;
 
+	initStringInfo(&buf);
+	nulliflen = strlen("NULLIF");
+
+	/* parse typename */
+	p = value;
+	while (1)
+	{
+		int	n = 0;
+
+		while (!isspace(p[n]) && p[n] != '(' && p[n] != '\0')
+			n++;
+
+		if (p != value)
+			appendStringInfoChar(&buf, ' ');
+
+		appendBinaryStringInfo(&buf, p, n);
+
+		p += n;
+		while (isspace((unsigned char) *p))
+			p++;
+
+		if (*p == '(' || *p == '\0' ||
+			pg_strncasecmp(p, "NULLIF", nulliflen) == 0)
+			break;
+	}
+
+	id = ParseTypeName(buf.data);
+	type = &TYPES[id];
+
+	/* parse length and offset */
+	field->len = 0;
+	if (*p == '(')
+	{
+		/* typename (N | B:E) */
+		p = ParseLengthAndOffset(p + 1, field);
+		if (field->len <= 0)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("TYPE length must be positive")));
+		if (field->offset < 0)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("TYPE offset must be positive")));
+
+		/* skip spaces and ')' */
+		while (isspace((unsigned char) *p))
+			p++;
+		p++;
+		while (isspace((unsigned char) *p))
+			p++;
+	}
+	else
+		field->len = type->len;	/* use default */
+
+	switch (id)
+	{
+	case T_CHAR:
+	case T_VARCHAR:
+		if (field->len <= 0)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("length of %s should be specified", type->name)));
+		break;
+	case T_INT2:
+	case T_INT8:
+	case T_UINT2:
+	case T_FLOAT8:
+		if (field->len != type->len)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("length of %s should be %d or default", type->name, type->len)));
+		break;
+	case T_INT4:
+		switch (field->len)
+		{
+		case sizeof(int16):		/* INTEGER(2) */
+			type = &TYPES[T_INT2];
+			break;
+		case sizeof(int32):		/* INTEGER(4) */
+			type = &TYPES[T_INT4];
+			break;
+		case sizeof(int64):		/* INTEGER(8) */
+			type = &TYPES[T_INT8];
+			break;
+		default:
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("length of INTEGER should be 2, 4 or 8")));
+		}
+		break;
+	case T_UINT4:
+		switch (field->len)
+		{
+		case sizeof(uint16):	/* UNSIGNED INTEGER(2) */
+			type = &TYPES[T_UINT2];
+			break;
+		case sizeof(uint32):	/* UNSIGNED INTEGER(4) */
+			type = &TYPES[T_UINT4];
+			break;
+		default:
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("length of UNSIGNED INTEGER should be 2 or 4")));
+		}
+		break;
+	case T_FLOAT4:
+		switch (field->len)
+		{
+		case sizeof(float4):	/* FLOAT(4) */
+			type = &TYPES[T_FLOAT4];
+			break;
+		case sizeof(float8):	/* FLOAT(8) */
+			type = &TYPES[T_FLOAT8];
+			break;
+		default:
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("length of FLOAT should be 4 or 8")));
+		}
+		break;
+	default:
+		break;
+	}
+
 	/* parse nullif */
-	nullif = strstr(value, "NULLIF");
-	if (nullif)
+	if (pg_strncasecmp(p, "NULLIF", nulliflen) == 0 && isspace(p[nulliflen]))
 	{
 		/* Seek to the argument of NULLIF */
-		p = nullif + lengthof("NULLIF") - 1;
-		while (*p && isspace((unsigned char) *p))
+		p += nulliflen + 1;
+		while (isspace((unsigned char) *p))
 			p++;
 
 		if (*p == '\'' || *p == '"')
@@ -556,12 +669,18 @@ ParseFormat(const char *value, Field *field)
 			field->nullif = palloc(n + 1);
 			memcpy(field->nullif, p, n);
 			field->nullif[n] = '\0';
+			p += n + 1;
 		}
 		else
 		{
 			/* hex format */
 			int		i;
-			size_t	n = (1 + strlen(p)) / 2;
+			size_t	n = strlen(p);
+
+			while (isspace((unsigned char) p[n - 1]))
+				n--;
+			n = (1 + n) / 2;
+
 			field->nulllen = n;
 			field->nullif = palloc(n + 1);
 			field->nullif[n] = '\0';
@@ -570,109 +689,18 @@ ParseFormat(const char *value, Field *field)
 				field->nullif[i] = (char)
 					((hex_in(p[i*2]) << 4) + hex_in(p[i*2+1]));
 			}
+			p += n * 2;
 		}
+
+		while (isspace((unsigned char) *p))
+			p++;
 	}
 
-	/* parse typename and length */
-	p = strchr(value, '(');
-	if (p)
-	{	/* typename (N | B:E) */
-		len = ParseLengthAndOffset(p + 1, field);
-		if (len <= 0)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("COL length must be positive")));
-		if (field->offset < 0)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("COL offset must be positive")));
-	}
-	else if (nullif)
-	{	/* typename NULLIF ... */
-		p = nullif;
-		len = 0;
-	}
-	else
-	{	/* typename */
-		p = value + strlen(value);
-		len = 0;
-	}
-
-	/* trim trailing spaces */
-	while (p > value && isspace((unsigned char) p[-1]))
-		p--;
-
-	/* resolve the type */
-	id = ParseTypeName(value, p - value);
-	type = &TYPES[id];
-
-	if (len == 0)
-	{
-		len = type->len;	/* use default */
-	}
-	else switch (id)
-	{
-	case T_INT2:
-	case T_INT8:
-	case T_UINT2:
-	case T_FLOAT8:
-		if (len != type->len)
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of %s should be %d or default", type->name, type->len)));
-		break;
-	case T_INT4:
-		switch (len)
-		{
-		case sizeof(int16):		/* INTEGER(2) */
-			type = &TYPES[T_INT2];
-			break;
-		case sizeof(int32):		/* INTEGER(4) */
-			type = &TYPES[T_INT4];
-			break;
-		case sizeof(int64):		/* INTEGER(8) */
-			type = &TYPES[T_INT8];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of INTEGER should be 2, 4 or 8")));
-		}
-		break;
-	case T_UINT4:
-		switch (len)
-		{
-		case sizeof(uint16):	/* UNSIGNED INTEGER(2) */
-			type = &TYPES[T_UINT2];
-			break;
-		case sizeof(uint32):	/* UNSIGNED INTEGER(4) */
-			type = &TYPES[T_UINT4];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of UNSIGNED INTEGER should be 2 or 4")));
-		}
-		break;
-	case T_FLOAT4:
-		switch (len)
-		{
-		case sizeof(float4):	/* FLOAT(4) */
-			type = &TYPES[T_FLOAT4];
-			break;
-		case sizeof(float8):	/* FLOAT(8) */
-			type = &TYPES[T_FLOAT8];
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("length of FLOAT should be 4 or 8")));
-		}
-		break;
-	default:
-		break;
-	}
-
-	if (len <= 0)
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			errmsg("length of %s should be specified", type->name)));
+	if (*p != '\0')
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+			errmsg("syntax error at or near \"%s\" : %s", p, value)));
 
 	field->read = type->read;
-	field->len = len;
 
 	if ((type->len == 0 && field->len < field->nulllen) ||
         (type->len > 0 && field->nulllen > 0 && field->len != field->nulllen))
@@ -682,6 +710,8 @@ ParseFormat(const char *value, Field *field)
 				field->len, (type->len == 0 ? "or less " : ""),
 				field->nulllen, value)));
 	}
+
+	pfree(buf.data);
 }
 
 static bool
@@ -807,9 +837,9 @@ BinaryParserDumpParams(BinaryParser *self)
 				for (j = 0; j < field->nulllen; j++)
 				{
 					appendStringInfoCharMacro(&buf,
-											  hex_out(field->nullif[j] >> 4));
+											  hex_out((unsigned char) field->nullif[j] >> 4));
 					appendStringInfoCharMacro(&buf,
-											  hex_out(field->nullif[j] % 0x10));
+											  hex_out((unsigned char) field->nullif[j] % 0x10));
 				}
 				appendStringInfoCharMacro(&buf, '\n');
 			}
@@ -938,7 +968,7 @@ Read_##T(TupleFormer *former, char *in, const Field* field, int idx, bool *isnul
 	} \
 	memcpy(&v, in, sizeof(v)); \
 	*isnull = false; \
-	switch (former->desc->attrs[idx]->atttypid) \
+	switch (former->typId[idx]) \
 	{ \
 	case INT2OID: \
 		return Int16GetDatum((int16)v); \

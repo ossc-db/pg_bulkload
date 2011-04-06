@@ -105,3 +105,15 @@ SELECT * FROM customer ORDER BY c_id;
 \! pg_bulkload -d contrib_regression data/bin4.ctl -i data/data1.bin -l results/bin9.log -P pbfile -u dbfile -o "PARSE_ERRORS=INFINITE" -o "DUPLICATE_ERRORS=INFINITE"
 \! awk -f data/adjust.awk results/bin9.log
 
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin10.log -o PRESERVE_BLANKS=YES -o "COL=10"
+\! awk -f data/adjust.awk results/bin10.log
+
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin11.log -o PRESERVE_BLANKS=NO -o "COL=10"
+\! awk -f data/adjust.awk results/bin11.log
+
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT NULLIF abcg"
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o PRESERVE_BLANKS=NO -o "COL=10 aaaa"
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT (2) NULLIF abcd aaaa"
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT NULLIF abcd aaaa"
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT (2) aaaa"
+\! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT aaaa"

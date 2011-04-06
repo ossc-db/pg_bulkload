@@ -422,3 +422,73 @@ SELECT * FROM target_like ORDER BY id;
   1 | call no_arg_f |      3
 (5 rows)
 
+\! pg_bulkload -d contrib_regression data/bin6.ctl -i data/data4.bin -l results/filter5.log -P results/filter5.prs -u results/filter5.dup -o "PARSE_ERRORS=4" -o FILTER=plpgsql_f
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	3 Rows successfully loaded.
+	1 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/filter5.log
+
+pg_bulkload 3.1alpha1 on <TIMESTAMP>
+
+INFILE = .../data4.bin
+PARSE_BADFILE = .../filter5.prs
+DUPLICATE_BADFILE = .../filter5.dup
+LOGFILE = .../filter5.log
+TABLE = public.target_like
+TRUNCATE = YES
+LIMIT = INFINITE
+PARSE_ERRORS = 4
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+VERBOSE = NO
+CHECK_CONSTRAINTS = NO
+TYPE = BINARY
+SKIP = 0
+ASYNC_READ = YES
+STRIDE = 16
+FILTER = plpgsql_f
+COL = "INTEGER" (1 + 4)
+COL = "INTEGER" (5 + 4)
+COL = "INTEGER" (9 + 4)
+COL = "INTEGER" (13 + 4)
+WRITER = DIRECT
+
+Parse error Record 1: Input Record 4: Rejected. field 1 is error value
+
+  0 Rows skipped.
+  3 Rows successfully loaded.
+  1 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target_like ORDER BY id;
+ id | str | master 
+----+-----+--------
+ 25 | 14  |     11
+ 45 | 24  |     21
+ 65 | 34  |     31
+(3 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target_like ORDER BY id;
+ id | str | master 
+----+-----+--------
+ 25 | 14  |     11
+ 45 | 24  |     21
+ 65 | 34  |     31
+(3 rows)
+

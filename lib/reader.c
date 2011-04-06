@@ -795,6 +795,7 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 	/*
 	 * get column information of the target relation
 	 */
+	former->typId = (Oid *) palloc(natts * sizeof(Oid));
 	former->typIOParam = (Oid *) palloc(natts * sizeof(Oid));
 	former->typInput = (FmgrInfo *) palloc(natts * sizeof(FmgrInfo));
 	former->typMod = (Oid *) palloc(natts * sizeof(Oid));
@@ -814,6 +815,7 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 
 			former->typMod[i] = -1;
 			former->attnum[i] = i;
+			former->typId[i] = filter->argtypes[i];
 		}
 	}
 	else
@@ -834,6 +836,7 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 			fmgr_info(in_func_oid, &former->typInput[i]);
 
 			former->typMod[i] = attrs[i]->atttypmod;
+			former->typId[i] = attrs[i]->atttypid;
 
 			/* update valid column information */
 			former->attnum[former->maxfields] = i;
@@ -847,6 +850,9 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 void
 TupleFormerTerm(TupleFormer *former)
 {
+	if (former->typId)
+		pfree(former->typId);
+
 	if (former->typIOParam)
 		pfree(former->typIOParam);
 
@@ -985,7 +991,20 @@ FilterInit(Filter *filter, TupleDesc desc)
 
 	/* Check data type of the function result value */
 	if (pp->prorettype == desc->tdtypeid)
+	{
+		/*
+		 * If the return value of the filter function is a targer table,
+		 * lookup_rowtype_tupdesc grab AccessShareLock on the table in the
+		 * first call.  We call lookup_rowtype_tupdesc here to avoid deadlock
+		 * when lookup_rowtype_tupdesc is called by the internal routine of the
+		 * filter function, because a parallel writer process holds an
+		 * AccessExclusiveLock.
+		 */
+		TupleDesc	resultDesc = lookup_rowtype_tupdesc(pp->prorettype, -1);
+		ReleaseTupleDesc(resultDesc);
+
 		filter->tupledesc_matched = true;
+	}
 	else if (pp->prorettype == RECORDOID)
 	{
 		TupleDesc	resultDesc = NULL;
