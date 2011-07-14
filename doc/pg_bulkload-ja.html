@@ -297,13 +297,13 @@ INPUT = generate_series(1, 1000)  # 1から1,000の連番をロードする
 <dd>
 先頭から何行をスキップするかを指定します。
 デフォルトは 0 です。
-ただし「TYPE=FUNCTION」と指定した場合は無視されます。
+ただし「TYPE=FUNCTION」とSKIP の両方を指定した場合はエラーになります。
 </dd>
 
 <dt>LIMIT | LOAD = n</dt>
 <dd>
 ロード行数を指定します。
-デフォルトは指定なし (全行ロード) です。
+デフォルトは指定なし、または INFINITE (全行ロード) です。
 「TYPE=FUNCTION」と指定した場合でも使用可能です。
 </dd>
 
@@ -365,7 +365,7 @@ argtype は省略可能ですが、関数を一意に特定できない場合は
 FILTER 関数の作り方は <a href="#filter">FILTER 関数の作り方</a>に示しています。
 </dd>
 <dd>
-FILTER オプションは、「TYPE=FUNCTION」を指定した場合は無視されます。
+FILTER オプションは、「TYPE=FUNCTION」と FILTER の両方を指定した場合はエラーになります。
 また、CSV フォーマット固有の設定項目の FORCE_NOT_NULL と FILTER の両方を指定した場合はエラーになります。
 </dd>
 
@@ -382,14 +382,14 @@ CHECK_CONSTRAINTS を「WRITER=BINARY」と同時に指定した場合はエラ�
 エラーを許容された不良データはロードされず、PARSE BADFILE に記録されます。
 デフォルトは 0 です。
 発生したエラーの件数がこの値を超えた場合は、<strong>その時点でコミットして残りの入力データのロードは行いません</strong>。
-エラーを1件も許容しない場合は 0 を、全てのエラーを許容する場合は -1 を指定します。
+エラーを1件も許容しない場合は 0 を、全てのエラーを許容する場合は -1 または INFINITE を指定します。
 </dd>
 
 <dt>DUPLICATE_ERRORS = n </dt>
 <dd>一意制約違反の許容件数を指定します。エラーを許容された一意制約違反のレコードはロードされず、DUPLICATE_BADFILE に記録されます。
 デフォルトは 0 です。
 一意制約に違反するレコードの数がこの値を超えた場合は、<strong>その時点でロールバックしてロード処理全体を取り消します</strong>。
-エラーを1件も許容しない場合は 0 を、全てのエラーを許容する場合は -1 を指定します。
+エラーを1件も許容しない場合は 0 を、全てのエラーを許容する場合は -1 または INFINITE を指定します。
 DUPLICATE_ERRORS を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
 </dd>
 
@@ -633,15 +633,32 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 <h4>kill -9は使わない</h4>
 <p>pg_bulkload を "kill -9" を使って停止させるのはできる限りやめてください。もし実行すると postgresql スクリプトによるリカバリが実行されます。</p>
 
-<h3>MULTI_PROCESS=YES 指定時の認証における制約</h3>
-<p> MULTI_PROCESS=YES かつロード対象のデータベースにlocalhostから接続するのにパスワードが必要な場合、
-たとえパスワードを正しくプロンプトに入力しても、パスワード認証に失敗してしまいます。
-この問題を回避するには、パスワードを<a href="http://www.postgresql.jp/document/current/html/libpq-pgpass.html">.pgpassファイル</a>に指定しなければなりません。
-ただし、.pgpassファイルは、PostgreSQLサーバを起動したOSユーザ(典型的には"postgres"ユーザ)のホームディレクトリに配置する必要があります。
-例えば、pg_bulkloadが、ポート番号5432で稼働しているサーバに、パスワードが"foopass"であるユーザ"foo"として接続する場合では、
-管理者は以下の行を.pgpassファイルに追加します。</p>
-
-<pre>localhost:5432:*:foo:foopass</pre>
+<h4>MULTI_PROCESS=YES指定時の認証における制約</h4>
+<p>MULTI_PROCESS=YESかつロード対象のデータベースにlocalhostから接続するのにパスワードが必要な場合、たとえパスワードを正しくプロンプトに入力しても、パスワード認証に失敗してしまいます。この問題を回避するには、以下のいずれかを設定してください。<br/>
+<ul>
+<li>
+localhost からのアクセスの認証方式に trust を指定する<br/>
+localhost からの接続には、UNIX 環境では UNIX ドメインソケット接続を使用し、Windows 環境では TCP/IP ループバック接続を使用します。UNIX 環境では以下の行を pg_hba.conf ファイルに追加します。<br/>
+<pre>
+# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for UNIX]
+local   all             foo                                     trust<br/></pre>
+Windows 環境では以下の行を pg_hba.conf ファイルに追加します。<br/>
+<pre>
+# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for Windows]
+host    all             foo             127.0.0.1/32            trust</pre>
+</li>
+<li>
+パスワードを.pgpassファイルに指定する<br/>
+もし trust 認証がセキュリティ上問題であれば、認証方式を password または md5 に指定した上で、パスワードを<a href="http://www.postgresql.jp/document/current/html/libpq-pgpass.html">.pgpassファイル</a>に指定してください。ただし、.pgpassファイルは、PostgreSQLサーバを起動したOSユーザ(典型的には"postgres"ユーザ)のホームディレクトリに配置する必要があります。例えば、pg_bulkloadが、ポート番号5432で稼働しているサーバに、パスワードが"foopass"であるユーザ"foo"として接続する場合では、管理者は以下の行を.pgpassファイルに追加します。
+<pre>
+localhost:5432:*:foo:foopass</pre>
+</li>
+<li>
+WRITER=PARALLE を使用しない<br/>
+.pgpass も指定できない場合は WRITER=PARALLE を使用できないため、WRITER=DIRECT を指定してください。
+</li>
+</ul>
+</p>
 
 <h3>データベース制約の扱い</h3>
 <p>

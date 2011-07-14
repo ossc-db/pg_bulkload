@@ -2,7 +2,7 @@
  *
  * pgut.c
  *
- * Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -399,6 +399,28 @@ PQconnectionNeedsPassword(PGconn *conn)
 }
 #endif
 
+/*
+ * Escaping libpq connect parameter strings.
+ *
+ * Replaces "'" with "\'" and "\" with "\\".
+ */
+static void
+escape_param_str(StringInfo buf, const char *keyword, const char *value)
+{
+	const char *cp;
+
+	appendStringInfo(buf, "%s='", keyword);
+
+	for (cp = value; *cp; cp++)
+	{
+		if (*cp == '\\' || *cp == '\'')
+			appendStringInfoChar(buf, '\\');
+		appendStringInfoChar(buf, *cp);
+	}
+
+	appendStringInfoChar(buf, '\'');
+}
+
 PGconn *
 pgut_connect(const char *info, YesNo prompt, int elevel)
 {
@@ -410,7 +432,7 @@ pgut_connect(const char *info, YesNo prompt, int elevel)
 		passwd = prompt_for_password();
 		initStringInfo(&add_pass);
 		appendStringInfoString(&add_pass, info);
-		appendStringInfo(&add_pass, " password=%s ", passwd);
+		escape_param_str(&add_pass, "password", passwd);
 	}
 	else
 	{
@@ -459,7 +481,7 @@ pgut_connect(const char *info, YesNo prompt, int elevel)
 			else
 	 			initStringInfo(&add_pass);
 			appendStringInfoString(&add_pass, info);
-			appendStringInfo(&add_pass, " password=%s ", passwd);
+			escape_param_str(&add_pass, "password", passwd);
 			continue;
 		}
 

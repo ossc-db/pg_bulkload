@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/pg_btree.h
  *
- *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**

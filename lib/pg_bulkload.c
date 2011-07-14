@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_bulkload.c
  *
- *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -180,6 +180,12 @@ pg_bulkload(PG_FUNCTION_ARGS)
 	BULKLOAD_PROFILE_PUSH();
 
 	pg_rusage_init(&ru0);
+
+	/* must be the super user */
+	if (!superuser())
+		ereport(ERROR,
+			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+			 errmsg("must be superuser to use pg_bulkload")));
 
 	options = PG_GETARG_DATUM(0);
 
@@ -363,9 +369,10 @@ pg_bulkload(PG_FUNCTION_ARGS)
  * Check iff the write target is ok
  */
 void
-VerifyTarget(Relation rel)
+VerifyTarget(Relation rel, int64 max_dup_errors)
 {
-	AclResult	aclresult;
+	AclMode	required_access;
+	AclMode	aclresult;
 	if (rel->rd_rel->relkind != RELKIND_RELATION)
 	{
 		const char *type;
@@ -387,10 +394,12 @@ VerifyTarget(Relation rel)
 					type, RelationGetRelationName(rel))));
 	}
 
-	aclresult = pg_class_aclcheck(
-		RelationGetRelid(rel), GetUserId(), ACL_INSERT);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_CLASS,
+	required_access = ACL_INSERT |
+						(max_dup_errors != 0 ? ACL_DELETE : ACL_NO_RIGHTS);
+	aclresult = pg_class_aclmask(
+		RelationGetRelid(rel), GetUserId(), required_access, ACLMASK_ALL);
+	if (required_access != aclresult)
+		aclcheck_error(ACLCHECK_NO_PRIV, ACL_KIND_CLASS,
 					   RelationGetRelationName(rel));
 }
 
@@ -602,6 +611,9 @@ ParseOptions(Datum options, Reader **rd, Writer **wt, time_t tm)
 
 			(*wt)->dup_badfile = pstrdup(path);
 		}
+
+		/* Verify DataDir/pg_bulkload directory */
+		ValidateLSFDirectory(BULKLOAD_LSF_DIR);
 	}
 
 	/*

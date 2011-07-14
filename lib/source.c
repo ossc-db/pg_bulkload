@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/source.c
  *
- *	  Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
@@ -120,13 +120,6 @@ CreateSource(const char *path, TupleDesc desc, bool async_read)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("relative path not allowed for INPUT: %s", path)));
-
-		/* must be the super user if load from a file */
-		if (!superuser())
-			ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to use pg_bulkload from a file"),
-				 errhint("Anyone can use pg_bulkload from stdin")));
 
 		if (async_read)
 			return CreateAsyncSource(path, desc);
@@ -499,9 +492,10 @@ static size_t
 RemoteSourceRead(RemoteSource *self, void *buffer, size_t len)
 {
 	size_t	bytesread;
+	size_t	minread = len;
 
 	bytesread = 0;
-	while (len > 0 && bytesread < 1 && !self->eof)
+	while (len > 0 && bytesread < minread && !self->eof)
 	{
 		int			avail;
 

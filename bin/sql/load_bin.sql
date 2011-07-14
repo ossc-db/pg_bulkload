@@ -117,3 +117,30 @@ SELECT * FROM customer ORDER BY c_id;
 \! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT NULLIF abcd aaaa"
 \! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT (2) aaaa"
 \! echo -n "" | pg_bulkload -d contrib_regression data/bin5.ctl -l results/bin_error.log -o "COL=SHORT aaaa"
+
+-- load from stdin
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i Stdin -l results/bin12.log -P results/bin12.prs -u results/bin12.dup -o TRUNCATE=YES -o ENCODING=SQLASCII < data/data1.bin
+\! awk -f data/adjust.awk results/bin12.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+\! pg_bulkload -d contrib_regression data/bin1.ctl -i Stdin -l results/bin13.log -P results/bin13.prs -u results/bin13.dup -o TRUNCATE=YES -o ENCODING=SQLASCII < data/data1.bin
+\! awk -f data/adjust.awk results/bin13.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;

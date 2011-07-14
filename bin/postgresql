@@ -12,7 +12,7 @@
 #      this script doesn't execute pg_bulkload's recovery and call pg_ctl 
 #      directory.
 #
-# Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 #------------------------------------------------------------------------------
 # Acquire a command name
@@ -94,7 +94,7 @@ while [ $# -gt 0 ];do
         ;;
     -V|--version)
         # Show a version of pg_bulkload and PostgreSQL and exit normally
-        echo "pg_bulkload 3.1alpha2"
+        echo "pg_bulkload 3.1.0"
         pg_ctl --version
         exit 0
         ;;

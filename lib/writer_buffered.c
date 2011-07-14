@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_buffered.c
  *
- *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"
@@ -71,7 +71,7 @@ BufferedWriterInit(BufferedWriter *self)
 		self->base.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
 
 	self->base.rel = heap_open(self->base.relid, AccessExclusiveLock);
-	VerifyTarget(self->base.rel);
+	VerifyTarget(self->base.rel, self->base.max_dup_errors);
 
 	self->base.desc = RelationGetDescr(self->base.rel);
 

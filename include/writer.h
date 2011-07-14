@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/writer.h
  *
- *	  Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -89,8 +89,9 @@ extern void WriterDumpParams(Writer *self);
  * Utilitiy functions
  */
 
-extern void VerifyTarget(Relation rel);
+extern void VerifyTarget(Relation rel, int64 max_dup_errors);
 extern void TruncateTable(Oid relid);
 char *get_relation_name(Oid relid);
+extern void ValidateLSFDirectory(const char *path);
 
 #endif   /* WRITER_H_INCLUDED */

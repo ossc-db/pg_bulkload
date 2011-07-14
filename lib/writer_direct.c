@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_direct.c
  *
- *	  Copyright (c) 2007-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
@@ -89,7 +89,6 @@ static void	flush_pages(DirectWriter *loader);
 static void	close_data_file(DirectWriter *loader);
 static void	UpdateLSF(DirectWriter *loader, BlockNumber num);
 static void UnlinkLSF(DirectWriter *loader);
-static void ValidateLSFDirectory(const char *path);
 
 /* ========================================================================
  * Implementation
@@ -134,7 +133,7 @@ DirectWriterInit(DirectWriter *self)
 		self->base.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
 
 	self->base.rel = heap_open(self->base.relid, AccessExclusiveLock);
-	VerifyTarget(self->base.rel);
+	VerifyTarget(self->base.rel, self->base.max_dup_errors);
 
 	self->base.desc = RelationGetDescr(self->base.rel);
 
@@ -640,7 +639,7 @@ UnlinkLSF(DirectWriter *loader)
 /*
  * Check for LSF directory. If not exists, create it.
  */
-static void
+void
 ValidateLSFDirectory(const char *path)
 {
 	struct stat	stat_buf;

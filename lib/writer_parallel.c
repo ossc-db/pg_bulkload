@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_parallel.c
  *
- *	  Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"
@@ -11,8 +11,10 @@
 #include "access/heapam.h"
 #include "access/xact.h"
 #include "commands/dbcommands.h"
+#include "commands/variable.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "postmaster/postmaster.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/typcache.h"
@@ -45,6 +47,7 @@ static int	ParallelWriterSendQuery(ParallelWriter *self, PGconn *conn, char *que
 static const char *finish_and_get_message(ParallelWriter *self);
 static void write_queue(ParallelWriter *self, const void *buffer, uint32 len);
 static void transfer_message(void *arg, const PGresult *res);
+static char *escape_param_str(const char *str);
 static PGconn *connect_to_localhost(void);
 
 /* ========================================================================
@@ -92,7 +95,7 @@ ParallelWriterInit(ParallelWriter *self)
 
 		/*
 		 * If the return value of the filter function or input function is a
-		 * targer table, lookup_rowtype_tupdesc grab AccessShareLock on the
+		 * target table, lookup_rowtype_tupdesc grab AccessShareLock on the
 		 * table in the first call.  We call lookup_rowtype_tupdesc here to
 		 * avoid deadlock when lookup_rowtype_tupdesc is called by the internal
 		 * routine of the filter function or input function, because a parallel
@@ -330,17 +333,55 @@ write_queue(ParallelWriter *self, const void *buffer, uint32 len)
 	}
 }
 
+/*
+ * Escaping libpq connect parameter strings.
+ *
+ * Replaces "'" with "\'" and "\" with "\\".
+ */
+static char *
+escape_param_str(const char *str)
+{
+	const char *cp;
+	StringInfo	buf = makeStringInfo();
+
+	for (cp = str; *cp; cp++)
+	{
+		if (*cp == '\\' || *cp == '\'')
+			appendStringInfoChar(buf, '\\');
+		appendStringInfoChar(buf, *cp);
+	}
+
+	return buf->data;
+}
+
 static PGconn *
 connect_to_localhost(void)
 {
 	PGconn *conn;
 	char	sql[1024];
+	char   *host;
+	char	dbName[1024];
+
+	/* Also ensure backend isn't confused by this environment var. */
+	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
+
+#ifdef HAVE_UNIX_SOCKETS
+	host = (UnixSocketDir == NULL || UnixSocketDir[0] == '\0') ?
+				DEFAULT_PGSOCKET_DIR :
+				UnixSocketDir;
+#else
+	host = "localhost";
+#endif
+
+	/* set dbname and disable hostaddr */
+	snprintf(dbName, lengthof(dbName), "dbname='%s' hostaddr=''",
+			 escape_param_str(get_database_name(MyDatabaseId)));
 
 	conn = PQsetdbLogin(
-		"localhost",
+		host,
 		GetConfigOption("port", false),
 		NULL, NULL,
-		get_database_name(MyDatabaseId),
+		dbName,
 		GetUserNameFromId(GetUserId()),
 		NULL);
 	if (PQstatus(conn) == CONNECTION_BAD)
@@ -350,18 +391,24 @@ connect_to_localhost(void)
 		wr.conn = conn;
 		ereport(ERROR,
 				(errcode(ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION),
-				 errmsg("could not establish connection"),
-				 errdetail("%s", finish_and_get_message(&wr))));
+				 errmsg("could not establish connection to parallel writer"),
+				 errdetail("%s", finish_and_get_message(&wr)),
+				 errhint("Refer to the following if it is an authentication "
+						 "error.  Specifies the authentication method to "
+						 "without the need for a password in pg_hba.conf (ex. "
+						 "trust or ident), or specify the password to the "
+						 "password file of the operating system user who ran "
+						 "PostgreSQL server.  If cannot use these solution, "
+						 "specify WRITER=DIRECT.")));
 	}
-
-	/* attempt to set client encoding to match server encoding */
-	PQsetClientEncoding(conn, GetDatabaseEncodingName());
 
 	/* attempt to set default datestyle */
 	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle", false));
 	PQexec(conn, sql);
 
-	/* TODO: do we need more settings? (ex. CLIENT_CONN_xxx) */
+	/* attempt to set default datestyle */
+	snprintf(sql, lengthof(sql), "SET timezone = '%s'", show_timezone());
+	PQexec(conn, sql);
 
 	/* set message receiver */
 	PQsetNoticeReceiver(conn, transfer_message, NULL);

@@ -2,7 +2,7 @@
  *
  * pgut-fe.c
  *
- * Copyright (c) 2009-2010, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -29,6 +29,28 @@ static bool parse_pair(const char buffer[], char key[], char value[]);
 static char *get_username(void);
 
 /*
+ * Escaping libpq connect parameter strings.
+ *
+ * Replaces "'" with "\'" and "\" with "\\".
+ */
+static void
+escape_param_str(StringInfo buf, const char *keyword, const char *value)
+{
+	const char *cp;
+
+	appendStringInfo(buf, "%s='", keyword);
+
+	for (cp = value; *cp; cp++)
+	{
+		if (*cp == '\\' || *cp == '\'')
+			appendStringInfoChar(buf, '\\');
+		appendStringInfoChar(buf, *cp);
+	}
+
+	appendStringInfoChar(buf, '\'');
+}
+
+/*
  * the result is also available with the global variable 'connection'.
  */
 void
@@ -40,15 +62,15 @@ reconnect(int elevel)
 	disconnect();
 	initStringInfo(&buf);
 	if (dbname && dbname[0])
-		appendStringInfo(&buf, "dbname=%s ", dbname);
+		escape_param_str(&buf, "dbname", dbname);
 	if (host && host[0])
-		appendStringInfo(&buf, "host=%s ", host);
+		escape_param_str(&buf, "host", host);
 	if (port && port[0])
-		appendStringInfo(&buf, "port=%s ", port);
+		escape_param_str(&buf, "port", port);
 	if (username && username[0])
-		appendStringInfo(&buf, "user=%s ", username);
+		escape_param_str(&buf, "user", username);
 	if (password && password[0])
-		appendStringInfo(&buf, "password=%s ", password);
+		escape_param_str(&buf, "password", password);
 
 	connection = pgut_connect(buf.data, prompt_password, elevel);
 
