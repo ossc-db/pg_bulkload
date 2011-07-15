@@ -8,7 +8,7 @@
 </head>
 
 <body>
-<h1 id="pg_bulkload">pg_bulkload 3.0</h1>
+<h1 id="pg_bulkload">pg_bulkload 3.1</h1>
 <div class="navigation">
   <a href="index.html">Top</a> &gt;
   <a href="pg_bulkload.html">pg_bulkload</a>
@@ -50,7 +50,16 @@ On the other hand, you can enable constraint checks when loading unclean data.
 
 <p>
 The original goal of pg_bulkload was an faster alternative of <code>COPY</code> command in PostgreSQL,
-but now version 3.0 has some ETL features like input data validation and data transformation with filter functions.
+but version 3.0 or later has some ETL features like input data validation and data transformation with filter functions.
+</p>
+
+<p>
+In version 3.1, pg_bulkload can convert the load data into the binary file
+which can be used as an input file of pg_bulkload.
+If you check whether the load data is valid when converting it into the binary file,
+you can skip the check when loading it from the binary file to a table.
+Which would reduce the load time itself.
+Also in version 3.1, parallel loading works more effectively than before.
 </p>
 
 <h2 id="examples">Examples</h2>
@@ -111,11 +120,20 @@ NOTICE: BULK LOAD END
 
 <dl>
 <dt>
--i INFILE<br />
---infile=INFILE
+-i INPUT<br />
+--input=INPUT<br />
+--infile=INPUT
 </dt>
-<dd>A path to read the input source.
-Same as "<a href="#INFILE">INFILE</a>" in control files.
+<dd>Source to load data from.
+Same as "<a href="#INPUT">INPUT</a>" in control files.
+</dd>
+
+<dt>
+-O OUTPUT<br />
+--output=OUTPUT
+</dt>
+<dd>Destination to load data to.
+Same as "<a href="#OUTPUT">OUTPUT</a>" in control files.
 </dd>
 
 <dt>
@@ -212,27 +230,21 @@ Characters after "#" are ignored as comments in each line.
 <h3>Common</h3>
 <dl>
 
-<dt>TABLE = [ schema_name. ] table_name</dt>
+<dt>TYPE = CSV | BINARY | FIXED | FUNCTION </dt>
 <dd>
-The target table to be loaded.
-If no <i>schema_name</i>, search_path is used to find the target table.
-Always required.
-</dd>
-
-<dt>TYPE</dt>
-<dd>
-The type of input data. Always required.
+The type of input data.
+The default is CSV.
 <ul>
   <li>CSV : load from a text file in CSV format</li>
   <li>BINARY | FIXED : load from a fixed binary file</li>
   <li>FUNCTION : load from a result set from a function.<br/>
-      If you use it, INFILE must be an expression to call a function.</li>
+      If you use it, INPUT must be an expression to call a function.</li>
 </ul>
 </dd>
 
-<dt id="INFILE">INFILE</dt>
+<dt id="INPUT">INPUT | INFILE = path | stdin | [ schemaname. ] function_name (argvalue, ...)</dt>
 <dd>
-A path to read the input source. Always required.
+Source to load data from. Always required.
 The value is treated as following depending on the TYPE option:
 <ul>
   <li>A file in the server:
@@ -243,7 +255,7 @@ The value is treated as following depending on the TYPE option:
       It is available only when "TYPE=CSV" or "TYPE=BINARY".
   </li>
   <li>Standard input to pg_bulkload command:
-      "INFILE=stdin" means pg_bulkload will read data from the standard input of pg_bulkload client program through network.
+      "INPUT=stdin" means pg_bulkload will read data from the standard input of pg_bulkload client program through network.
       You should use this form when the input file and database is in different servers.
       It is available only when "TYPE=CSV" or "TYPE=BINARY".
       For example:
@@ -257,47 +269,69 @@ The value is treated as following depending on the TYPE option:
 <pre>TABLE = sample_table
 TYPE = FUNCTION
 WRITER = DIRECT
-INFILE = generate_series(1, 1000)  # sequential numbers from 1 to 1000
+INPUT = generate_series(1, 1000)  # sequential numbers from 1 to 1000
 ...</pre></li>
 </ul>
 </dd>
 
-<dt>WRITER | LOADER = DIRECT | BUFFERED | PARALLEL</dt>
+<dt>WRITER | LOADER = DIRECT | BUFFERED | BINARY | PARALLEL</dt>
 <dd>
 The method to load data. The default is DIRECT.
 <ul>
-  <li>DIRECT   : Bypass the shared buffers and skip WAL records, but need the own recovery procedure.
+  <li>DIRECT   : Load data directly to table.
+                 Bypass the shared buffers and skip WAL logging, but need the own recovery procedure.
                  This is the default, and original older version's mode.</li>
-  <li>BUFFERED : Use shared buffers, write WALs,  and use the original PostgreSQL WAL recovery.</li>
-  <li>PARALLEL : Same as DIRECT, but uses two processes for reading and writing data. 
-    If password authentication is configured to the database to load,
-    you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
-  
-  
-  </li>
+  <li>BUFFERED : Load data to table via shared buffers.
+                         Use shared buffers, write WALs, and use the original PostgreSQL WAL recovery.</li>
+  <li>BINARY    : Convert data into the binary file which can be used as an input file to load from.
+                 Create a sample of the control file necessary to load the output binary file.
+                 This sample file is created in the same directory as the binary file, and its name is &lt;binary-file-name&gt;.ctl.
+  <li>PARALLEL : Same as "WRITER=DIRECT" and "MULTI_PROCESS=YES".
+                 If PARALLEL is specified, <a href="#MULTI_PROCESS">MULTI_PROCESS</a> is ignored.
+                 If password authentication is configured to the database to load,
+                 you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+</ul>
+</dd>
 
+<dt id="OUTPUT">OUTPUT | TABLE = { [ schema_name. ] table_name | outfile }</dt>
+<dd>
+Destination to load data to. Always required.
+The value is treated as following depending on the WRITER (or LOADER) option:
+<ul>
+  <li>A table to load to:
+       Specify the table to load to.
+       If schema_name is omitted, the first matching table in the search_path is used.
+       You can load data to a table only if WRITER is DIRECT, BUFFERED or PARALLEL.</li>
+  <li>A file in the server:
+       Specify the path of the output file in the server.
+       If it's a relative path, it will be interpreted in the same way as <a href="#INPUT">INPUT</a> option.
+       The OS user running PostgreSQL must have write permission to the parent directory of the specified file.
+       You can load (convert) data to a file only if WRITER is BINARY.</li>
 </ul>
 </dd>
 
 <dt>SKIP | OFFSET = n</dt>
 <dd>
 The number of skip input rows. The default is 0.
-This option is unavailable if you use TYPE=FUNCTION.
+You must not specify both "TYPE=FUNCTION" and SKIP at the same time.
 </dd>
 
 <dt>LIMIT | LOAD = n</dt>
 <dd>
 The number of rows to load.
-The default is 0, that is all of data will be loaded.
+The default is INFINITE, i.e., all of data will be loaded.
 This option is available even if you use TYPE=FUNCTION.
 </dd>
 
-<dt>ENCODING</dt>
+<dt>ENCODING = encoding</dt>
 <dd>
 Specify the encoding of the input data.
-The input data is verified to be in the encoding, and converted to the database encoding if needed.
-If you have data that encoding is same as database, you can skip encoding verification and conversion for performance when you don't specify the option.
-The default is neither verified nor converted, but the default of "INFILE=stdin" is client_encoding.
+Check whether the specified encoding is valid, and convert the input data to the database encoding if needed.
+By default, the encoding of the input data is neither verified nor converted.
+If you can be sure that the input data is encoded in the database encoding,
+you can reduce the load time by not specifying this option, and by skipping encoding verification and conversion.
+Note that client_encoding is used as the encoding of the input data by default only if INPUT is stdin.
+You must not specify both "TYPE=FUNCTION" and ENCODING at the same time.
 </dd>
 <dd>
 See <a href="http://www.postgresql.jp/document/current/html/functions-string.html#CONVERSION-NAMES">Built-in Conversions</a> for valid encoding names.
@@ -348,7 +382,7 @@ If not specified, the input data are directly parsed as the load-target table.
 See also <a href="#filter">How to write FILTER functions</a> to make FILTER functions.
 </dd>
 <dd>
-FILTER option is ignored when "TYPE=FUNCTION" is specified.
+You must not specify both "TYPE=FUNCTION" and FILTER at the same time.
 Also, FORCE_NOT_NULL in CSV option cannot be used with FILTER option.
 </dd>
 
@@ -356,24 +390,26 @@ Also, FORCE_NOT_NULL in CSV option cannot be used with FILTER option.
 <dd>
 Specify whether CHECK constraints are checked during the loading.
 The default is NO.
+You must not specify both "WRITER=BINARY" and CHECK_CONSTRAINTS at the same time.
 </dd>
 
-<dt>PARSE_ERRORS</dt>
+<dt>PARSE_ERRORS = n </dt>
 <dd>
-The number of ingored tuples that throw errors during parsing, encoding checks, encoding conversion, FILTER function, CHECK constraint checks, or NOT NULL checks.
+The number of ingored tuples that throw errors during parsing, encoding checks, encoding conversion, FILTER function, CHECK constraint checks, NOT NULL checks, or data type conversion.
 Invalid input tuples are not loaded and recorded in the PARSE BADFILE.
 The default is 0.
 If there are equal or more parse errors than the value, <strong>already loaded data is committed and the remaining tuples are not loaded</strong>.
-0 means to allow no errors, and -1 means ignore all errors.
+0 means to allow no errors, and -1 and INFINITE mean to ignore all errors.
 </dd>
 
-<dt>DUPLICATE_ERRORS</dt>
+<dt>DUPLICATE_ERRORS = n</dt>
 <dd>
 The number of ingored tuples that violate unique constraints.
 Conflicted tuples are removed from the table and recorded in the DUPLICATE BADFILE.
 The default is 0.
 If there are equal or more unique violations than the value, <strong>the whole load is rollbacked</strong>.
-0 means to allow no violations, and -1 means ignore all violations.
+0 means to allow no violations, and -1 and INFINITE mean to ignore all violations.
+You must not specify both "WRITER=BINARY" and DUPLICATE_ERRORS at the same time.
 </dd>
 
 <dt>ON_DUPLICATE_KEEP = NEW | OLD</dt>
@@ -381,6 +417,7 @@ If there are equal or more unique violations than the value, <strong>the whole l
 The removed tuples are recorded in the BAD file.
 The default is NEW.
 You also need to set DUPLICATE_ERRORS to more than 0 if you enable the option.
+You must not specify both "WRITER=BINARY" and ON_DUPLICATE_KEEP at the same time.
 <ul>
   <li>NEW : Keep tuples in the input data, and remove corresponding existing tuples.
             When both violated tuples are in the data, keep the latter one.</li>
@@ -391,15 +428,16 @@ You also need to set DUPLICATE_ERRORS to more than 0 if you enable the option.
 <dt id="LOGFILE">LOGFILE = path</dt>
 <dd>
 A path to write the result log.
-If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+If specified by a relative path, it is treated as same as <a href="#INPUT">INPUT</a>.
 The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.log.
 </dd>
 
 <dt id="PARSE_BADFILE">PARSE_BADFILE = path</dt>
 <dd>
-A path to write bad records that cannot be parsed correctly.
+A path to the BAD file logging invalid records which caused an error during parsing, encoding checks,
+encoding conversion, FILTER function, CHECK constraint checks, NOT NULL checks, or data type conversion.
 The format of the file is same as the input source file.
-If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+If specified by a relative path, it is treated as same as <a href="#INPUT">INPUT</a>.
 The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.bad.&lt;<i>extension-of-infile</i>&gt;.
 </dd>
 
@@ -407,8 +445,9 @@ The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt
 <dd>
 A path to write bad records that conflict with unique constraints during index rebuild.
 The format of the file is always CSV.
-If specified by a relative path, it is treated as same as <a href="#INFILE">INFILE</a>.
+If specified by a relative path, it is treated as same as <a href="#INPUT">INPUT</a>.
 The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt;_&lt;<i>schema</i>&gt;_&lt;<i>table</i>&gt;.dup.csv.
+You must not specify both "WRITER=BINARY" and DUPLICATE_BADFILE at the same time.
 </dd>
 
 <dt>TRUNCATE = YES | NO</dt>
@@ -416,6 +455,7 @@ The default is $PGDATA/pg_bulkload/&lt;<i>timestamp</i>&gt;_&lt;<i>dbname</i>&gt
 If YES, delete all rows from the target table with TRUNCATE command.
 If NO, do nothing.
 The default is NO.
+You must not specify both "WRITER=BINARY" and TRUNCATE at the same time.
 </dd>
 
 <dt>VERBOSE = YES | NO</dt>
@@ -425,12 +465,22 @@ If NO, don't write them in serverlog.
 The default is NO.
 </dd>
 
+<dt id="MULTI_PROCESS">MULTI_PROCESS = YES | NO</dt>
+<dd>
+If YES, we do data reading, parsing and writing in parallel by using multiple threads.
+If NO, we use only single thread for them instead of doing parallel processing.
+The default is NO.
+If WRITER is PARALLEL, MULTI_PROCESS is ignored.
+If password authentication is configured to the database to load,
+you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+</dd>
+
 </dl>
 
 
-<h3>CSV format</h3>
+<h3>CSV input format</h3>
 <dl>
-<dt id="DELIMITER">DELIMITER</dt>
+<dt id="DELIMITER">DELIMITER = delimiter_character</dt>
 <dd>
 The single ASCII character that separates columns within each row (line) of the file.
 The default is comma.
@@ -440,22 +490,22 @@ Then, you need to double quote the tab:
 You can also specify DELIMITER as a command-lineo option with <code>$'\t'</code> syntax.
 <pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
 </dd>
-<dt>QUOTE</dt>
+<dt>QUOTE = quote_character</dt>
 <dd>
 Specifies the ASCII quotation character.
 The default is double-quotation.
 </dd>
-<dt>ESCAPE</dt>
+<dt>ESCAPE = escape_character</dt>
 <dd>
 Specifies the ASCII character that should appear before a QUOTE data character value.
 The default is double-quotation.
 </dd>
-<dt>NULL</dt>
+<dt>NULL = null_string</dt>
 <dd>
 The string that represents a null value.
 The default is a empty value with no quotes.
 </dd>
-<dt>FORCE_NOT_NULL</dt>
+<dt>FORCE_NOT_NULL = column</dt>
 <dd>
 Process each specified column as though it were not a NULL value.
 Multiple columns are available as needed.
@@ -464,9 +514,9 @@ FILTER cannot be used together with this option.
 
 </dl>
 
-<h3>Binary format</h3>
+<h3>Binary input format</h3>
 <dl>
-<dt>COL = type [ (size) ]<dt>
+<dt>COL = type [ (size) ] [ NULLIF { 'null_string' | null_hex } ]<dt>
 <dd>
 Column definitions of input file from left to right.
 The definitions consists of type name, offset, and length in bytes.
@@ -484,12 +534,19 @@ If binary, endian must match between server and data file.
     <li>FLOAT | REAL : floating point number in 4 or 8 bytes. The default is 4.</li>
     <li>DOUBLE : floating point number in 8 bytes.</li>
   </ul>
-The length and offset of the type can be specifed as following:
+The length and offset of the type can be specifed as follows:
   <ul>
     <li>TYPE : TYPE with default length follows.</li>
     <li>TYPE(L) : TYPE with L bytes follows.</li>
     <li>TYPE(S+L) : L bytes, offset S bytes from the beginning of the line</li>
     <li>TYPE(S:E) : start at S bytes and end at E bytes.</li>
+  </ul>
+The string expressing NULL can be specified as follows:
+  <ul>
+    <li>NULLIF 'null_string' : Specify the string expressing NULL when the type is CHAR or VARCHAR.
+The length of the string must be the same as that of the type.</li>
+    <li>NULLIF null_hex : Specify the hex value expressing NULL when the type is other than CHAR and VARCHAR.
+The length of the hex value must be the same as that of the type.</li>
   </ul>
 In addition, "COL N" is available, that is same as COL CHAR(N), for backward compatibility.
 </dd>
@@ -508,6 +565,42 @@ The default is whole of the row, which means the total of COLs.
 </dd>
 
 </dl>
+
+<h3>Binary output format</h3>
+<dl>
+<dt>OUT_COL = type [ (size) ] [ NULLIF { 'null_string' | null_hex } ]<dt>
+<dd>
+Column definitions of output file from left to right.
+The definitions consists of type name, offset, and length in bytes.
+CHAR and VARCHAR means input data is a text.
+Otherwise, it is a binary data.
+If binary, endian must match between server and data file.
+  <ul>
+    <li>CHAR | CHARACTER : fixed-length string.
+          The length must be specified. If the string to be stored is shorter than the declared length,
+          values will be space-padded. "COL=CHAR(size)" will be output in the sample of control file.</li>
+    <li>VARCHAR | CHARACTER VARYING : fixed-length string.
+          The length must be specified. If the string to be stored is shorter than the declared length,
+          values will be space-padded. "COL=VARCHAR(size)" will be output in the sample of control file.</li>
+    <li>SMALLINT | SHOFT : signed integer in 2 bytes.</li>
+    <li>INTEGER | INT : signed integer in 2 or 4 or 8 bytes. The default is 4.</li>
+    <li>BIGINT | LONG : signed integer in 8 bytes.</li>
+    <li>UNSIGNED SMALLINT | SHORT : unsigned integer in 2 bytes.</li>
+    <li>UNSIGNED INTEGER | INT : unsigned integer in 2 or 4 bytes. The default is 4.</li>
+    <li>FLOAT | REAL : floating point number in 4 or 8 bytes. The default is 4.</li>
+    <li>DOUBLE : floating point number in 8 bytes.</li>
+  </ul>
+The string expressing NULL can be specified as follows.
+If omitted but NULL is input, NULL is logged as an invalid data in PARSE_BADFILE.
+  <ul>
+    <li>NULLIF 'null_string' : Specify the string expressing NULL when the type is CHAR or VARCHAR.
+The length of the string must be the same as that of the type.</li>
+    <li>NULLIF null_hex : Specify the hex value expressing NULL when the type is other than CHAR and VARCHAR.
+The length of the hex value must be the same as that of the type.</li>
+  </ul>
+</dd>
+</dl>
+
 
 <h2 id="environment">Environment</h2>
 <p>The followin envionment variables affect pg_bulkload.</p>
@@ -528,19 +621,41 @@ The default is whole of the row, which means the total of COLs.
 <h3>Exit code of pg_bulkload</h3>
 <p>
 pg_bulkload returns 0 when succesfully loaded.
-It also returns 1 with a WARNING message when there are some parse errors or duplicate errors even if loading itself was finished.
+It also returns 3 with a WARNING message when there are some parse errors or duplicate errors even if loading itself was finished.
 Note that skipped rows and replaced rows (with ON_DUPLICATE_KEEP = NEW) are not considered as an error; the exit code will be 0.
 </p>
 
 <p>
 When there is a non-continuable error, the loader raises an ERROR message.
-Then, the exit code will be one of values defined in <a href="http://www.opengroup.org/onlinepubs/9699919799/basedefs/errno.h.html">errno.h</a>
-or the following values. The code will be often -2 because almost all errors occur in the database server.
+The return code will be often 1 because many errors occur in the database server during loading data.
+The following table shows the codes that pg_bulkload can return.
 </p>
-<ul>
-<li>-1 : PostgreSQL connection error</li>
-<li>-2 : PostgreSQL SQL error</li>
-</ul>
+
+<table>
+<thead>
+  <tr>
+    <th>Return code</th>
+    <th>Description</th>
+  </tr>
+</thead>
+  <tr>
+    <td>0</td>
+    <td>Success</td>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>Error occurred during running SQL in PostgreSQL</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Failed to connect to PostgreSQL</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>Success, but some data could not be loaded</td>
+  </tr>
+</table>
+
 
 <h3>On direct loading</h3>
 <p>
@@ -577,19 +692,39 @@ must invoke postgresql script to perform pg_bulkload recovery and restart
 PostgreSQL to continue.
 <p>  
 
-<h4>Authentication can fail when WRITER=PARALLEL</h4>
-<p> When WRITER=PARALLEL and password is required to connect from localhost
+<h4>Authentication can fail when MULTI_PROCESS=YES</h4>
+<p> When MULTI_PROCESS=YES and password is required to connect from localhost
 to the database to load, the authentication will fail even if you enter
-the password correctly in the prompt. To avoid this, specify the password in
+the password correctly in the prompt. To avoid this, configure either of the followings.<br/>
+<ul>
+<li>Use "trust" method to authenticate the connection from localhost<br/>
+In UNIX environment, the connection from localhost uses UNIX-domain socket,
+and in Windows, it uses TCP/IP loopback address.
+In UNIX, add the following line into pg_hba.conf.<br/>
+<pre>
+# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for UNIX]
+local   all             foo                                     trust<br/></pre>
+In Windows, add the following line into pg_hba.conf.<br/>
+<pre>
+# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for Windows]
+host    all             foo             127.0.0.1/32            trust</pre>
+</li>
+<li>Specify the password in .pgpass file<br/>
+If you don't want to use "trust" method for security reasons, use "md5" or "password"
+as an authentication method and specify the password in
 <a href="http://www.postgresql.org/docs/current/static/libpq-pgpass.html">.pgpass file</a>.
 Note that the .pgpass file must be in the home directory of the OS user
 (typically "postgres" user) who ran PostgreSQL server. For example,
 if pg_bulkload connects to the server that is running on port 5432 as
 the DB user "foo" whose password is "foopass", the administrator can add
-the following line to the .pgpass file:</p>
-
+the following line to the .pgpass file:
 <pre>localhost:5432:*:foo:foopass</pre>
-
+</li>
+<li>Don't use "WRITER=PARALLE"<br/>
+Use the loading method other than "WRITER=PARALLEL".
+</li>
+</ul>
+</p>
 
 <h3>Database Constraints</h3>
 <p>
@@ -689,7 +824,7 @@ $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 <dt>PostgreSQL versions</dt>
 <dd>PostgreSQL 8.3, 8.4, 9.0</dd>
 <dt>OS</dt>
-<dd>RHEL 5.3, Fedora 12, Windows XP</dd>
+<dd>RHEL 5.5, Fedora 12, Windows XP</dd>
 </dl>
 
 <h2 id="seealso">See Also</h2>
