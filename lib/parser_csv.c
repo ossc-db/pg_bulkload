@@ -105,7 +105,7 @@ typedef struct CSVParser
 	bool	   *fnn;			/**< array of NOT NULL column flag */
 } CSVParser;
 
-static void	CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
+static void	CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
 static HeapTuple	CSVParserRead(CSVParser *self, Checker *checker);
 static int64	CSVParserTerm(CSVParser *self);
 static bool CSVParserParam(CSVParser *self, const char *keyword, char *value);
@@ -178,7 +178,7 @@ CreateCSVParser(void)
  * @note Caller must release the resource using CSVParserTerm().
  */
 static void
-CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
+CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation)
 {
 	TupleCheckStatus	status;
 
@@ -212,7 +212,7 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 
 	self->source = CreateSource(infile, desc, multi_process);
 
-	status = FilterInit(&self->filter, desc);
+	status = FilterInit(&self->filter, desc, collation);
 	if (checker->tchecker)
 		checker->tchecker->status = status;
 

@@ -44,7 +44,7 @@ typedef struct FunctionParser
 	TupleTableSlot		   *funcResultSlot;
 } FunctionParser;
 
-static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
+static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
 static HeapTuple FunctionParserRead(FunctionParser *self, Checker *checker);
 static int64	FunctionParserTerm(FunctionParser *self);
 static bool FunctionParserParam(FunctionParser *self, const char *keyword, char *value);
@@ -73,7 +73,7 @@ CreateFunctionParser(void)
 }
 
 static void
-FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
+FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation)
 {
 	int					i;
 	ParsedFunction		function;
@@ -273,8 +273,13 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 	ReleaseSysCache(ftup);
 
-	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs, NULL,
-							 (Node *) &self->rsinfo);
+#if PG_VERSION_NUM >= 90100
+	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs,
+		collation, NULL, (Node *) &self->rsinfo);
+#else
+	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs,
+		NULL, (Node *) &self->rsinfo);
+#endif
 
 	self->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)

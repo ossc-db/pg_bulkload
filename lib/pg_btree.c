@@ -41,8 +41,10 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #define _bt_spool			unused_bt_spool
 #define _bt_leafbuild		unused_bt_leafbuild
 
-#if PG_VERSION_NUM >= 90200
+#if PG_VERSION_NUM >= 90300
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 90200
+#include "nbtree/nbtsort-9.2.c"
 #elif PG_VERSION_NUM >= 90100
 #include "nbtree/nbtsort-9.1.c"
 #elif PG_VERSION_NUM >= 90000
@@ -846,9 +848,17 @@ compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
 		}
 		else
 		{
-			compare = DatumGetInt32(FunctionCall2(&entry->sk_func,
-												  attrDatum1,
-												  attrDatum2));
+			compare =
+#if PG_VERSION_NUM >= 90100
+				DatumGetInt32(FunctionCall2Coll(&entry->sk_func,
+												entry->sk_collation,
+												attrDatum1,
+												attrDatum2));
+#else
+				DatumGetInt32(FunctionCall2(&entry->sk_func,
+											attrDatum1,
+											attrDatum2));
+#endif
 
 			if (entry->sk_flags & SK_BT_DESC)
 				compare = -compare;

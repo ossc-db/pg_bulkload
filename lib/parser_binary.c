@@ -55,7 +55,7 @@ typedef struct BinaryParser
 /*
  * Prototype declaration for local functions
  */
-static void	BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
+static void	BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
 static HeapTuple BinaryParserRead(BinaryParser *self, Checker *checker);
 static int64	BinaryParserTerm(BinaryParser *self);
 static bool BinaryParserParam(BinaryParser *self, const char *keyword, char *value);
@@ -96,7 +96,7 @@ CreateBinaryParser(void)
  * function.
  */
 static void
-BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
+BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation)
 {
 	int					i;
 	size_t				maxlen;
@@ -116,7 +116,7 @@ BinaryParserInit(BinaryParser *self, Checker *checker, const char *infile, Tuple
 
 	self->source = CreateSource(infile, desc, multi_process);
 
-	status = FilterInit(&self->filter, desc);
+	status = FilterInit(&self->filter, desc, collation);
 	if (checker->tchecker)
 		checker->tchecker->status = status;
 

@@ -150,7 +150,14 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 	reindex_index((indexId))
 #define func_signature_string(funcname, nargs, argnames, argtypes) \
 	func_signature_string((funcname), (nargs), (argtypes))
-#define GetConfigOption(name, restrict_superuser)	GetConfigOption((name))
+
+#endif
+
+#if PG_VERSION_NUM < 90200
+
+#define RangeVarGetRelid(relation, lockmode, missing_ok, nowait) \
+	RangeVarGetRelid((relation), (missing_ok))
+#define PG_GET_COLLATION()		(InvalidOid)
 
 #endif
 
@@ -168,6 +175,14 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 #elif PG_VERSION_NUM < 90000
 #define FuncnameGetCandidates(names, nargs, argnames, variadic, defaults) \
 	FuncnameGetCandidates((names), (nargs), (variadic), (defaults))
+#endif
+
+#if PG_VERSION_NUM < 90000
+#define GetConfigOption(name, missing_ok, restrict_superuser) \
+	GetConfigOption((name))
+#elif PG_VERSION_NUM < 90200
+#define GetConfigOption(name, missing_ok, restrict_superuser) \
+	GetConfigOption((name), (restrict_superuser))
 #endif
 
 #endif   /* PGUT_BE_H */

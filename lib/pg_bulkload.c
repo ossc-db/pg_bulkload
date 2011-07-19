@@ -26,6 +26,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
+#include "utils/rel.h"
 
 #include "common.h"
 #include "logger.h"
@@ -220,7 +221,7 @@ pg_bulkload(PG_FUNCTION_ARGS)
 
 		/* initialize parser */
 		ParserInit(rd->parser, &rd->checker, rd->infile, wt->desc,
-				   wt->multi_process);
+				   wt->multi_process, PG_GET_COLLATION());
 	}
 	PG_CATCH();
 	{

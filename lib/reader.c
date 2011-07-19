@@ -22,6 +22,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
@@ -700,7 +701,7 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 }
 
 TupleCheckStatus
-FilterInit(Filter *filter, TupleDesc desc)
+FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 {
 	int				i;
 	ParsedFunction	func;
@@ -819,6 +820,8 @@ FilterInit(Filter *filter, TupleDesc desc)
 	filter->fn_strict = pp->proisstrict;
 	filter->fn_rettype = pp->prorettype;
 
+	filter->collation = collation;
+
 	ReleaseSysCache(ftup);
 
 	return status;
@@ -865,7 +868,11 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 	fmgr_info(filter->funcid, &flinfo);
 
+#if PG_VERSION_NUM >= 90100
+	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, filter->collation, NULL, NULL);
+#else
 	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, NULL, NULL);
+#endif
 
 	for (i = 0; i < filter->nargs; i++)
 	{

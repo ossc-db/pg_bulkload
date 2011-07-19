@@ -17,6 +17,7 @@
 #include "postmaster/postmaster.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 #include "utils/typcache.h"
 
 #include "pgut/pgut-be.h"
@@ -379,7 +380,7 @@ connect_to_localhost(void)
 
 	conn = PQsetdbLogin(
 		host,
-		GetConfigOption("port", false),
+		GetConfigOption("port", false, false),
 		NULL, NULL,
 		dbName,
 		GetUserNameFromId(GetUserId()),
@@ -403,7 +404,7 @@ connect_to_localhost(void)
 	}
 
 	/* attempt to set default datestyle */
-	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle", false));
+	snprintf(sql, lengthof(sql), "SET datestyle = '%s'", GetConfigOption("datestyle", false, false));
 	PQexec(conn, sql);
 
 	/* attempt to set default datestyle */

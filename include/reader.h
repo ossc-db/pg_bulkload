@@ -43,7 +43,7 @@ typedef struct Checker	Checker;
  * Parser
  */
 
-typedef void (*ParserInitProc)(Parser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
+typedef void (*ParserInitProc)(Parser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
 typedef HeapTuple (*ParserReadProc)(Parser *self, Checker *checker);
 typedef int64 (*ParserTermProc)(Parser *self);
 typedef bool (*ParserParamProc)(Parser *self, const char *keyword, char *value);
@@ -68,7 +68,7 @@ extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
 extern Parser *CreateFunctionParser(void);
 
-#define ParserInit(self, checker, infile, relid, multi_process)		((self)->init((self), (checker), (infile), (relid), (multi_process)))
+#define ParserInit(self, checker, infile, relid, multi_process, collation)		((self)->init((self), (checker), (infile), (relid), (multi_process), (collation)))
 #define ParserRead(self, checker)					((self)->read((self), (checker)))
 #define ParserTerm(self)					((self)->term((self)))
 #define ParserParam(self, keyword, value)	((self)->param((self), (keyword), (value)))
@@ -216,10 +216,11 @@ struct Filter
 	HeapTupleData	tuple;
 	bool			tupledesc_matched;
 	Oid				fn_rettype;
+	Oid				collation;
 };
 
 extern bool tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc);
-extern TupleCheckStatus FilterInit(Filter *filter, TupleDesc desc);
+extern TupleCheckStatus FilterInit(Filter *filter, TupleDesc desc, Oid collation);
 extern void FilterTerm(Filter *filter);
 extern HeapTuple FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field);
 

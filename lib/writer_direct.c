@@ -307,7 +307,7 @@ DirectWriterParam(DirectWriter *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->base.output == NULL);
 
 		self->base.relid = RangeVarGetRelid(makeRangeVarFromNameList(
-						stringToQualifiedNameList(value)), false);
+						stringToQualifiedNameList(value)), NoLock, false, false);
 		self->base.output = get_relation_name(self->base.relid);
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
