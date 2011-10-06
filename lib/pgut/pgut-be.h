@@ -157,6 +157,11 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 
 #define RangeVarGetRelid(relation, lockmode, missing_ok, nowait) \
 	RangeVarGetRelid((relation), (missing_ok))
+
+#endif
+
+#if PG_VERSION_NUM < 90100
+
 #define PG_GET_COLLATION()		(InvalidOid)
 
 #endif
@@ -180,7 +185,7 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 #if PG_VERSION_NUM < 90000
 #define GetConfigOption(name, missing_ok, restrict_superuser) \
 	GetConfigOption((name))
-#elif PG_VERSION_NUM < 90200
+#elif PG_VERSION_NUM < 90100
 #define GetConfigOption(name, missing_ok, restrict_superuser) \
 	GetConfigOption((name), (restrict_superuser))
 #endif
