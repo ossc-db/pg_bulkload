@@ -633,7 +633,9 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 <h4>kill -9は使わない</h4>
 <p>pg_bulkload を "kill -9" を使って停止させるのはできる限りやめてください。もし実行すると postgresql スクリプトによるリカバリが実行されます。</p>
 
-<h4>MULTI_PROCESS=YES指定時の認証における制約</h4>
+<h3>パラレルロードで使用する場合</h3>
+<p>パラレルロードで使用する場合(MULTI_PROCESS=YES または WRITER=PARALLEL)、以下のことに注意しなければなりません：</p>
+<h4>認証における制約</h4>
 <p>MULTI_PROCESS=YESかつロード対象のデータベースにlocalhostから接続するのにパスワードが必要な場合、たとえパスワードを正しくプロンプトに入力しても、パスワード認証に失敗してしまいます。この問題を回避するには、以下のいずれかを設定してください。<br/>
 <ul>
 <li>
@@ -659,6 +661,8 @@ WRITER=PARALLE を使用しない<br/>
 </li>
 </ul>
 </p>
+<h4>PostgreSQLサーバを起動したOSユーザのクライアントエンコーディング</h4>
+<p>PostgreSQLサーバを起動したOSユーザのクライアントエンコーディングは、DBエンコーディングを指定してください。</p>
 
 <h3>データベース制約の扱い</h3>
 <p>
@@ -743,7 +747,7 @@ $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1</dd>
 <dt>OS</dt>
 <dd>RHEL 5.5, Fedora 12, Windows XP</dd>
 </dl>
