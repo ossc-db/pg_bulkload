@@ -185,7 +185,7 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 #if PG_VERSION_NUM < 90000
 #define GetConfigOption(name, missing_ok, restrict_superuser) \
 	GetConfigOption((name))
-#elif PG_VERSION_NUM < 90200
+#elif PG_VERSION_NUM < 90100
 #define GetConfigOption(name, missing_ok, restrict_superuser) \
 	GetConfigOption((name), (restrict_superuser))
 #endif
