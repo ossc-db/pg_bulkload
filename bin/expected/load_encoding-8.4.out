@@ -1,0 +1,418 @@
+\connect contrib_regression_sqlascii
+SET client_encoding = 'SQL_ASCII';
+\! pg_bulkload -d contrib_regression_sqlascii data/csv7.ctl -i data/data4.csv -l results/encoding1.log -P results/encoding1.prs -u results/encoding1.dup -o "PARSE_ERRORS=-1"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	9 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+\! awk -f data/adjust.awk results/encoding1.log
+
+pg_bulkload 3.1.2 on <TIMESTAMP>
+
+INPUT = .../data4.csv
+PARSE_BADFILE = .../encoding1.prs
+LOGFILE = .../encoding1.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../encoding1.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+
+  0 Rows skipped.
+  9 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+(9 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+(9 rows)
+
+\! pg_bulkload -d contrib_regression_sqlascii data/csv7.ctl -i data/data4.csv -l results/encoding2.log -P results/encoding2.prs -u results/encoding2.dup -o "PARSE_ERRORS=-1" -o "ENCODING=UTF0"
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid encoding for parameter "ENCODING": "UTF0"
+DETAIL: query was: SELECT * FROM pg_bulkload($1)
+\! awk -f data/adjust.awk results/encoding2.log
+awk: data/adjust.awk:1: fatal: cannot open file `results/encoding2.log' for reading (No such file or directory)
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+(9 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+  3 | a4a220 |      3
+(9 rows)
+
+\! pg_bulkload -d contrib_regression_sqlascii data/csv7.ctl -i data/data4.csv -l results/encoding3.log -P results/encoding3.prs -u results/encoding3.dup -o "PARSE_ERRORS=0" -o "ENCODING=UTF8"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	2 Rows successfully loaded.
+	1 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/encoding3.log
+
+pg_bulkload 3.1.2 on <TIMESTAMP>
+
+INPUT = .../data4.csv
+PARSE_BADFILE = .../encoding3.prs
+LOGFILE = .../encoding3.log
+LIMIT = INFINITE
+PARSE_ERRORS = 0
+ENCODING = UTF8
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../encoding3.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Maximum parse error count exceeded - 1 error(s) found in input file
+
+  0 Rows skipped.
+  2 Rows successfully loaded.
+  1 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  2 | e38182 |      2
+(2 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  2 | e38182 |      2
+(2 rows)
+
+\connect contrib_regression_utf8
+SET client_encoding = 'SQL_ASCII';
+\! pg_bulkload -d contrib_regression_utf8 data/csv7.ctl -i data/data4.csv -l results/encoding4.log -P results/encoding4.prs -u results/encoding4.dup -o "PARSE_ERRORS=1" -o "ENCODING=SQL_ASCII"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	4 Rows successfully loaded.
+	2 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/encoding4.log
+
+pg_bulkload 3.1.2 on <TIMESTAMP>
+
+INPUT = .../data4.csv
+PARSE_BADFILE = .../encoding4.prs
+LOGFILE = .../encoding4.log
+LIMIT = INFINITE
+PARSE_ERRORS = 1
+ENCODING = SQL_ASCII
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../encoding4.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Parse error Record 2: Input Record 6: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Maximum parse error count exceeded - 2 error(s) found in input file
+
+  0 Rows skipped.
+  4 Rows successfully loaded.
+  2 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+(4 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+(4 rows)
+
+\! pg_bulkload -d contrib_regression_utf8 data/csv7.ctl -i data/data4.csv -l results/encoding5.log -P results/encoding5.prs -u results/encoding5.dup -o "PARSE_ERRORS=2" -o "ENCODING=UTF8"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	6 Rows successfully loaded.
+	3 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/encoding5.log
+
+pg_bulkload 3.1.2 on <TIMESTAMP>
+
+INPUT = .../data4.csv
+PARSE_BADFILE = .../encoding5.prs
+LOGFILE = .../encoding5.log
+LIMIT = INFINITE
+PARSE_ERRORS = 2
+ENCODING = UTF8
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../encoding5.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Parse error Record 2: Input Record 6: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Parse error Record 3: Input Record 9: Rejected - column 2. invalid byte sequence for encoding "UTF8": 0xa4
+Maximum parse error count exceeded - 3 error(s) found in input file
+
+  0 Rows skipped.
+  6 Rows successfully loaded.
+  3 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+(6 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id | encode | master 
+----+--------+--------
+  1 | 616161 |      1
+  1 | 616161 |      1
+  1 | 616161 |      1
+  2 | e38182 |      2
+  2 | e38182 |      2
+  2 | e38182 |      2
+(6 rows)
+
+\! pg_bulkload -d contrib_regression_utf8 data/csv7.ctl -i data/data4.csv -l results/encoding6.log -P results/encoding6.prs -u results/encoding6.dup -o "PARSE_ERRORS=3" -o "ENCODING=EUC-JP"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	6 Rows successfully loaded.
+	3 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/encoding6.log
+
+pg_bulkload 3.1.2 on <TIMESTAMP>
+
+INPUT = .../data4.csv
+PARSE_BADFILE = .../encoding6.prs
+LOGFILE = .../encoding6.log
+LIMIT = INFINITE
+PARSE_ERRORS = 3
+ENCODING = EUC_JP
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../encoding6.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 2: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
+Parse error Record 2: Input Record 5: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
+Parse error Record 3: Input Record 8: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
+
+  0 Rows skipped.
+  6 Rows successfully loaded.
+  3 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id |  encode  | master 
+----+----------+--------
+  1 | 616161   |      1
+  1 | 616161   |      1
+  1 | 616161   |      1
+  3 | e3818220 |      3
+  3 | e3818220 |      3
+  3 | e3818220 |      3
+(6 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
+ id |  encode  | master 
+----+----------+--------
+  1 | 616161   |      1
+  1 | 616161   |      1
+  1 | 616161   |      1
+  3 | e3818220 |      3
+  3 | e3818220 |      3
+  3 | e3818220 |      3
+(6 rows)
+

@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
@@ -45,11 +45,13 @@ expected/load_function.out: expected/load_function-$(MAJORVERSION).out
 	cp expected/load_function-$(MAJORVERSION).out expected/load_function.out
 expected/load_filter.out: expected/load_filter-$(MAJORVERSION).out
 	cp expected/load_filter-$(MAJORVERSION).out expected/load_filter.out
+expected/load_encoding.out: expected/load_encoding-$(MAJORVERSION).out
+	cp expected/load_encoding-$(MAJORVERSION).out expected/load_encoding.out
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out
+	rm -f sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out expected/load_encoding.out
 
-installcheck: sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out
+installcheck: sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out expected/load_encoding.out
