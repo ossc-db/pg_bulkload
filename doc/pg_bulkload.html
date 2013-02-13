@@ -41,6 +41,11 @@ pg_bulkload [ OPTIONS ] [ controlfile ]
 </p>
 
 <h2 id="description">Description</h2>
+
+<p style="color:red">
+IMPORTANT NOTE: Under streaming replication environment, pg_bulkload does not work properly. See <a href="#restrictions">here</a> for details.
+</p>
+
 <p>
 pg_bulkload is designed to load huge amount of data to a database.
 You can choose whether database constraints are checked and how many errors are ignored during the loading.
@@ -671,11 +676,12 @@ You must start and stop PostgreSQL using postgresql script, which invokes "<code
 If you use pg_bulkload in Windows operating system, postgresql script is not included in a pg_bulkload package. So you have to invoke "<code>pg_bulkload -r</code>" manually.
 </p>
 
-<h4>PITR</h4>
+<h4>PITR/Replication</h4>
 <p>
 Because of bypassing WAL, archive recovery by PITR is not available.
 If you would like to use PITR, take a full backup of the 
-database after the loading by pg_bulkload.
+database after load via pg_bulkload.
+If you are using streaming replication, you need to re-create your standby based on the backup set which is taken after pg_bulkload.
 </p>
 
 <h4>Load status file in $PGDATA/pg_bulkload</h4>
@@ -797,6 +803,10 @@ $ make USE_PGXS=1 install</pre>
 <pre>$ postgresql start
 $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 
+<p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
+<pre>$ psql database_name
+database_name=# CREATE EXTENSION pg_bulkload;</pre>
+
 <h3 id="rpm">Installation from RPM package</h3>
 <p>
 It can be installed from RPM package.
@@ -819,10 +829,14 @@ $PGSHARE is used instead in the following example:</p>
 <pre>$ postgresql start
 $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 
+<p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
+<pre>$ psql database_name
+database_name=# CREATE EXTENSION pg_bulkload;</pre>
+
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2</dd>
 <dt>OS</dt>
 <dd>RHEL 5.5, Fedora 12, Windows XP</dd>
 </dl>
@@ -835,7 +849,7 @@ $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
   <a href="index.html">Top</a> &gt;
   <a href="pg_bulkload.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2013, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
