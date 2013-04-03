@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2013, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
@@ -37,6 +37,8 @@ LIBS := $(filter-out -lxslt, $(LIBS))
 ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
+
+REGRESS_OPTS += $(if $(filter 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
 
 sql/init.sql: sql/init-$(MAJORVERSION).sql
 	cp sql/init-$(MAJORVERSION).sql sql/init.sql

@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_tuple.c
  *
- *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2013, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -98,7 +98,7 @@ TupleParserRead(TupleParser *self, Checker *checker)
 	{
 		if (self->buflen < len)
 		{
-			repalloc(self->buffer, len);
+			self->buffer = repalloc(self->buffer, len);
 			self->buflen = len;
 		}
 		if (QueueRead(self->queue, self->buffer, len, false) == len)
