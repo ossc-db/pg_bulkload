@@ -1,8 +1,11 @@
 pg_bulkload
 ===========
 
-This is a pg_bulkload repository for personal usage, NOT the official one.
+This is an alternative repository of pg_bulkload.
 
-Official development and release of tar balls and RPMs is on pgfoundry :http://pgfoundry.org/projects/pgbulkload
+Though the original CVS repository  is well-known, I feel easy to use GIT to daily develop.
+
+The release of tar balls and RPMs is on pgfoundry :http://pgfoundry.org/projects/pgbulkload .
+
 
 
