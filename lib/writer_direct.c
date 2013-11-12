@@ -22,6 +22,7 @@
 #include "storage/fd.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "storage/bufpage.h"
 
 #include "logger.h"
 #include "pg_loadstatus.h"
@@ -32,10 +33,11 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
-
 #if PG_VERSION_NUM >= 90300
 #include "common/relpath.h"
 #include "access/heapam_xlog.h"
+#include "storage/checksum.h"
+#include "storage/checksum_impl.h"
 #endif
 
 #if PG_VERSION_NUM < 80400
@@ -91,6 +93,7 @@ static void	DirectWriterDumpParams(DirectWriter *self);
 static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
+#define GetTargetPage(self,blk_offset)    ((Page) ((self)->blocks + BLCKSZ * ((self)->curblk - blk_offset)))
 
 /**
  * @brief Total number of blocks at the time
@@ -238,6 +241,8 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
 		RelationGetTargetPageFreeSpace(self->base.rel, HEAP_DEFAULT_FILLFACTOR))
 	{
+
+		
 		if (self->curblk < BLOCK_BUF_NUM - 1)
 			self->curblk++;
 		else
@@ -510,6 +515,19 @@ flush_pages(DirectWriter *loader)
 
 		/* Write the last block number to the load status file. */
 		UpdateLSF(loader, flush_num);
+
+#if PG_VERSION_NUM >= 90300
+		/* If we need a checksum, add it */
+        Page page = GetCurrentPage(loader);
+        if (DataChecksumsEnabled()){
+            int j = 0;
+            Page contained_page;
+            for (  j=0; j<flush_num; j++ ) {
+                contained_page = GetTargetPage(loader,j);
+                ((PageHeader) contained_page)->pd_checksum = pg_checksum_page((char *) contained_page, LS_TOTAL_CNT(ls) - 1 - j);
+        	}
+		}	
+#endif
 
 		/*
 		 * Flush flush_num data block to the current file.
