@@ -824,6 +824,10 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 
 	ReleaseSysCache(ftup);
 
+	/* flag set */
+	filter->is_first_time_call = true;
+	filter->fn_extra = NULL;
+
 	return status;
 }
 
@@ -867,6 +871,13 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	}
 
 	fmgr_info(filter->funcid, &flinfo);
+
+	/* set fn_extra except the first time call */
+#if PG_VERSION_NUM >= 90204
+	if ( filter->is_first_time_call == false ) {
+		flinfo.fn_extra = filter->fn_extra;
+	}
+#endif
 
 #if PG_VERSION_NUM >= 90100
 	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, filter->collation, NULL, NULL);
@@ -930,6 +941,14 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);
 	filter->tuple.t_len = HeapTupleHeaderGetDatumLength(filter->tuple.t_data);
+
+	/* save fn_extra, and unset the flag */
+#if PG_VERSION_NUM >= 90204
+	if ( filter->is_first_time_call == true ) {
+		filter->is_first_time_call = false;
+	}
+	filter->fn_extra = flinfo.fn_extra;
+#endif
 
 	return &filter->tuple;
 }

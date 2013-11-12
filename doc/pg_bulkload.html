@@ -28,6 +28,7 @@
 <li><a href="#details">Details</a></li>
 <li><a href="#install">Installation</a></li>
 <li><a href="#requirement">Requirements</a></li>
+<li><a href="#releasenote">Release Notes</a></li>
 <li><a href="#seealso">See Also</a></li>
 </ol>
 </div>
@@ -65,6 +66,10 @@ If you check whether the load data is valid when converting it into the binary f
 you can skip the check when loading it from the binary file to a table.
 Which would reduce the load time itself.
 Also in version 3.1, parallel loading works more effectively than before.
+</p>
+
+<p>
+There are some bugs in old version of 3.1. Please check <a href="#releasenote">Release notes<a>, and use newer versions. 
 </p>
 
 <h2 id="examples">Examples</h2>
@@ -838,8 +843,26 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <dt>PostgreSQL versions</dt>
 <dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2</dd>
 <dt>OS</dt>
-<dd>RHEL 5.5, Fedora 12, Windows XP</dd>
+<dd>RHEL 5/6, Fedora 12, Windows XP</dd>
 </dl>
+
+<h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.4</h4>
+<ul>
+<li>Fix bugs against PostgreSQL 9.2.4 There happened a memory leak when using a FILTER function written by SQL. </li>
+<li>Fix in postgresql script There was the code for now-defunct option.</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.3</h4>
+<ul>
+<li>Fix bugs of the WRITER = PARALLEL. There was a case where the load data disappear.</li>
+<li>Fix bugs of the WRITER = BUFFERED. There was a case where indexes on the update tables corrupt on the streaming-replictaioned slave node.</li>
+</ul>
+</p>
 
 <h2 id="seealso">See Also</h2>
 <a href="http://developer.postgresql.org/pgdocs/postgres/sql-copy.html">COPY</a>

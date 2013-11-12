@@ -28,6 +28,7 @@
 <li><a href="#details">詳細</a></li>
 <li><a href="#install">インストール方法</a></li>
 <li><a href="#requirement">動作環境</a></li>
+<li><a href="#releasenote">リリースノート<a></li>
 <li><a href="#seealso">関連項目</a></li>
 </ol>
 </div>
@@ -42,7 +43,7 @@ pg_bulkload [ OPTIONS ] [ controlfile ]
 
 <h2 id="description">説明</h2>
 <p style="color:red">
-重要な制約: pg_bulkloadはレプリケーション環境では期待どおりに動作しません。詳細は<a href="#restrictions">こちら</a>を参照してください。
+重要な制約: pg_bulkloadは、PITRやレプリケーション環境では期待どおりに動作しません。詳細は<a href="#restrictions">こちら</a>を参照してください。
 </p>
 <p>
 pg_bulkload は、大量のデータを高速に投入する目的のためのツールです。
@@ -58,6 +59,10 @@ pg_bulkload は元々は PostgreSQL 組み込みのデータロード用コマ�
 バージョン 3.1 では、テーブルの他に固定長のバイナリファイルへ出力できます。
 入力データの整合性を確認しながらバイナリファイルに変換できるため、出力されたバイナリファイルのテーブルへのロード時間を短縮できます。
 また、マルチプロセス実行機能を改良し、より高速にロードできるようになりました。
+</p>
+
+<p>
+ご利用の際はなるべく最新バージョンにてお願い致します。古いバージョンにて発覚した不具合については<a href="#releasenote">リリースノート</a>を参照ください。
 </p>
 
 <h2 id="examples">使用例</h2>
@@ -268,7 +273,7 @@ INPUT = generate_series(1, 1000)  # 1から1,000の連番をロードする
 <dd>
 ロード方式を以下のいずれかで指定します。デフォルトは DIRECT です。
 <ul>
-  <li>DIRECT   : テーブルに直接データをロードします。高速ですが特殊なリカバリ手順が必要です。WALをスキップし、共有バッファも汚しません。</li>
+  <li>DIRECT   : テーブルに直接データをロードします。高速ですが特殊なリカバリ手順が必要です。WALを極力スキップし、共有バッファも汚しません。（※最初の1ページ分のWALなどを出力します。）</li>
   <li>BUFFERED : 共有バッファを使用してテーブルにデータをロードします。特殊なリカバリは不要です。ただし、WALを書き、共有バッファも汚します。</li>
   <li>BINARY   : バイナリファイルに出力します。バイナリファイルと同じディレクトリに、出力したバイナリファイルをロードするためのサンプル制御ファイルを出力します。サンプル制御ファイルのファイル名は &lt;バイナリファイル名&gt;.ctl となります。</li>
   <li>PARALLEL : 「WRITER=DIRECT」と「MULTI_PROCESS=YES」を指定した場合と同じです。
@@ -760,8 +765,27 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <dt>PostgreSQLバージョン</dt>
 <dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2</dd>
 <dt>OS</dt>
-<dd>RHEL 5.5, Fedora 12, Windows XP</dd>
+<dd>RHEL 5/6, Fedora 12, Windows XP</dd>
 </dl>
+
+<h2 id="releasenote">リリースノート</h2>
+
+<p>
+<h4>3.1.4</h4>
+<ul>
+<li>PostgreSQL9.2.4において、SQLで作成したFILTER関数を用いてデータをロードした際、メモリリークが発生する不具合がありました。</li>
+<li>postgresqlスクリプトに、現在は廃止されたpg_bulkloadのオプションに関するコードが残っていました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.3</h4>
+<ul>
+<li>WRITER=PARALLELモードを利用した際、一部データが正しくロードされない場合がありました。</li>
+<li>ストリーミング・レプリケーション構成のPostgreSQLに対して、マスタ側にWRITER=BUFFERDモードでデータをロードした際、スレーブ側のテーブルのインデックスが破損する場合がありました。</li>
+</ul>
+</p>
+
 
 <h2 id="seealso">関連項目</h2>
 <a href="http://www.postgresql.jp/document/current/html/sql-copy.html">COPY</a>
