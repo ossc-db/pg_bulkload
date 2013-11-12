@@ -29,6 +29,10 @@
 #include "reader.h"
 #include "pgut/pgut-be.h"
 
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
+
 typedef struct FunctionParser
 {
 	Parser	base;

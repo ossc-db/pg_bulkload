@@ -68,7 +68,7 @@ expected/init-9.1.out:
 expected/init-9.2.out:
 	cp expected/init-extension.out expected/init-9.2.out
 expected/init-9.3.out:
-	cp expected/init-extension.out expected/init-9.3.out
+	cp expected/init-extension-9.3.out expected/init-9.3.out
 expected/load_function.out: expected/load_function-$(MAJORVERSION).out
 	cp expected/load_function-$(MAJORVERSION).out expected/load_function.out
 expected/load_filter.out: expected/load_filter-$(MAJORVERSION).out

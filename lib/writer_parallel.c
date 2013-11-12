@@ -362,6 +362,7 @@ connect_to_localhost(void)
 	char	sql[1024];
 	char   *host;
 	char	dbName[1024];
+    char    *UnixSocketDir;
 
 	/* Also ensure backend isn't confused by this environment var. */
 	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);

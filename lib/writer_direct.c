@@ -32,6 +32,12 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
+
+#if PG_VERSION_NUM >= 90300
+#include "common/relpath.h"
+#include "access/heapam_xlog.h"
+#endif
+
 #if PG_VERSION_NUM < 80400
 
 #define toast_insert_or_update(rel, newtup, oldtup, options) \
@@ -40,6 +46,14 @@
 #define log_newpage(rnode, forknum, blk, page) \
 	log_newpage((rnode), (blk), (page))
 
+#endif
+
+/**
+ *  * pg_tli is removed in 9.3 and added pg_checksum instead
+ *   */
+#if PG_VERSION_NUM >= 90300
+#define PageSetTLI(page, tli) \
+	(((PageHeader) (page))->pd_checksum = (uint16) (0))
 #endif
 
 /**
@@ -460,7 +474,8 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
-	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel))
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel)
+			&& !(loader->base.rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) )
 	{
 		XLogRecPtr	recptr;
 

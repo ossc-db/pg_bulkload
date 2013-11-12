@@ -29,20 +29,24 @@
 #include "utils/snapmgr.h"
 #endif
 
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
+
 #include "logger.h"
 
-static BTSpool *unused_bt_spoolinit(Relation, bool, bool);
 static void unused_bt_spooldestroy(BTSpool *);
 static void unused_bt_spool(IndexTuple, BTSpool *);
 static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 
-#define _bt_spoolinit		unused_bt_spoolinit
 #define _bt_spooldestroy	unused_bt_spooldestroy
 #define _bt_spool			unused_bt_spool
 #define _bt_leafbuild		unused_bt_leafbuild
 
-#if PG_VERSION_NUM >= 90300
+#if PG_VERSION_NUM >= 90400
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 90300
+#include "nbtree/nbtsort-9.3.c"
 #elif PG_VERSION_NUM >= 90200
 #include "nbtree/nbtsort-9.2.c"
 #elif PG_VERSION_NUM >= 90100
@@ -178,6 +182,7 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 	int				numIndices = relinfo->ri_NumIndices;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
 	BTSpool		  **spools;
+	Relation heapRel = relinfo->ri_RelationDesc;
 
 	spools = palloc(numIndices * sizeof(BTSpool *));
 	for (i = 0; i < numIndices; i++)
@@ -188,9 +193,17 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 		{
 			elog(DEBUG1, "pg_bulkload: spool \"%s\"",
 				RelationGetRelationName(indices[i]));
+
+#if PG_VERSION_NUM >= 90300
+			spools[i] = _bt_spoolinit(heapRel,indices[i],
+					enforceUnique ? indices[i]->rd_index->indisunique: false,
+					false);
+#else
 			spools[i] = _bt_spoolinit(indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
 					false);
+#endif
+
 			spools[i]->isunique = indices[i]->rd_index->indisunique;
 		}
 		else
@@ -589,7 +602,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * fsync those pages here, they might still not be on disk when the crash
 	 * occurs.
 	 */
-	if (!RELATION_IS_LOCAL(wstate->index))
+	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
 		RelationOpenSmgr(wstate->index);
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);

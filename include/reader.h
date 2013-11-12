@@ -19,6 +19,10 @@
 #include "nodes/primnodes.h"
 #include "utils/relcache.h"
 
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
+
 /*
  * Source
  */

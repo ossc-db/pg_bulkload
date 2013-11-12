@@ -33,6 +33,8 @@
 #include "pgut/pgut-be.h"
 #include "reader.h"
 
+#include "storage/fd.h"
+
 #define DEFAULT_MAX_PARSE_ERRORS		0
 
 /**

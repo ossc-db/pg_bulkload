@@ -77,6 +77,10 @@ static void LoaderCreateLockFile(const char *filename,
 								 bool amPostmaster,
 								 bool isDDLock, const char *refName);
 
+/* Check that the header fields of a page appear valid. */
+bool PageHeaderIsValid(PageHeader page);
+
+
 /**
  * @brief Entry point for recovery process
  *
