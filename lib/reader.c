@@ -308,6 +308,8 @@ ReaderNext(Reader *rd)
 			ParserDumpRecord(parser, rd->parse_fp, rd->parse_badfile);
 
 			MemoryContextReset(ccxt);
+			// Without the below line, the regression tests shows the different result on debug-build mode.
+			tuple = NULL;
 		}
 		PG_END_TRY();
 
