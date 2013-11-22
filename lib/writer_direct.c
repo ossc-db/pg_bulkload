@@ -518,7 +518,6 @@ flush_pages(DirectWriter *loader)
 
 #if PG_VERSION_NUM >= 90300
 		/* If we need a checksum, add it */
-		Page page = GetCurrentPage(loader);
 	        if (DataChecksumsEnabled()){
         		int j = 0;
 			Page contained_page;

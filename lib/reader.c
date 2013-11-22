@@ -830,7 +830,7 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 
 	/* flag set */
 	filter->is_first_time_call = true;
-	filter->fn_extra = NULL;
+	filter->context = CurrentMemoryContext;
 
 	return status;
 }
@@ -874,12 +874,24 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 		}
 	}
 
+	oldcontext = CurrentMemoryContext;
+	oldowner = CurrentResourceOwner;
+
+	MemoryContextSwitchTo(filter->context);
 	fmgr_info(filter->funcid, &flinfo);
+	MemoryContextSwitchTo(oldcontext);
+	CurrentResourceOwner = oldowner;
 
 	/* set fn_extra except the first time call */
 #if PG_VERSION_NUM >= 90204
-	if ( filter->is_first_time_call == false ) {
-		flinfo.fn_extra = filter->fn_extra;
+	if ( filter->is_first_time_call == false &&
+		MemoryContextIsValid(filter->fn_extra.fcontext) ) {
+		flinfo.fn_extra = (SQLFunctionCache *) palloc0(sizeof(SQLFunctionCache));
+		memmove((SQLFunctionCache *)flinfo.fn_extra, &(filter->fn_extra),
+							sizeof(SQLFunctionCache));
+	} else {
+
+		filter->is_first_time_call = true;	
 	}
 #endif
 
@@ -899,8 +911,6 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	 * Execute the function inside a sub-transaction, so we can cope with
 	 * errors sanely
 	 */
-	oldcontext = CurrentMemoryContext;
-	oldowner = CurrentResourceOwner;
 	BeginInternalSubTransaction(NULL);
 
 	/* Want to run inside per tuple memory context */
@@ -950,8 +960,12 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 #if PG_VERSION_NUM >= 90204
 	if ( filter->is_first_time_call == true ) {
 		filter->is_first_time_call = false;
+		memmove(&(filter->fn_extra),(SQLFunctionCache *) flinfo.fn_extra,
+						sizeof(SQLFunctionCache));
 	}
-	filter->fn_extra = flinfo.fn_extra;
+
+	if(!SubTransactionIsActive(filter->fn_extra.subxid))
+		filter->fn_extra.subxid++;
 #endif
 
 	return &filter->tuple;
