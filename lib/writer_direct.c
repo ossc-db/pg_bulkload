@@ -518,14 +518,15 @@ flush_pages(DirectWriter *loader)
 
 #if PG_VERSION_NUM >= 90300
 		/* If we need a checksum, add it */
-        Page page = GetCurrentPage(loader);
-        if (DataChecksumsEnabled()){
-            int j = 0;
-            Page contained_page;
-            for (  j=0; j<flush_num; j++ ) {
-                contained_page = GetTargetPage(loader,j);
-                ((PageHeader) contained_page)->pd_checksum = pg_checksum_page((char *) contained_page, LS_TOTAL_CNT(ls) - 1 - j);
-        	}
+		Page page = GetCurrentPage(loader);
+	        if (DataChecksumsEnabled()){
+        		int j = 0;
+			Page contained_page;
+	        	for (  j=0; j<flush_num; j++ ) {
+                		contained_page = GetTargetPage(loader,j);
+		                ((PageHeader) contained_page)->pd_checksum = 
+					pg_checksum_page((char *) contained_page, LS_TOTAL_CNT(ls) - 1 - j);
+        		}
 		}	
 #endif
 
