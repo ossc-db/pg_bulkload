@@ -1,4 +1,4 @@
-RUNCATE customer;
+TRUNCATE customer;
 \pset null '(null)'
 CREATE FUNCTION public.load_function1(int4, int4, varchar(500) DEFAULT 'default value') RETURNS SETOF customer AS
 $$
