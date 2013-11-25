@@ -479,6 +479,7 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
+#if PG_VERSION_NUM >= 90100
 	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel)
 			&& !(loader->base.rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) )
 	{
@@ -488,7 +489,16 @@ flush_pages(DirectWriter *loader)
 			ls->ls.exist_cnt, loader->blocks);
 		XLogFlush(recptr);
 	}
+#else
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel) )
+	{
+		XLogRecPtr	recptr;
 
+		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
+			ls->ls.exist_cnt, loader->blocks);
+		XLogFlush(recptr);
+	}
+#endif
 	/*
 	 * Write blocks. We might need to write multiple files on boundary of
 	 * relation segments.
