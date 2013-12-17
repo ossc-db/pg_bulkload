@@ -684,6 +684,7 @@ If you use pg_bulkload in Windows operating system, postgresql script is not inc
 <h4>PITR/Replication</h4>
 <p>
 Because of bypassing WAL, archive recovery by PITR is not available.
+This does not mean that it can be done PITR without loaded tables data.
 If you would like to use PITR, take a full backup of the 
 database after load via pg_bulkload.
 If you are using streaming replication, you need to re-create your standby based on the backup set which is taken after pg_bulkload.
@@ -841,12 +842,20 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3</dd>
 <dt>OS</dt>
-<dd>RHEL 5/6, Fedora 12, Windows XP</dd>
+<dd>RHEL 5/6</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.5</h4>
+<ul>
+<li>Supports PostgreSQL 9.3. </li>
+<li>Fix bugs about load to UNLOGGED tables</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.4</h4>
