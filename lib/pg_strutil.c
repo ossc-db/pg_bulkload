@@ -30,6 +30,16 @@
 #include "access/htup_details.h"
 #endif
 
+#if PG_VERSION_NUM >= 90400
+
+#define parseTypeString(arg, argtype, typmod) \
+	parseTypeString(arg, argtype, typmod, false)
+
+#define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
+	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false)
+
+#endif
+
 char *
 QuoteString(char *str)
 {

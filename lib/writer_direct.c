@@ -40,7 +40,12 @@
 #include "storage/checksum_impl.h"
 #endif
 
-#if PG_VERSION_NUM < 80400
+#if PG_VERSION_NUM >= 90400
+
+#define log_newpage(rnode, forknum, blk, page) \
+	log_newpage(rnode, forknum, blk, page, true)
+
+#elif PG_VERSION_NUM < 80400
 
 #define toast_insert_or_update(rel, newtup, oldtup, options) \
 	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
