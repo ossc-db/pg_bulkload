@@ -367,6 +367,15 @@ connect_to_localhost(void)
 	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
 
 #ifdef HAVE_UNIX_SOCKETS
+
+#if PG_VERSION_NUM >= 90300
+	/* UnixSocketDir exist only 9.2 and before. */
+	char *UnixSocketDir;
+	
+	/* use PGHOST value */
+	UnixSocketDir = getenv("PGHOST");
+#endif
+
 	host = (UnixSocketDir == NULL || UnixSocketDir[0] == '\0') ?
 				DEFAULT_PGSOCKET_DIR :
 				UnixSocketDir;
