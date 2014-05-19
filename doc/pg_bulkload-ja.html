@@ -760,15 +760,26 @@ $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
+<p>なお、regression testを行うにはPostgreSQLサーバを起動させた状態で、以下のコマンドを実行してください。</p>
+<pre>$ make installcheck</pre>
+
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4beta1</dd>
 <dt>OS</dt>
 <dd>RHEL 5/6</dd>
 </dl>
 
 <h2 id="releasenote">リリースノート</h2>
+<p>
+<h4>3.1.6</h4>
+<ul>
+<li>WRITER=PARALLELモードを利用した際、環境変数PGHOSTのハンドリングが適切に行われていませんでした。これにより、PostgreSQLのunix_socket_directory(9.3以降はunix_socket_directories)設定値をデフォルトから変更していた場合、WRITER=PARALLELモードでのロードが動作しませんでした。</li>
+<li>PostgreSQL 9.4beta1に対応しました。</li>
+</ul>
+</p>
+
 <p>
 <h4>3.1.5</h4>
 <ul>
@@ -802,7 +813,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
   <a href="index_ja.html">Top</a> &gt;
   <a href="pg_bulkload-ja.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2013, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2014, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

@@ -842,12 +842,20 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4beta1</dd>
 <dt>OS</dt>
 <dd>RHEL 5/6</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.6</h4>
+<ul>
+<li>Fix bug of the WRITER = PARALLEL: pg_bulkload did not handle PGHOST environment variable correctly. Thus, it did not work when unix_socket_directory, unix_socket_directories after 9.3, is changed from /tmp. </li>
+<li>Supports PostgreSQL 9.4beta1</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.5</h4>
@@ -881,7 +889,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
   <a href="index.html">Top</a> &gt;
   <a href="pg_bulkload.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2013, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2014, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

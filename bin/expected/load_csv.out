@@ -14,7 +14,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv1.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data1.csv
 PARSE_BADFILE = .../csv1.prs
@@ -85,7 +85,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/csv1-2.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data1.csv
 PARSE_BADFILE = .../csv1-2.prs
@@ -151,7 +151,7 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv2.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data2.csv
 PARSE_BADFILE = .../csv2.prs
@@ -214,7 +214,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv3.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data2.csv
 PARSE_BADFILE = .../csv3.prs
@@ -298,7 +298,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv4.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data2.csv
 PARSE_BADFILE = .../csv4.prs
@@ -351,7 +351,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv5.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data2.csv
 PARSE_BADFILE = .../csv5.prs
@@ -433,7 +433,7 @@ ERROR: query failed: ERROR:  integer out of range
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv6.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data3.csv
 PARSE_BADFILE = .../csv6.prs
@@ -483,7 +483,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/csv7.log
 
-pg_bulkload 3.1.5 on <TIMESTAMP>
+pg_bulkload 3.1.6 on <TIMESTAMP>
 
 INPUT = .../data3.csv
 PARSE_BADFILE = .../csv7.prs
