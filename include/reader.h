@@ -258,6 +258,7 @@ struct Filter
 	Oid				fn_rettype;
 	Oid				collation;
 	bool			is_first_time_call;
+	bool			is_funcid_sql;
 #if PG_VERSION_NUM >= 90204
 	SQLFunctionCache	fn_extra;
 #endif

@@ -11,9 +11,11 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
+#include <string.h>
 
 #include "access/heapam.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_language.h"
 #include "catalog/pg_type.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
@@ -710,7 +712,9 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 	int				i;
 	ParsedFunction	func;
 	HeapTuple		ftup;
+	HeapTuple		ltup;
 	Form_pg_proc	pp;
+	Form_pg_language	lp;
 	TupleCheckStatus	status = NEED_COERCION_CHECK;
 
 	if (filter->funcstr == NULL)
@@ -826,6 +830,17 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 
 	filter->collation = collation;
 
+	/* checking if the filter function is a SQL function */
+	ltup = SearchSysCache(LANGOID, ObjectIdGetDatum(pp->prolang), 0, 0, 0);
+	lp = (Form_pg_language) GETSTRUCT(ltup);
+	
+	if(strcmp(NameStr(lp->lanname), "sql") == 0)
+		filter->is_funcid_sql = true;
+	else	
+		filter->is_funcid_sql = false;
+	
+	
+	ReleaseSysCache(ltup);
 	ReleaseSysCache(ftup);
 
 	/* flag set */
@@ -874,18 +889,26 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 		}
 	}
 
+	/* From PostgreSQL 9.2.4, fmgr_sql behavior has changed. */
+	/* So, we have to change to filter's memory context before fmgr_info() call.*/
+	/* See PostgreSQL commit "Fix SQL function execution to be safe with long-lived FmgrInfos."*/
+#if PG_VERSION_NUM >= 90204
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
 
 	MemoryContextSwitchTo(filter->context);
+#endif
+
 	fmgr_info(filter->funcid, &flinfo);
+
+#if PG_VERSION_NUM >= 90204
 	MemoryContextSwitchTo(oldcontext);
 	CurrentResourceOwner = oldowner;
 
 	/* set fn_extra except the first time call */
-#if PG_VERSION_NUM >= 90204
 	if ( filter->is_first_time_call == false &&
-		MemoryContextIsValid(filter->fn_extra.fcontext) ) {
+		MemoryContextIsValid(filter->fn_extra.fcontext) &&
+		filter->is_funcid_sql) {
 		flinfo.fn_extra = (SQLFunctionCache *) palloc0(sizeof(SQLFunctionCache));
 		memmove((SQLFunctionCache *)flinfo.fn_extra, &(filter->fn_extra),
 							sizeof(SQLFunctionCache));
@@ -911,6 +934,12 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	 * Execute the function inside a sub-transaction, so we can cope with
 	 * errors sanely
 	 */
+
+#if PG_VERSION_NUM < 90204
+	oldcontext = CurrentMemoryContext;
+	oldowner = CurrentResourceOwner;
+#endif
+
 	BeginInternalSubTransaction(NULL);
 
 	/* Want to run inside per tuple memory context */
@@ -958,7 +987,8 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 	/* save fn_extra, and unset the flag */
 #if PG_VERSION_NUM >= 90204
-	if ( filter->is_first_time_call == true ) {
+	if ( filter->is_first_time_call == true &&
+		 filter->is_funcid_sql) {
 		filter->is_first_time_call = false;
 		memmove(&(filter->fn_extra),(SQLFunctionCache *) flinfo.fn_extra,
 						sizeof(SQLFunctionCache));
