@@ -369,11 +369,14 @@ connect_to_localhost(void)
 #ifdef HAVE_UNIX_SOCKETS
 
 #if PG_VERSION_NUM >= 90300
-	/* UnixSocketDir exist only 9.2 and before. */
-	char *UnixSocketDir;
-	
-	/* use PGHOST value */
-	UnixSocketDir = getenv("PGHOST");
+    /* UnixSocketDir exist only 9.2 and before. */
+    char *UnixSocketDir;
+
+    /* Use PGHOST if it is set, otherwise use unix_socket_direcotoris */
+    UnixSocketDir = getenv("PGHOST");
+    if ( UnixSocketDir == NULL ) {
+        UnixSocketDir = strtok(Unix_socket_directories, ",");
+    }
 #endif
 
 	host = (UnixSocketDir == NULL || UnixSocketDir[0] == '\0') ?
