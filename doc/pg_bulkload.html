@@ -853,6 +853,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h4>3.1.6</h4>
 <ul>
 <li>Fix bug of the WRITER = PARALLEL: pg_bulkload did not handle PGHOST environment variable correctly. Thus, it did not work when unix_socket_directory, unix_socket_directories after 9.3, is changed from /tmp. </li>
+<li>Fix bug of filter functions: pg_bulkload fails if it use a filter function written by not SQL. This happens in PostgreSQL 9.2.4 and after.</li>
 <li>Supports PostgreSQL 9.4beta1</li>
 </ul>
 </p>
