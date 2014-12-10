@@ -18,8 +18,6 @@ before_install:
   - echo 'export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
   - export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION
   - mkdir pg_data
-  - cat ~/.bashrc
-  - mkdir pg_data/archivelog
   - initdb --no-locale -D pg_data/$PGVERSION
   - sudo chmod 777 /var/run/postgresql
   - sudo echo "local   all         postgres                          trust" > $PGDATA/pg_hba.conf
@@ -41,9 +39,9 @@ env:
 #    - PGVERSION=9.4
 #    - PGVERSION=9.3
 #    - PGVERSION=9.2
-    - PGVERSION=9.1
-    - PGVERSION=9.0
-    - PGVERSION=8.4
+     - PGVERSION=9.1
+     - PGVERSION=9.0
+     - PGVERSION=8.4
 
 language: cpp
 compiler:
