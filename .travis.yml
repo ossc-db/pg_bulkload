@@ -27,6 +27,7 @@ before_install:
   - sudo echo "host    all         all         127.0.0.1/32          trust" >> $PGDATA/pg_hba.conf
   - sudo echo "host    all         all         ::1/128               trust" >> $PGDATA/pg_hba.conf
   - sudo echo "logging_collector = on" >> $PGDATA/postgresql.conf
+  - pg_ctl -V
   - pg_ctl -D $PGDATA start
 
 before_script:
