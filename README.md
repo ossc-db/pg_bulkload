@@ -3,7 +3,6 @@ pg_bulkload
 
 * master: [![Build Status](https://travis-ci.org/bwtakacy/pg_bulkload.svg?branch=master)](https://travis-ci.org/bwtakacy/pg_bulkload)
 * VERSION3_1_STABLE: [![Build Status](https://travis-ci.org/bwtakacy/pg_bulkload.svg?branch=VERSION3_1_STABLE)](https://travis-ci.org/bwtakacy/pg_bulkload)
-* 
 
 This is an alternative repository of pg_bulkload.
 
