@@ -52,4 +52,4 @@ compiler:
 script: make installcheck
 
 after_script:
-  - cat /home/travis/build/bwtakacy/pg_bulkload/pg_bulkload/regression.diffs
+  - cat /home/travis/build/bwtakacy/pg_bulkload/pg_bulkload/bin/regression.diffs
