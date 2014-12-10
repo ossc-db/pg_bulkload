@@ -15,8 +15,8 @@ before_install:
   - sudo service postgresql stop
   - echo 'export PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin' >> ~/.bashrc
   - export PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin
-  - echo 'export PGDATA=/home/travis/build/bwtakacy/pg_rman/pg_data/$PGVERSION' >> ~/.bashrc
-  - export PGDATA=/home/travis/build/bwtakacy/pg_rman/pg_data/$PGVERSION
+  - echo 'export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
+  - export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION
   - mkdir pg_data
   - cat ~/.bashrc
   - mkdir pg_data/archivelog
@@ -30,7 +30,7 @@ before_install:
 
 before_script:
   - git clone https://github.com/bwtakacy/pg_bulkload.git pg_bulkload
-  - cd pg_rman && git describe --alway
+  - cd pg_bulkload && git describe --alway
   - git checkout -b VERSION3_1_STABLE origin/VERSION3_1_STABLE
   - make
   - sudo make install
