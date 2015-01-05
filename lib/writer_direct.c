@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_direct.c
  *
- *	  Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"

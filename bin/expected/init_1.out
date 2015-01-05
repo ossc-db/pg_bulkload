@@ -26,7 +26,6 @@ CREATE TABLE customer (
     c_data          varchar(500) NOT NULL
 ) WITH (oids, fillfactor=20);
 ALTER TABLE customer ADD PRIMARY KEY (c_id, c_w_id, c_d_id);
-NOTICE:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "customer_pkey" for table "customer"
 CREATE INDEX idx_btree ON customer USING btree (c_d_id, c_last);
 CREATE INDEX idx_btree_fn ON customer USING btree ((abs(c_w_id) + c_d_id));
 CREATE INDEX idx_hash ON customer USING hash (c_d_id);
@@ -37,14 +36,11 @@ CREATE TABLE master (
     id int PRIMARY KEY,
    str text
 );
-NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "master_pkey" for table "master"
 CREATE TABLE target (
     id int PRIMARY KEY,
    str text CHECK(length(str) < 10) NOT NULL UNIQUE,
 master int REFERENCES master (id)
 );
-NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "target_pkey" for table "target"
-NOTICE:  CREATE TABLE / UNIQUE will create implicit index "target_str_key" for table "target"
 CREATE TABLE target_like (
      id int,
     str text,

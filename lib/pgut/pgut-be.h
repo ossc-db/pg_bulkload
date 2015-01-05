@@ -2,7 +2,7 @@
  *
  * pgut-be.h
  *
- * Copyright (c) 2009-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
