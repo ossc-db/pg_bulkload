@@ -353,8 +353,13 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	 * We need to log index creation in WAL iff WAL archiving is enabled AND
 	 * it's not a temp index.
 	 */
+#if PG_VERSION_NUM >= 90000
+	wstate.btws_use_wal = self->use_wal &&
+		XLogIsNeeded() && !RELATION_IS_LOCAL(wstate.index);
+#else
 	wstate.btws_use_wal = self->use_wal &&
 		XLogArchivingActive() && !RELATION_IS_LOCAL(wstate.index);
+#endif
 
 	/* reserve the metapage */
 	wstate.btws_pages_alloced = BTREE_METAPAGE + 1;
