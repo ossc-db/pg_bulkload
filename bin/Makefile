@@ -44,15 +44,11 @@ sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
 	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
-expected/load_function.out: expected/load_function-$(MAJORVERSION).out
-	cp expected/load_function-$(MAJORVERSION).out expected/load_function.out
-expected/load_filter.out: expected/load_filter-$(MAJORVERSION).out
-	cp expected/load_filter-$(MAJORVERSION).out expected/load_filter.out
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out
+	rm -f sql/load_function.sql sql/load_filter.sql 
 
-installcheck: sql/load_function.sql sql/load_filter.sql expected/load_function.out expected/load_filter.out
+installcheck: sql/load_function.sql sql/load_filter.sql 

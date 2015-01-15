@@ -374,9 +374,9 @@ DUPLICATE_ERRORS = 0
 ON_DUPLICATE_KEEP = NEW
 TRUNCATE = YES
 
-Parse error Record 1: Input Record 2: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe3 0x81
-Parse error Record 2: Input Record 5: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe3 0x81
-Parse error Record 3: Input Record 8: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe3 0x81
+Parse error Record 1: Input Record 2: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
+Parse error Record 2: Input Record 5: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
+Parse error Record 3: Input Record 8: Rejected - column 2. invalid byte sequence for encoding "EUC_JP": 0xe381
 
   0 Rows skipped.
   6 Rows successfully loaded.
