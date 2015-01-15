@@ -24,8 +24,9 @@ SRCS = \
 	pgut/pgut-ipc.c
 OBJS = $(SRCS:.c=.o)
 MODULE_big = pg_bulkload
+EXTENSION = pg_bulkload
 DATA_built = pg_bulkload.sql
-DATA = uninstall_pg_bulkload.sql 
+DATA = pg_bulkload--3.2devel.sql pg_bulkload--unpackaged--3.2devel.sql uninstall_pg_bulkload.sql 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
