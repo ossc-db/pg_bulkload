@@ -25,16 +25,15 @@ reload configuration files, report the status of a PostgreSQL server,
 or signal a PostgreSQL process.
 
 Usage:
-  $CMDNAME start   [-w] [-D DATADIR] [-s] [-l FILENAME] [-o \"OPTIONS\"]
-  $CMDNAME stop    [-W] [-D DATADIR] [-s] [-m SHUTDOWN-MODE]
-  $CMDNAME restart [-w] [-D DATADIR] [-s] [-m SHUTDOWN-MODE] [-o \"OPTIONS\"]
+  $CMDNAME start   [-w] [-D DATADIR] [-l FILENAME] [-o \"OPTIONS\"]
+  $CMDNAME stop    [-W] [-D DATADIR] [-m SHUTDOWN-MODE]
+  $CMDNAME restart [-w] [-D DATADIR] [-m SHUTDOWN-MODE] [-o \"OPTIONS\"]
   $CMDNAME reload  [-D DATADIR] [-s]
   $CMDNAME status  [-D DATADIR]
   $CMDNAME kill    SIGNALNAME PID
 
 Common options:
   -D, --pgdata DATADIR   location of the database storage area
-  -s, --silent           only print errors, no informational messages
   -w                     wait until operation completes
   -W                     do not wait until operation completes
   --help                 show this help, then exit
@@ -79,9 +78,6 @@ kill_signame=
 
 # Process ID passed to "pg_ctl kill"
 kill_pid=
-
-# Flag if -s or --silent is specified
-silent_mode=
 
 # Check command line arguments and execute a property process
 while [ $# -gt 0 ];do
@@ -133,10 +129,6 @@ while [ $# -gt 0 ];do
     -p)
         PG_CTL_ARGS="$PG_CTL_ARGS $1 $2"
         shift
-        ;;
-    -s|--silent)
-        PG_CTL_ARGS="$PG_CTL_ARGS $1"
-        silent_mode="yes"
         ;;
     -w)
 				WAIT_ARGS="$WAIT_ARGS $1"
@@ -322,11 +314,7 @@ fi
 # If recovery command exits in abnormal status, this script doesn't execute 
 # pg_ctl and exits 1.
 if [ "$op" = "start" -o "$op" = "restart" ];then
-    if [ "$silent_mode" = "yes" ];then
-        pg_bulkload -s -r -D $PGDATA
-    else
-        pg_bulkload -r -D $PGDATA
-    fi
+    pg_bulkload -r -D $PGDATA
 
     if [ "$?" -ne 0 ];then
         exit 1
