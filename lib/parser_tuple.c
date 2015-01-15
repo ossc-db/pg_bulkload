@@ -98,7 +98,7 @@ TupleParserRead(TupleParser *self, Checker *checker)
 	{
 		if (self->buflen < len)
 		{
-			repalloc(self->buffer, len);
+			self->buffer = repalloc(self->buffer, len);
 			self->buflen = len;
 		}
 		if (QueueRead(self->queue, self->buffer, len, false) == len)
