@@ -37,6 +37,9 @@ LIBS := $(filter-out -lxslt, $(LIBS))
 ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
+
+REGRESS_OPTS += $(if $(filter 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
+
 sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
 	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
