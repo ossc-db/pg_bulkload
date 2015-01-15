@@ -15,7 +15,7 @@
 <body>
 <div Align="right"><h2><a href="http://pgbulkload.projects.postgresql.org/"> English</a></h2></div>
 <center>
-<img style="border: none; margin-left: auto; margin-right: auto; " src="http://pgfoundry.org/images/elephantSmall.png" height="75" width="75" />
+<img style="border: none; margin-left: auto; margin-right: auto; " src="https://wiki.postgresql.org/images/3/30/PostgreSQL_logo.3colors.120x120.png" height="75" width="75" />
 <hr />
 <h1>pg_bulkload ホームページへようこそ</h1>
 </center>
@@ -54,6 +54,7 @@ pg_bulkload は PostgreSQL 向けの高速データロードユーティリテ�
 <p>
 COPY と pg_bulkload の比較のため、以下の条件で測定を行いました。
 PostgreSQL サーバは、基本的なチューニングを済ませた状態です。
+詳細な環境条件については末尾に記載しています。
 </p>
 
 <dl>
@@ -76,188 +77,170 @@ PostgreSQL サーバは、基本的なチューニングを済ませた状態で
 <ol>
   <li>空のテーブルへの 4GB のデータの初期ロード</li>
   <li>既に 4GB のデータを持つテーブルへの、1GB の追加ロード</li>
-  <li>PARALLEL, FILTER 機能の性能への影響</li>
+  <li>maintenance_work_mem、FILTER 機能の性能への影響</li>
 </ol>
 
 <h2>結果1 : 初期ロード</h2>
 <p>
-COPY で初期ロードを行う場合、COPY と同一のトランザクションで TRUNCATE を行うと高速にロードできます。
-また、COPY ではインデックスを張らない状態でロードし、ロード後からインデックスを作成したほうが全体の時間が短くなります。
-これらのチューニングを行った COPY と比べても、pg_bulkload はロード時間を約85%まで短縮できています。
+pg_bulkload の PARALLEL モードを用いることで、COPY に比べて半分程度の時間でロードを行うことができています。
+COPY を用いる場合でも、インデックス定義なしで COPY することで処理時間を 2/3 程度にまで短縮することが可能です。
+これは pg_bulkload の DIRECT モードとほぼ同等の効果があります。
 </p>
-
 <table style="float:left">
-<caption>初期ロード: TRUNCATE+COPY vs pg_bulkload</caption>
+<caption>初期ロード(4GB) </caption>
 <thead>
   <tr>
-    <th rowspan="2">項目</th>
-    <th colspan="2">version (postgres + bulkload)</th>
-  </tr>
-  <tr>
-    <th>8.4.4 + 2.4</th>
-    <th>9.0b2 + 3.0</th>
+    <th>項目</th>
+    <th>時間</th>
+    <th>時間比</th>
   </tr>
 </thead>
 <tbody>
   <tr>
     <td>COPY with indexes</td>
-    <td align="right">1133.4 sec</td>
-    <td align="right">1105.8 sec</td>
+    <td align="right">500 sec</td>
+    <td align="center">-</td>
   </tr>
   <tr>
-    <td>COPY without indexes<br />+ CREATE INDEX</td>
-    <td align="right">717.9 sec</td>
-    <td align="right">705.3 sec</td>
+    <td>COPY without indexes<br>+ CREATE INDEX</td>
+    <td align="right">333 sec <br>(229 sec + 51 sec+ 53 sec)</td>
+    <td align="right">66.7 %</td>
   </tr>
   <tr>
-    <td>pg_bulkload (DIRECT)<br />with indexes</td>
-    <td align="right">603.2 sec</td>
-    <td align="right">598.9 sec</td>
+    <td>pg_bulkload (DIRECT)<br>with indexes</td>
+    <td align="right">334 sec</td>
+    <td align="right">66.8 %</td>
   </tr>
   <tr>
-    <th>時間比</th>
-    <th style="text-align:right">84.0 %</th>
-    <th style="text-align:right">84.9 %</th>
+    <td>pg_bulkload (PARALLEL)<br>with indexes</td>
+    <td align="right">221 sec</td>
+    <td align="right">44.2 %</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/initial_load.png" />
+<img src="./img/initial_load_93.png">
 </div>
 
 <h2 style="clear:both">結果2 : 追加ロード</h2>
 <p>
-追加ロードの COPY では、既存のデータは削除できないため、初期ロードで行った TRUNCATE によるチューニングは使えません。
-また、インデックスの再作成の際は、既存のデータもインデックスしなければならないため、必ずしも高速化には結びつかないようです。
-その結果、pg_bulkload のロード時間は約35%となり、COPY との差が広がっています。
+pg_bulkload を用いることで、インデックスを付けたままのロードでも、COPY と比較して DIRECT モードで 2/3 程度、PARALLEL モードで半分程度の時間での実施が可能です。
+追加ロードの COPY では、インデックスを落としてロードを行う手段は有効ではありません。
+インデックスの再作成の際に既存のデータもインデックスしなければならないためです。
 </p>
 
 <table style="float:left">
-<caption>追加ロード: COPY vs pg_bulkload</caption>
+<caption>追加ロード(1GB)</caption>
 <thead>
   <tr>
-    <th rowspan="2">項目</th>
-    <th colspan="2">version (postgres + bulkload)</th>
-  </tr>
-  <tr>
-    <th>8.4.4 + 2.4</th>
-    <th>9.0b2 + 3.0</th>
+    <th>項目</th>
+    <th>時間</th>
+    <th>時間比</th>
   </tr>
 </thead>
 <tbody>
   <tr>
     <td>COPY with indexes</td>
-    <td align="right">520.4 sec</td>
-    <td align="right">549.3 sec</td>
+    <td align="right">140 sec</td>
+    <td align="center">-</td>
   </tr>
   <tr>
-    <td>COPY without indexes<br />+ CREATE INDEX</td>
-    <td align="right">805.3 sec</td>
-    <td align="right">799.6 sec</td>
+    <td>COPY without indexes<br>+ CREATE INDEX</td>
+    <td align="right">187 sec <br>(62 sec + 60 sec + 65 sec)</td>
+    <td align="right">133.6 %</td>
   </tr>
   <tr>
-    <td>pg_bulkload (DIRECT)<br />with indexes</td>
-    <td align="right">185.2 sec</td>
-    <td align="right">191.7 sec</td>
+    <td>pg_bulkload (DIRECT)<br>with indexes</td>
+    <td align="right">93 sec</td>
+    <td align="right">66.4 %</td>
   </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>時間比</th>
-    <th style="text-align:right">35.6 %</th>
-    <th style="text-align:right">34.9 %</th>
+  <tr>
+    <td>pg_bulkload (PARALLEL)<br>with indexes</td>
+    <td align="right">70 sec</td>
+    <td align="right">50.0 %</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/appended_load.png" />
+<img src="./img/appended_load_93.png">
 </div>
 
-<h2 style="clear:both">結果3 : PARALLEL, FILTER 機能の性能への影響</h2>
+<h2 style="clear:both">結果3 : パラメータ、各種機能による性能影響</h2>
 <p>
-パラレルローダは WRITER = PARALLEL の指定で利用できます。
-入力ファイルの読み込みと、テーブルへの行の書き出しを別プロセスで行うため、特にマルチCPU環境で高速化が期待できます。
-実測では、ロード時間を約70%に短縮できました。
+pg_bulkload は インデックス作成処理において maintenance_work_mem の影響を受けます。
+この値を大きくすることでさらにロードが高速になる可能性があります。
+ここでは、maintenance_work_mem が 64 MB と 1 GB の場合で 15 % 程度処理時間に差が出ています。
 </p>
 
 <p>
-FILTER 機能は、入力データを柔軟に編集した後にロードすることができますが、編集するためのコストは無料ではありません。
-実測では、SQL関数を利用する場合には 250-300%、C言語関数を利用する場合には 150% までロード時間が増加しました。
+pg_bulkload の FILTER 機能を用いることで、入力データを柔軟に編集しながらロードすることができますが、性能へのトレードオフがあります。
+この検証では、SQL関数を利用する場合には2倍以上、C言語関数を利用する場合には 1.3倍強 までロード時間が増加しました。
 </p>
 
 <table style="float:left">
-<caption>PARALLEL, FILTER 機能の性能への影響</caption>
+<caption>maintenace_work_mem、 FILTER 機能の性能への影響</caption>
 <thead>
   <tr>
-    <th rowspan="2">項目</th>
-    <th>初期ロード (4GB)</th>
-    <th>追加ロード (1GB)</th>
+    <th rowspan="2" colspan="2">項目</th>
+    <th colspan="2">時間</th>
+  </tr>
+  <tr>
+    <th>初期ロード(4GB)</th>
+    <th>追加ロード(1GB)</th>
   </tr>
 </thead>
 <tbody>
   <tr>
-    <td>pg_bulkload (DIRECT)</td>
-    <td align="right">598.9 sec</td>
-    <td align="right">191.7 sec</td>
+    <td>MWM = 64 MB</td>
+    <td>DIRECT</td>
+    <td align="right">397 sec</td>
+    <td align="right">109 sec</td>
   </tr>
   <tr>
-    <td>pg_bulkload (PARALLEL)</td>
-    <td align="right">413.5 sec</td>
-    <td align="right">133.0 sec</td>
-  </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>時間比</th>
-    <th style="text-align:right">69.0 %</th>
-    <th style="text-align:right">69.4 %</th>
+    <td rowspan="4">MWM = 1 GB</td>
   </tr>
   <tr>
-    <td>pg_bulkload (SQL-FILTER)</td>
-    <td align="right">1813.9 sec</td>
-    <td align="right">484.6 sec</td>
-  </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>時間比</th>
-    <th style="text-align:right">302.9 %</th>
-    <th style="text-align:right">252.7 %</th>
+    <td>DIRECT</td>
+    <td align="right">334 sec</td>
+    <td align="right">93 sec</td>
   </tr>
   <tr>
-    <td>pg_bulkload (C-FILTER)</td>
-    <td align="right">918.4 sec</td>
-    <td align="right">263.7 sec</td>
+    <td>DIRECT with SQL FILTER</td>
+    <td align="right">801 sec</td>
+    <td align="right">216 sec</td>
   </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>時間比</th>
-    <th style="text-align:right">153.3 %</th>
-    <th style="text-align:right">137.6 %</th>
+  <tr>
+    <td>DIRECT with C FILTER</td>
+    <td align="right">456 sec</td>
+    <td align="right">126 sec</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/para+filter.png" />
+<img src="./img/filter.png">
 </div>
 
-<p style="clear:both">
-すべて PostgreSQL 9.0b2 + pg_bulkload 3.0b1 を使用。インデックス付き。
-</p>
-
-<h2>測定条件</h2>
+<h2 style="clear:both">測定条件</h2>
 <table>
 <thead>
   <tr><th>項目</th><th>値</th></tr>
 </thead>
 <tbody>
-  <tr><td>Server</td><td>Dell PowerEdge 1900</td></tr>
-  <tr><td>CPU</td><td>Dual Core Xeon 5050 (3.0GHz)</td></tr>
-  <tr><td>Hyper-Threading</td><td>off</td></tr>
-  <tr><td>Memory</td><td>2GB</td></tr>
-  <tr><td>Storage Subsystem</td><td>Dell PowerVault 221S</td></tr>
-  <tr><td>Disks</td><td>SCSI 7x146GB (RAID 0)</td></tr>
-  <tr><td>RAID Controller</td><td>PERC 4e/DC DRAM=128MB</td></tr>
-  <tr><td>OS</td><td>CentOS 5.5 (64bit)</td></tr>
-  <tr><td>shared_buffers</td><td>256MB</td></tr>
+  <tr><td>Server</td><td>Dell PowerEdge R410</td></tr>
+  <tr><td>CPU</td><td>Intel Xeon E5645 (2.4GHz) 12 core * 2</td></tr>
+  <tr><td>Memory</td><td>32GB</td></tr>
+  <tr><td>Disks</td><td>SAS 10000rpm 2TB * 4</td></tr>
+  <tr><td>OS</td><td>CentOS 6.2 (64bit)</td></tr>
+  <tr><td>PostgreSQL version</td><td>9.3.4</td></tr>
+  <tr><td>pg_bulkload version</td><td>3.1.6</td></tr>
+  <tr><td>shared_buffers</td><td>3210MB</td></tr>
   <tr><td>checkpoint_segments</td><td>300</td></tr>
-  <tr><td>checkpoint_timeout</td><td>5min</td></tr>
+  <tr><td>checkpoint_timeout</td><td>15min</td></tr>
+  <tr><td>work_mem</td><td>1MB</td></tr>
+  <tr><td>maintenance_work_mem</td><td>1GB</td></tr>
   <tr><td>Table definition</td><td>DBT-2 customer table</td></tr>
   <tr><td rowspan="2">Indexed columns</td><td>c_id (PRIMARY KEY)</td></tr>
   <tr><td>c_d_id (non-unique B-Tree)</td></tr>

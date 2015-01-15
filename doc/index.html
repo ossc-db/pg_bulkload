@@ -14,7 +14,7 @@
 <body>
 <Div Align="right"><h2><a href="http://pgbulkload.projects.postgresql.org/index_ja.html"> Japanese</a></h2></Div>
 
-<center><img style="border: none; margin-left: auto; margin-right: auto; " src="http://pgfoundry.org/images/elephantSmall.png" height="75" width="75" />
+<center><img style="border: none; margin-left: auto; margin-right: auto; " src="https://wiki.postgresql.org/images/3/30/PostgreSQL_logo.3colors.120x120.png" height="75" width="75" />
 <hr />
 <h1>Welcome to the pg_bulkload Project Home Page</h1>
 <hr />
@@ -72,188 +72,171 @@ There are the following measurement patterns.
 <ol>
   <li>Initial data loading to an empty table for 4GB of data</li>
   <li>Appended data loading to a table with 4GB of data for 1GB of new data</li>
-  <li>Performance efficiencies by PARALLEL and FILTER features</li>
+  <li>Performance efficiencies by maintenance_work_mem and FILTER features</li>
 </ol>
 
 <h2>Result 1: Initial data loading</h2>
 <p>
-COPY has better performance on initial data loading if the destination table is TRUNCATEd in the same transaction with COPY.
-In addition, performance of COPY is improved when the data are loaded without indexes and create indexes after the loading.
-However, pg_bulkload has completed in 85% of loading time compared with the tuned COPY.
+Pg_bulkload on WRITER = PARALLEL mode can load data with an almost half time against COPY.
+In PARALLEL mode, performance will be improved on multi-CPU server because reading an input file and writing rows to a table are done with two processes.
+</p>
+<p>
+COPY also can be more fast by loading into table without indexes and create indexes after it.
 </p>
 
 <table style="float:left">
-<caption>Initial: TRUNCATE+COPY vs pg_bulkload</caption>
+<caption>Initial Load (4GB) </caption>
 <thead>
   <tr>
-    <th rowspan="2">Item</th>
-    <th colspan="2">version (postgres + bulkload)</th>
-  </tr>
-  <tr>
-    <th>8.4.4 + 2.4</th>
-    <th>9.0b2 + 3.0</th>
+    <th>Item</th>
+    <th>Duration</th>
+    <th>Duration comparison</th>
   </tr>
 </thead>
 <tbody>
   <tr>
     <td>COPY with indexes</td>
-    <td align="right">1133.4 sec</td>
-    <td align="right">1105.8 sec</td>
+    <td align="right">500 sec</td>
+    <td align="center">-</td>
   </tr>
   <tr>
-    <td>COPY without indexes<br />+ CREATE INDEX</td>
-    <td align="right">717.9 sec</td>
-    <td align="right">705.3 sec</td>
+    <td>COPY without indexes<br>+ CREATE INDEX</td>
+    <td align="right">333 sec <br>(229 sec + 51 sec+ 53 sec)</td>
+    <td align="right">66.7 %</td>
   </tr>
   <tr>
-    <td>pg_bulkload (DIRECT)<br />with indexes</td>
-    <td align="right">603.2 sec</td>
-    <td align="right">598.9 sec</td>
+    <td>pg_bulkload (DIRECT)<br>with indexes</td>
+    <td align="right">334 sec</td>
+    <td align="right">66.8 %</td>
   </tr>
   <tr>
-    <th>Duration comparison</th>
-    <th style="text-align:right">84.0 %</th>
-    <th style="text-align:right">84.9 %</th>
+    <td>pg_bulkload (PARALLEL)<br>with indexes</td>
+    <td align="right">221 sec</td>
+    <td align="right">44.2 %</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/initial_load.png" />
+<img src="./img/initial_load_93.png">
 </div>
 
 <h2 style="clear:both">Result 2: Appended data loading</h2>
 <p>
-The TRUNCATE hack is not available on appended data loading.
-Also, creating indexes after loading is not always faster than loading with indexes.
-Therefore, pg_bulkload has completed in 35% of loading time compared with COPY on appended data loading.
+Pg_bulkload on WRITER = PARALLEL mode can load data with an almost half time against COPY in this case also.
+COPY without indexes is not faster than COPY with indexes. because it has to create indexes for total records of the table from initial.
 </p>
 
 <table style="float:left">
-<caption>Appended: COPY vs pg_bulkload</caption>
+<caption>Appended Load (1GB)</caption>
 <thead>
   <tr>
-    <th rowspan="2">Item</th>
-    <th colspan="2">version (postgres + bulkload)</th>
-  </tr>
-  <tr>
-    <th>8.4.4 + 2.4</th>
-    <th>9.0b2 + 3.0</th>
+    <th>Item</th>
+    <th>Duration</th>
+    <th>Duration comparison</th>
   </tr>
 </thead>
 <tbody>
   <tr>
     <td>COPY with indexes</td>
-    <td align="right">520.4 sec</td>
-    <td align="right">549.3 sec</td>
+    <td align="right">140 sec</td>
+    <td align="center">-</td>
   </tr>
   <tr>
-    <td>COPY without indexes<br />+ CREATE INDEX</td>
-    <td align="right">805.3 sec</td>
-    <td align="right">799.6 sec</td>
+    <td>COPY without indexes<br>+ CREATE INDEX</td>
+    <td align="right">187 sec <br>(62 sec + 60 sec + 65 sec)</td>
+    <td align="right">133.6 %</td>
   </tr>
   <tr>
-    <td>pg_bulkload (DIRECT)<br />with indexes</td>
-    <td align="right">185.2 sec</td>
-    <td align="right">191.7 sec</td>
+    <td>pg_bulkload (DIRECT)<br>with indexes</td>
+    <td align="right">93 sec</td>
+    <td align="right">66.4 %</td>
   </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>Duration comparison</th>
-    <th style="text-align:right">35.6 %</th>
-    <th style="text-align:right">34.9 %</th>
+  <tr>
+    <td>pg_bulkload (PARALLEL)<br>with indexes</td>
+    <td align="right">70 sec</td>
+    <td align="right">50.0 %</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/appended_load.png" />
+<img src="./img/appended_load_93.png">
 </div>
 
-<h2 style="clear:both">Result 3: PARALLEL and FILTER features</h2>
+<h2 style="clear:both">Result 3: Influence from parameters and features</h2>
 <p>
-The parallel loader is used when WRITER = PARALLEL is specified.
-Performance would be improved on multi-CPU server because reading an input file and writing rows to a table are done with two processes.
-The actual measurement shows the loading time is shortened to 70%.
+The maintenece_work_mem, PostgreSQL parameter, affects the performance of pg_bulkload.
+The duration becomes almost 15 % shorter if this parameter is changed from 64 MB to 1 GB.
 </p>
 
 <p>
 FILTER feature transforms input data in various operations, but it's not free.
-The actual measurement shows the loading time is increased to 250-300% with SQL functions and 150% with C functions.
+The actual measurement shows the loading time is increased to almost 240 % with SQL functions and almost 140 % with C functions.
 </p>
 
 <table style="float:left">
-<caption>PARALLEL and FILTER features</caption>
+<caption>pg_bulkload features</caption>
 <thead>
   <tr>
-    <th rowspan="2">Item</th>
+    <th rowspan="2" colspan="2">項目</th>
+    <th colspan="2">時間</th>
+  </tr>
+  <tr>
     <th>Initial (4GB)</th>
     <th>Appended (1GB)</th>
   </tr>
 </thead>
 <tbody>
   <tr>
-    <td>pg_bulkload (DIRECT)</td>
-    <td align="right">598.9 sec</td>
-    <td align="right">191.7 sec</td>
+    <td>MWM = 64 MB</td>
+    <td>DIRECT</td>
+    <td align="right">397 sec</td>
+    <td align="right">109 sec</td>
   </tr>
   <tr>
-    <td>pg_bulkload (PARALLEL)</td>
-    <td align="right">413.5 sec</td>
-    <td align="right">133.0 sec</td>
-  </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>Duration comparison</th>
-    <th style="text-align:right">69.0 %</th>
-    <th style="text-align:right">69.4 %</th>
+    <td rowspan="4">MWM = 1 GB</td>
   </tr>
   <tr>
-    <td>pg_bulkload (SQL-FILTER)</td>
-    <td align="right">1813.9 sec</td>
-    <td align="right">484.6 sec</td>
-  </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>Duration comparison</th>
-    <th style="text-align:right">302.9 %</th>
-    <th style="text-align:right">252.7 %</th>
+    <td>DIRECT</td>
+    <td align="right">334 sec</td>
+    <td align="right">93 sec</td>
   </tr>
   <tr>
-    <td>pg_bulkload (C-FILTER)</td>
-    <td align="right">918.4 sec</td>
-    <td align="right">263.7 sec</td>
+    <td>DIRECT with SQL FILTER</td>
+    <td align="right">801 sec</td>
+    <td align="right">216 sec</td>
   </tr>
-  <tr bgcolor="#D8BFD8">
-    <th>Duration comparison</th>
-    <th style="text-align:right">153.3 %</th>
-    <th style="text-align:right">137.6 %</th>
+  <tr>
+    <td>DIRECT with C FILTER</td>
+    <td align="right">456 sec</td>
+    <td align="right">126 sec</td>
   </tr>
 </tbody>
 </table>
 
 <div style="float:left">
-<img src="img/para+filter.png" />
+<img src="./img/filter.png">
 </div>
 
-<p style="clear:both">
-PostgreSQL 9.0b2 + pg_bulkload 3.0b1 was used for all measurements, with indexes.
-</p>
-
-<h2>Conditions</h2>
+<h2 style="clear:both">Conditions</h2>
 <table>
 <thead>
   <tr><th>Item</th><th>Value</th></tr>
 </thead>
 <tbody>
-  <tr><td>Server</td><td>Dell PowerEdge 1900</td></tr>
-  <tr><td>CPU</td><td>Dual Core Xeon 5050 (3.0GHz)</td></tr>
-  <tr><td>Hyper-Threading</td><td>off</td></tr>
-  <tr><td>Memory</td><td>2GB</td></tr>
-  <tr><td>Storage Subsystem</td><td>Dell PowerVault 221S</td></tr>
-  <tr><td>Disks</td><td>SCSI 7x146GB (RAID 0)</td></tr>
-  <tr><td>RAID Controller</td><td>PERC 4e/DC DRAM=128MB</td></tr>
-  <tr><td>OS</td><td>CentOS 5.5 (64bit)</td></tr>
-  <tr><td>shared_buffers</td><td>256MB</td></tr>
+  <tr><td>Server</td><td>Dell PowerEdge R410</td></tr>
+  <tr><td>CPU</td><td>Intel Xeon E5645 (2.4GHz) 12 core * 2</td></tr>
+  <tr><td>Memory</td><td>32GB</td></tr>
+  <tr><td>Disks</td><td>SAS 10000rpm 2TB * 4</td></tr>
+  <tr><td>OS</td><td>CentOS 6.2 (64bit)</td></tr>
+  <tr><td>PostgreSQL version</td><td>9.3.4</td></tr>
+  <tr><td>pg_bulkload version</td><td>3.1.6</td></tr>
+  <tr><td>shared_buffers</td><td>3210MB</td></tr>
   <tr><td>checkpoint_segments</td><td>300</td></tr>
-  <tr><td>checkpoint_timeout</td><td>5min</td></tr>
+  <tr><td>checkpoint_timeout</td><td>15min</td></tr>
+  <tr><td>work_mem</td><td>1MB</td></tr>
+  <tr><td>maintenance_work_mem</td><td>1GB</td></tr>
   <tr><td>Table definition</td><td>DBT-2 customer table</td></tr>
   <tr><td rowspan="2">Indexed columns</td><td>c_id (PRIMARY KEY)</td></tr>
   <tr><td>c_d_id (non-unique B-Tree)</td></tr>
