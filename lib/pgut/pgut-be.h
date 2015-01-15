@@ -2,7 +2,7 @@
  *
  * pgut-be.h
  *
- * Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -155,7 +155,7 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 
 #if PG_VERSION_NUM < 90200
 
-#define RangeVarGetRelid(relation, lockmode, missing_ok, nowait) \
+#define RangeVarGetRelid(relation, lockmode, missing_ok) \
 	RangeVarGetRelid((relation), (missing_ok))
 
 #endif

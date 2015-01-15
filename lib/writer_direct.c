@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_direct.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
@@ -307,7 +307,7 @@ DirectWriterParam(DirectWriter *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->base.output == NULL);
 
 		self->base.relid = RangeVarGetRelid(makeRangeVarFromNameList(
-						stringToQualifiedNameList(value)), NoLock, false, false);
+						stringToQualifiedNameList(value)), NoLock, false);
 		self->base.output = get_relation_name(self->base.relid);
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
