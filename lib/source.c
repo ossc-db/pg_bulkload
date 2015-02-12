@@ -102,6 +102,9 @@ static Source *CreateAsyncSource(const char *path, TupleDesc desc);
 static Source *CreateFileSource(const char *path, TupleDesc desc);
 static Source *CreateRemoteSource(const char *path, TupleDesc desc);
 
+static int Wrappered_pq_getbyte(void);
+static int Wrappered_pq_getbytes(char *s, size_t len);
+
 Source *
 CreateSource(const char *path, TupleDesc desc, bool async_read)
 {
@@ -505,7 +508,7 @@ RemoteSourceRead(RemoteSource *self, void *buffer, size_t len)
 			int			mtype;
 
 readmessage:
-			mtype = pq_getbyte();
+			mtype = Wrappered_pq_getbyte();
 			if (mtype == EOF)
 				ereport(ERROR,
 						(errcode(ERRCODE_CONNECTION_FAILURE),
@@ -561,7 +564,7 @@ readmessage:
 static size_t
 RemoteSourceReadOld(RemoteSource *self, void *buffer, size_t len)
 {
-	if (pq_getbytes((char *) buffer, 1))
+	if (Wrappered_pq_getbytes((char *) buffer, 1))
 	{
 		/* Only a \. terminator is legal EOF in old protocol */
 		ereport(ERROR,
@@ -629,4 +632,33 @@ RemoteSourceClose(RemoteSource *self)
 
 	SendResultDescriptionMessage(attrs, PG_BULKLOAD_COLS);
 	pfree(self);
+}
+
+/* These blow 2 wrapper functions is required for backward 
+ * compatibility beyond the PostgreSQL commit:
+ * Be more careful to not lose sync in the FE/BE protocol.*/
+static int
+Wrappered_pq_getbyte(void)
+{
+#if (PG_VERSION_NUM >= 90401) \
+  || ((PG_VERSION_NUM >= 90306) && (PG_VERSION_NUM < 90400)) \
+  || ((PG_VERSION_NUM >= 90210) && (PG_VERSION_NUM < 90300)) \
+  || ((PG_VERSION_NUM >= 90115) && (PG_VERSION_NUM < 90200)) \
+  || ((PG_VERSION_NUM >= 90019) && (PG_VERSION_NUM < 90100))
+             pq_startmsgread();
+#endif
+            return pq_getbyte();
+}
+
+static int
+Wrappered_pq_getbytes(char *s, size_t len)
+{
+#if (PG_VERSION_NUM >= 90401) \
+  || ((PG_VERSION_NUM >= 90306) && (PG_VERSION_NUM < 90400)) \
+  || ((PG_VERSION_NUM >= 90210) && (PG_VERSION_NUM < 90300)) \
+  || ((PG_VERSION_NUM >= 90115) && (PG_VERSION_NUM < 90200)) \
+  || ((PG_VERSION_NUM >= 90019) && (PG_VERSION_NUM < 90100))
+             pq_startmsgread();
+#endif
+            return pq_getbytes(s, len);
 }
