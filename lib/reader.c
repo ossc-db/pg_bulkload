@@ -19,6 +19,7 @@
 #include "catalog/pg_type.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
+#include "nodes/parsenodes.h"
 #include "parser/parse_coerce.h"
 #include "pgstat.h"
 #include "utils/builtins.h"
@@ -366,7 +367,11 @@ ReaderDumpParams(Reader *self)
 void
 CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 {
-	TupleDesc	desc;
+	TupleDesc       desc;
+	TupleDesc       tupDesc;
+	RangeTblEntry   *rte;
+	List            *range_table = NIL;
+	int             attnums, i;
 
 	checker->tchecker = tchecker;
 
@@ -407,6 +412,25 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 		checker->estate->es_result_relations = checker->resultRelInfo;
 		checker->estate->es_num_result_relations = 1;
 		checker->estate->es_result_relation_info = checker->resultRelInfo;
+
+        /* Set up RangeTblEntry */
+        rte = makeNode(RangeTblEntry);
+        rte->rtekind = RTE_RELATION;
+        rte->relid = RelationGetRelid(rel);
+        rte->relkind = rel->rd_rel->relkind;
+        rte->requiredPerms = ACL_INSERT;
+        range_table = list_make1(rte);
+
+        tupDesc = RelationGetDescr(rel);
+        attnums = tupDesc->natts;
+        for(i = 0; i <= attnums; i++) 
+        {
+            rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
+        }
+        ExecCheckRTPerms(range_table, true);
+
+		checker->estate->es_range_table = range_table;
+
 
 		/* Set up a tuple slot too */
 		checker->slot = MakeSingleTupleTableSlot(desc);
