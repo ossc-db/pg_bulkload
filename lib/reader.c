@@ -417,7 +417,9 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         rte = makeNode(RangeTblEntry);
         rte->rtekind = RTE_RELATION;
         rte->relid = RelationGetRelid(rel);
+#if PG_VERSION_NUM >= 90100
         rte->relkind = rel->rd_rel->relkind;
+#endif
         rte->requiredPerms = ACL_INSERT;
         range_table = list_make1(rte);
 
@@ -427,10 +429,15 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         {
             rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
         }
+#if PG_VERSION_NUM >= 90100
+        /* This API is published only from 9.1. 
+         * This is used for permission check, but currently pg_bulkload
+         * is called only from super user and so the below code maybe
+         * is not essential. */
         ExecCheckRTPerms(range_table, true);
+#endif
 
 		checker->estate->es_range_table = range_table;
-
 
 		/* Set up a tuple slot too */
 		checker->slot = MakeSingleTupleTableSlot(desc);
