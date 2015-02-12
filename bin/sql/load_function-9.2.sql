@@ -148,9 +148,9 @@ TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 2147483647, 'LOAD=1')" -l results/function11.log -P results/function11.prs -u results/function11.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1
 \set LOAD1 `awk -f data/gettime.awk results/function11.log`
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1000
-\set LOAD1000 `awk -f data/gettime.awk results/function12.log`
-SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 10000, 'LOAD=10000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=10000
+\set LOAD10000 `awk -f data/gettime.awk results/function12.log`
+SELECT :LOAD1 < :LOAD10000 AS "LOAD1 is fast";
 
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=1" -l results/function13.log -P results/function13.prs -u results/function13.dup -o "DUPLICATE_ERRORS=0"
 \! awk -f data/adjust.awk results/function13.log

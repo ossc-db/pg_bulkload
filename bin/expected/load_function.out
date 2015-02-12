@@ -578,16 +578,16 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \set LOAD1 `awk -f data/gettime.awk results/function11.log`
 TRUNCATE customer;
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 1000, 'LOAD=1000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=1000
+\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1, 10000, 'LOAD=10000')" -l results/function12.log -P results/function12.prs -u results/function12.dup -o "DUPLICATE_ERRORS=50" -o LOAD=10000
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
-	1000 Rows successfully loaded.
+	10000 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
-\set LOAD1000 `awk -f data/gettime.awk results/function12.log`
-SELECT :LOAD1 < :LOAD1000 AS "LOAD1 is fast";
+\set LOAD10000 `awk -f data/gettime.awk results/function12.log`
+SELECT :LOAD1 < :LOAD10000 AS "LOAD1 is fast";
  LOAD1 is fast 
 ---------------
  t
