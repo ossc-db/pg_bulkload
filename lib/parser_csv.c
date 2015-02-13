@@ -807,7 +807,7 @@ CSVParserDumpParams(CSVParser *self)
 		pfree(str);
 	}
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

@@ -104,7 +104,7 @@ WriterDumpParams(Writer *self)
 
 	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 
 	self->dumpParams(self);

@@ -363,9 +363,6 @@ connect_to_localhost(void)
 	char   *host;
 	char	dbName[1024];
 
-	/* Also ensure backend isn't confused by this environment var. */
-	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
-
 #ifdef HAVE_UNIX_SOCKETS
 
 #if PG_VERSION_NUM >= 90300
@@ -385,6 +382,9 @@ connect_to_localhost(void)
 #else
 	host = "localhost";
 #endif
+
+	/* Also ensure backend isn't confused by this environment var. */
+	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
 
 	/* set dbname and disable hostaddr */
 	snprintf(dbName, lengthof(dbName), "dbname='%s' hostaddr=''",

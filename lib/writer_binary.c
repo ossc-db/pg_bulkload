@@ -354,7 +354,7 @@ BinaryWriterDumpParams(BinaryWriter *self)
 
 	BinaryDumpParams(self->fields, self->nfield, &buf, "OUT_COL");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

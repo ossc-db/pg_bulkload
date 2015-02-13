@@ -191,7 +191,7 @@ BufferedWriterDumpParams(BufferedWriter *self)
 	appendStringInfo(&buf, "TRUNCATE = %s\n",
 					 self->base.truncate ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

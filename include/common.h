@@ -14,4 +14,12 @@
 
 #define PG_BULKLOAD_VERSION "3.1.7"
 
+#ifndef PG_PRINTF_ATTRIBUTE
+#ifdef WIN32
+#define PG_PRINTF_ATTRIBUTE gnu_printf
+#else
+#define PG_PRINTF_ATTRIBUTE printf
+#endif
+#endif
+
 #endif   /* COMMON_H_INCLUDED */

@@ -38,10 +38,12 @@ ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
 
-REGRESS_OPTS += $(if $(filter 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
+REGRESS_OPTS += $(if $(filter 8.3 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
 
 sql/init.sql: sql/init-$(MAJORVERSION).sql
 	cp sql/init-$(MAJORVERSION).sql sql/init.sql
+sql/init-8.3.sql:
+	cp sql/init-legacy.sql sql/init-8.3.sql
 sql/init-8.4.sql:
 	cp sql/init-legacy.sql sql/init-8.4.sql
 sql/init-9.0.sql:

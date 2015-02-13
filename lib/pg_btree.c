@@ -184,7 +184,9 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 	int				numIndices = relinfo->ri_NumIndices;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
 	BTSpool		  **spools;
+#if PG_VERSION_NUM >= 90300
 	Relation heapRel = relinfo->ri_RelationDesc;
+#endif
 
 	spools = palloc(numIndices * sizeof(BTSpool *));
 	for (i = 0; i < numIndices; i++)
@@ -945,7 +947,6 @@ remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *reln
 	if (tuple.t_data != NULL)
 	{
 		char		   *str;
-		TupleDesc		tupdesc;
 
 		simple_heap_delete(heap, &itup->t_tid);
 
@@ -957,7 +958,6 @@ remove_duplicate(Spooler *self, Relation heap, IndexTuple itup, const char *reln
 						 errmsg("could not open duplicate bad file \"%s\": %m",
 								self->dup_badfile)));
 
-		tupdesc = RelationGetDescr(heap);
 		tuple.t_len = ItemIdGetLength(itemid);
 		tuple.t_self = itup->t_tid;
 

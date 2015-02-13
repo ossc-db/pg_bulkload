@@ -288,7 +288,7 @@ ReaderNext(Reader *rd)
 
 			appendStringInfo(&buf, ". %s\n", message);
 
-			LoggerLog(WARNING, buf.data);
+			LoggerLog(WARNING, buf.data, 0);
 
 			/* Terminate if PARSE_ERRORS has been reached. */
 			if (rd->parse_errors > rd->max_parse_errors)
@@ -358,7 +358,7 @@ ReaderDumpParams(Reader *self)
 	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
 		self->checker.check_constraints ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 
 	ParserDumpParams(self->parser);
@@ -368,10 +368,12 @@ void
 CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 {
 	TupleDesc       desc;
-	TupleDesc       tupDesc;
 	RangeTblEntry   *rte;
 	List            *range_table = NIL;
+#if PG_VERSION_NUM >= 80400
+	TupleDesc       tupDesc;
 	int             attnums, i;
+#endif
 
 	checker->tchecker = tchecker;
 
@@ -423,12 +425,15 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         rte->requiredPerms = ACL_INSERT;
         range_table = list_make1(rte);
 
+#if PG_VERSION_NUM >= 80400
         tupDesc = RelationGetDescr(rel);
         attnums = tupDesc->natts;
         for(i = 0; i <= attnums; i++) 
         {
             rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
         }
+#endif
+
 #if PG_VERSION_NUM >= 90100
         /* This API is published only from 9.1. 
          * This is used for permission check, but currently pg_bulkload
