@@ -849,6 +849,13 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
 <h2 id="releasenote">Release Notes</h2>
 <p>
+<h4>3.1.8</h4>
+<ul>
+<li>Fix bug of CHECK_CONSTRAINTS = YES: PostgreSQL server can crash when load with CHECK_CONSTRAINTS = YES on PostgreSQL 9.4.1, 9.3.6, 9.2.10, 9.1.15, 9.0.19. </li>
+</ul>
+</p>
+
+<p>
 <h4>3.1.7</h4>
 <ul>
 <li>Supports PostgreSQL 9.4. </li>
