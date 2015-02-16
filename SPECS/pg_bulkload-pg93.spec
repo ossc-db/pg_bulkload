@@ -9,7 +9,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.7
+Version:        3.1.8
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -81,6 +81,8 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Mon Feb 16 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.8-1
+- Update to pg_bulkload 3.1.8
 * Tue Jan 06 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.7-1
 - Update to pg_bulkload 3.1.7
 * Fri Mar 23 2014 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.6-1
