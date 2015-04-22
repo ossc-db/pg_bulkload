@@ -69,7 +69,7 @@ Also in version 3.1, parallel loading works more effectively than before.
 </p>
 
 <p>
-There are some bugs in old version of 3.1. Please check <a href="#releasenote">Release notes<a>, and use newer versions. 
+There are some bugs in old version of 3.1. Please check <a href="#releasenote">Release notes</a>, and use newer versions. 
 </p>
 
 <h2 id="examples">Examples</h2>
@@ -82,7 +82,7 @@ pg_bulkload provides two programs.
 <p>
 This is a wrapper command for <code>pg_ctl</code>, which starts and stops PostgreSQL 
 server.  postgresql script invokes <code>pg_ctl</code> internally.   postgresql script 
-provides very important pg_bulkload functionality, recovery.   For 
+provides very important pg_bulkload functionality i.e. recovery.   To improve
 performance, pg_bulkload bypasses some of PostgreSQL's internal functionality
 such as WAL.   Therefore, pg_bulkload needs to provide separate recovery 
 procedure before usual PostgreSQL's recovery is performed.   postgresql script
@@ -207,8 +207,8 @@ If that is not set, the user name specified for the connection is used.
 <dd>User name to connect as. </dd>
 
 <dt>-W<br />--password</dt>
-<dd>Force pg_reorg to prompt for a password before connecting to a database.</dd>
-<dd>This option is never essential, since pg_reorg will automatically prompt for a password if the server demands password authentication. However, vacuumdb will waste a connection attempt finding out that the server wants a password. In some cases it is worth typing -W to avoid the extra connection attempt. </dd>
+<dd>Force pg_bulkload to prompt for a password before connecting to a database.</dd>
+<dd>This option is never essential, since pg_bulkload will automatically prompt for a password if the server demands password authentication. However, vacuumdb will waste a connection attempt finding out that the server wants a password. In some cases it is worth typing -W to avoid the extra connection attempt. </dd>
 </dl>
 
 <h3>Generic Options</h3>
@@ -497,7 +497,7 @@ The default is comma.
 When you load a tab-separated format file (TSV), you can set DELIMITER to a tab character.
 Then, you need to double quote the tab:
 <pre>DELIMITER="	" # a double-quoted tab</pre>
-You can also specify DELIMITER as a command-lineo option with <code>$'\t'</code> syntax.
+You can also specify DELIMITER as a command-line -o option with <code>$'\t'</code> syntax.
 <pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
 </dd>
 <dt>QUOTE = quote_character</dt>
