@@ -34,6 +34,10 @@ DATA = pg_bulkload--1.0.sql pg_bulkload--unpackaged--1.0.sql uninstall_pg_bulklo
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
+# handle to which function to be published from this shared library
+# see src/Makefile.shlib in PostgreSQL
+SHLIB_EXPORTS = exports.txt
+
 ifdef USE_PROFILE
 PG_CPPFLAGS += -DENABLE_BULKLOAD_PROFILE
 endif
