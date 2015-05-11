@@ -2,7 +2,7 @@
  *
  * pgut-list.c : copied from postgres/nodes/list.c
  *
- * Copyright (c) 2009-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -242,6 +242,7 @@ list_truncate(List *list, int new_size)
 	return list;
 }
 
+#if PG_VERSION_NUM < 90200
 /*
  * Locate the n'th cell (counting from 0) of the list.  It is an assertion
  * failure if there is no such cell.
@@ -265,7 +266,6 @@ list_nth_cell(List *list, int n)
 	return match;
 }
 
-#if PG_VERSION_NUM < 90200
 /*
  * Return the data value contained in the n'th element of the
  * specified list. (List elements begin at 0.)
@@ -276,9 +276,7 @@ list_nth(List *list, int n)
 	Assert(IsPointerList(list));
 	return lfirst(list_nth_cell(list, n));
 }
-#endif
 
-#if PG_VERSION_NUM < 90200
 /*
  * Return true iff 'datum' is a member of the list. Equality is
  * determined by using simple pointer comparison.

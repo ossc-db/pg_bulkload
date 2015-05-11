@@ -1,6 +1,6 @@
 # pg_bulkload extension
 comment = 'pg_bulkload is a high speed data loading utility for PostgreSQL'
-default_version = '3.2devel'
+default_version = '1.0'
 module_pathname = '$libdir/pg_bulkload'
 relocatable = false
 schema = public

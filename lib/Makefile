@@ -1,7 +1,7 @@
 #
 # pg_bulkload: lib/Makefile
 #
-#    Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
 	binary.c \
@@ -24,9 +24,13 @@ SRCS = \
 	pgut/pgut-ipc.c
 OBJS = $(SRCS:.c=.o)
 MODULE_big = pg_bulkload
+
 EXTENSION = pg_bulkload
+
+#supports both EXTENSION (for >=9.1) and without_EXTENSION (for <PG 9.1)
 DATA_built = pg_bulkload.sql
-DATA = pg_bulkload--3.2devel.sql pg_bulkload--unpackaged--3.2devel.sql uninstall_pg_bulkload.sql 
+DATA = pg_bulkload--1.0.sql pg_bulkload--unpackaged--1.0.sql uninstall_pg_bulkload.sql 
+
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 

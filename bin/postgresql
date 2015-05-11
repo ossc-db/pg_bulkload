@@ -12,7 +12,7 @@
 #      this script doesn't execute pg_bulkload's recovery and call pg_ctl 
 #      directory.
 #
-# Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 #------------------------------------------------------------------------------
 # Acquire a command name
@@ -25,10 +25,10 @@ reload configuration files, report the status of a PostgreSQL server,
 or signal a PostgreSQL process.
 
 Usage:
-  $CMDNAME start   [-w] [-D DATADIR] [-l FILENAME] [-o \"OPTIONS\"]
-  $CMDNAME stop    [-W] [-D DATADIR] [-m SHUTDOWN-MODE]
-  $CMDNAME restart [-w] [-D DATADIR] [-m SHUTDOWN-MODE] [-o \"OPTIONS\"]
-  $CMDNAME reload  [-D DATADIR] [-s]
+  $CMDNAME start   [-w] [-D DATADIR]  [-l FILENAME] [-o \"OPTIONS\"]
+  $CMDNAME stop    [-W] [-D DATADIR]  [-m SHUTDOWN-MODE]
+  $CMDNAME restart [-w] [-D DATADIR]  [-m SHUTDOWN-MODE] [-o \"OPTIONS\"]
+  $CMDNAME reload  [-D DATADIR] 
   $CMDNAME status  [-D DATADIR]
   $CMDNAME kill    SIGNALNAME PID
 
@@ -308,13 +308,11 @@ fi
 # If "start" or "restart" is given, pg_bulkload recovery is executed before 
 # pg_ctl start.
 # The path of $PGDATA is passed to recovery command as arguments.
-# If -s option is given, pg_bulkload recovery command is executed in silent
-# mode.
 # 
 # If recovery command exits in abnormal status, this script doesn't execute 
 # pg_ctl and exits 1.
 if [ "$op" = "start" -o "$op" = "restart" ];then
-    pg_bulkload -r -D $PGDATA
+     pg_bulkload -r -D $PGDATA
 
     if [ "$?" -ne 0 ];then
         exit 1

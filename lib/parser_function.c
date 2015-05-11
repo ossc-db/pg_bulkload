@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_function.c
  *
- *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -28,6 +28,10 @@
 #include "pg_strutil.h"
 #include "reader.h"
 #include "pgut/pgut-be.h"
+
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
 
 typedef struct FunctionParser
 {

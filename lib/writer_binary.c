@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_binary.c
  *
- *	  Copyright (c) 2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2011-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
@@ -354,7 +354,7 @@ BinaryWriterDumpParams(BinaryWriter *self)
 
 	BinaryDumpParams(self->fields, self->nfield, &buf, "OUT_COL");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

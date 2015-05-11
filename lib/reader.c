@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/reader.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -11,12 +11,15 @@
 #include "pg_bulkload.h"
 
 #include <fcntl.h>
+#include <string.h>
 
 #include "access/heapam.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_language.h"
 #include "catalog/pg_type.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
+#include "nodes/parsenodes.h"
 #include "parser/parse_coerce.h"
 #include "pgstat.h"
 #include "utils/builtins.h"
@@ -32,6 +35,8 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 #include "reader.h"
+
+#include "storage/fd.h"
 
 #define DEFAULT_MAX_PARSE_ERRORS		0
 
@@ -283,7 +288,7 @@ ReaderNext(Reader *rd)
 
 			appendStringInfo(&buf, ". %s\n", message);
 
-			LoggerLog(WARNING, buf.data);
+			LoggerLog(WARNING, buf.data, 0);
 
 			/* Terminate if PARSE_ERRORS has been reached. */
 			if (rd->parse_errors > rd->max_parse_errors)
@@ -306,8 +311,8 @@ ReaderNext(Reader *rd)
 			ParserDumpRecord(parser, rd->parse_fp, rd->parse_badfile);
 
 			MemoryContextReset(ccxt);
-			
-			/* Without the below line, the regression tests shows the different result on debug-build mode. */
+
+			// Without the below line, the regression tests shows the different result on debug-build mode. 
 			tuple = NULL;
 		}
 		PG_END_TRY();
@@ -354,7 +359,7 @@ ReaderDumpParams(Reader *self)
 	appendStringInfo(&buf, "CHECK_CONSTRAINTS = %s\n",
 		self->checker.check_constraints ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 
 	ParserDumpParams(self->parser);
@@ -363,7 +368,13 @@ ReaderDumpParams(Reader *self)
 void
 CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 {
-	TupleDesc	desc;
+	TupleDesc       desc;
+	RangeTblEntry   *rte;
+	List            *range_table = NIL;
+#if PG_VERSION_NUM >= 80400
+	TupleDesc       tupDesc;
+	int             attnums, i;
+#endif
 
 	checker->tchecker = tchecker;
 
@@ -404,6 +415,35 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 		checker->estate->es_result_relations = checker->resultRelInfo;
 		checker->estate->es_num_result_relations = 1;
 		checker->estate->es_result_relation_info = checker->resultRelInfo;
+
+        /* Set up RangeTblEntry */
+        rte = makeNode(RangeTblEntry);
+        rte->rtekind = RTE_RELATION;
+        rte->relid = RelationGetRelid(rel);
+#if PG_VERSION_NUM >= 90100
+        rte->relkind = rel->rd_rel->relkind;
+#endif
+        rte->requiredPerms = ACL_INSERT;
+        range_table = list_make1(rte);
+
+#if PG_VERSION_NUM >= 80400
+        tupDesc = RelationGetDescr(rel);
+        attnums = tupDesc->natts;
+        for(i = 0; i <= attnums; i++) 
+        {
+            rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
+        }
+#endif
+
+#if PG_VERSION_NUM >= 90100
+        /* This API is published only from 9.1. 
+         * This is used for permission check, but currently pg_bulkload
+         * is called only from super user and so the below code maybe
+         * is not essential. */
+        ExecCheckRTPerms(range_table, true);
+#endif
+
+		checker->estate->es_range_table = range_table;
 
 		/* Set up a tuple slot too */
 		checker->slot = MakeSingleTupleTableSlot(desc);
@@ -709,7 +749,9 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 	int				i;
 	ParsedFunction	func;
 	HeapTuple		ftup;
+	HeapTuple		ltup;
 	Form_pg_proc	pp;
+	Form_pg_language	lp;
 	TupleCheckStatus	status = NEED_COERCION_CHECK;
 
 	if (filter->funcstr == NULL)
@@ -825,7 +867,22 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 
 	filter->collation = collation;
 
+	/* checking if the filter function is a SQL function */
+	ltup = SearchSysCache(LANGOID, ObjectIdGetDatum(pp->prolang), 0, 0, 0);
+	lp = (Form_pg_language) GETSTRUCT(ltup);
+	
+	if(strcmp(NameStr(lp->lanname), "sql") == 0)
+		filter->is_funcid_sql = true;
+	else	
+		filter->is_funcid_sql = false;
+	
+	
+	ReleaseSysCache(ltup);
 	ReleaseSysCache(ftup);
+
+	/* flag set */
+	filter->is_first_time_call = true;
+	filter->context = CurrentMemoryContext;
 
 	return status;
 }
@@ -869,7 +926,34 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 		}
 	}
 
+	/* From PostgreSQL 9.2.4, fmgr_sql behavior has changed. */
+	/* So, we have to change to filter's memory context before fmgr_info() call.*/
+	/* See PostgreSQL commit "Fix SQL function execution to be safe with long-lived FmgrInfos."*/
+#if PG_VERSION_NUM >= 90204
+	oldcontext = CurrentMemoryContext;
+	oldowner = CurrentResourceOwner;
+
+	MemoryContextSwitchTo(filter->context);
+#endif
+
 	fmgr_info(filter->funcid, &flinfo);
+
+#if PG_VERSION_NUM >= 90204
+	MemoryContextSwitchTo(oldcontext);
+	CurrentResourceOwner = oldowner;
+
+	/* set fn_extra except the first time call */
+	if ( filter->is_first_time_call == false &&
+		MemoryContextIsValid(filter->fn_extra.fcontext) &&
+		filter->is_funcid_sql) {
+		flinfo.fn_extra = (SQLFunctionCache *) palloc0(sizeof(SQLFunctionCache));
+		memmove((SQLFunctionCache *)flinfo.fn_extra, &(filter->fn_extra),
+							sizeof(SQLFunctionCache));
+	} else {
+
+		filter->is_first_time_call = true;	
+	}
+#endif
 
 #if PG_VERSION_NUM >= 90100
 	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, filter->collation, NULL, NULL);
@@ -887,8 +971,12 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	 * Execute the function inside a sub-transaction, so we can cope with
 	 * errors sanely
 	 */
+
+#if PG_VERSION_NUM < 90204
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
+#endif
+
 	BeginInternalSubTransaction(NULL);
 
 	/* Want to run inside per tuple memory context */
@@ -933,6 +1021,19 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);
 	filter->tuple.t_len = HeapTupleHeaderGetDatumLength(filter->tuple.t_data);
+
+	/* save fn_extra, and unset the flag */
+#if PG_VERSION_NUM >= 90204
+	if ( filter->is_first_time_call == true &&
+		 filter->is_funcid_sql) {
+		filter->is_first_time_call = false;
+		memmove(&(filter->fn_extra),(SQLFunctionCache *) flinfo.fn_extra,
+						sizeof(SQLFunctionCache));
+	}
+
+	if(!SubTransactionIsActive(filter->fn_extra.subxid))
+		filter->fn_extra.subxid++;
+#endif
 
 	return &filter->tuple;
 }

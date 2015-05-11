@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_buffered.c
  *
- *	  Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"
@@ -191,7 +191,7 @@ BufferedWriterDumpParams(BufferedWriter *self)
 	appendStringInfo(&buf, "TRUNCATE = %s\n",
 					 self->base.truncate ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: bin/recovery.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -76,6 +76,10 @@ static void LoaderUnlinkLockFile(const char *filename);
 static void LoaderCreateLockFile(const char *filename,
 								 bool amPostmaster,
 								 bool isDDLock, const char *refName);
+
+/* Check that the header fields of a page appear valid. */
+bool PageHeaderIsValid(PageHeader page);
+
 
 /**
  * @brief Entry point for recovery process

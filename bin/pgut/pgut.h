@@ -2,7 +2,7 @@
  *
  * pgut.h
  *
- * Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -12,6 +12,8 @@
 
 #include "c.h"
 #include <assert.h>
+
+#include "common.h"
 
 #ifndef WIN32
 #include <sys/time.h>
@@ -152,7 +154,8 @@ extern void CHECK_FOR_INTERRUPTS(void);
 #define appendStringInfoChar	appendPQExpBufferChar
 #define appendBinaryStringInfo	appendBinaryPQExpBuffer
 
-extern bool appendStringInfoVA(StringInfo str, const char *fmt, va_list args);
+extern bool appendStringInfoVA(StringInfo str, const char *fmt, va_list args)
+__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 0)));
 extern int appendStringInfoFile(StringInfo str, FILE *fp);
 extern int appendStringInfoFd(StringInfo str, int fd);
 

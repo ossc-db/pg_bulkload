@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_csv.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -807,7 +807,7 @@ CSVParserDumpParams(CSVParser *self)
 		pfree(str);
 	}
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

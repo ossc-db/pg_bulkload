@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_binary.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -371,7 +371,7 @@ BinaryParserDumpParams(BinaryParser *self)
 
 	BinaryDumpParams(self->fields, self->nfield, &buf, "COL");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 

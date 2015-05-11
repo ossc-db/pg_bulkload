@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/reader.h
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -18,6 +18,14 @@
 #include "nodes/execnodes.h"
 #include "nodes/primnodes.h"
 #include "utils/relcache.h"
+
+#if PG_VERSION_NUM >= 90204
+#include "executor/functions.h"
+#endif
+
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
 
 /*
  * Source
@@ -200,6 +208,38 @@ extern void TupleFormerTerm(TupleFormer *former);
 extern HeapTuple TupleFormerTuple(TupleFormer *former);
 extern Datum TupleFormerValue(TupleFormer *former, const char *str, int col);
 
+#if PG_VERSION_NUM >= 90204
+/* This struct belong to function.c
+ * If future version of PG contain declaration
+ * in any header file eg. executor/functions.h
+ * we no need to define following structure.
+ */
+typedef struct
+{
+	char	   *fname;
+	char	   *src;
+
+	SQLFunctionParseInfoPtr pinfo;
+
+	Oid			rettype;
+	int16		typlen;
+	bool		typbyval;
+	bool		returnsSet;
+	bool		returnsTuple;
+	bool		shutdown_reg;
+	bool		readonly_func;
+	bool		lazyEval;
+
+	ParamListInfo paramLI;
+	Tuplestorestate *tstore;
+	JunkFilter *junkFilter;
+	List	   *func_state;
+	MemoryContext fcontext;
+	LocalTransactionId lxid;
+	SubTransactionId subxid;
+} SQLFunctionCache;
+#endif
+
 /* Filter */
 
 struct Filter
@@ -217,6 +257,12 @@ struct Filter
 	bool			tupledesc_matched;
 	Oid				fn_rettype;
 	Oid				collation;
+	bool			is_first_time_call;
+	bool			is_funcid_sql;
+#if PG_VERSION_NUM >= 90204
+	SQLFunctionCache	fn_extra;
+#endif
+	MemoryContext		context;
 };
 
 extern bool tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc);

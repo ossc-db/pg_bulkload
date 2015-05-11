@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_direct.c
  *
- *	  Copyright (c) 2007-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
@@ -22,6 +22,7 @@
 #include "storage/fd.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "storage/bufpage.h"
 
 #include "logger.h"
 #include "pg_loadstatus.h"
@@ -32,7 +33,19 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
-#if PG_VERSION_NUM < 80400
+#if PG_VERSION_NUM >= 90300
+#include "common/relpath.h"
+#include "access/heapam_xlog.h"
+#include "storage/checksum.h"
+#include "storage/checksum_impl.h"
+#endif
+
+#if PG_VERSION_NUM >= 90400
+
+#define log_newpage(rnode, forknum, blk, page) \
+	log_newpage(rnode, forknum, blk, page, true)
+
+#elif PG_VERSION_NUM < 80400
 
 #define toast_insert_or_update(rel, newtup, oldtup, options) \
 	toast_insert_or_update((rel), (newtup), (oldtup), true, true)
@@ -40,6 +53,14 @@
 #define log_newpage(rnode, forknum, blk, page) \
 	log_newpage((rnode), (blk), (page))
 
+#endif
+
+/**
+ *  * pg_tli is removed in 9.3 and added pg_checksum instead
+ *   */
+#if PG_VERSION_NUM >= 90300
+#define PageSetTLI(page, tli) \
+	(((PageHeader) (page))->pd_checksum = (uint16) (0))
 #endif
 
 /**
@@ -77,6 +98,7 @@ static void	DirectWriterDumpParams(DirectWriter *self);
 static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose);
 
 #define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
+#define GetTargetPage(self,blk_offset)    ((Page) ((self)->blocks + BLCKSZ * ((self)->curblk - blk_offset)))
 
 /**
  * @brief Total number of blocks at the time
@@ -224,6 +246,8 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 	if (PageGetFreeSpace(page) < MAXALIGN(tuple->t_len) +
 		RelationGetTargetPageFreeSpace(self->base.rel, HEAP_DEFAULT_FILLFACTOR))
 	{
+
+		
 		if (self->curblk < BLOCK_BUF_NUM - 1)
 			self->curblk++;
 		else
@@ -368,7 +392,7 @@ DirectWriterDumpParams(DirectWriter *self)
 	appendStringInfo(&buf, "TRUNCATE = %s\n",
 					 self->base.truncate ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 }
 
@@ -460,7 +484,9 @@ flush_pages(DirectWriter *loader)
 	 * when a transaction is commited.	COPY prevents xid reuse by
 	 * this method.
 	 */
-	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel))
+#if PG_VERSION_NUM >= 90100
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel)
+			&& !(loader->base.rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) )
 	{
 		XLogRecPtr	recptr;
 
@@ -468,7 +494,16 @@ flush_pages(DirectWriter *loader)
 			ls->ls.exist_cnt, loader->blocks);
 		XLogFlush(recptr);
 	}
+#else
+	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel) )
+	{
+		XLogRecPtr	recptr;
 
+		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
+			ls->ls.exist_cnt, loader->blocks);
+		XLogFlush(recptr);
+	}
+#endif
 	/*
 	 * Write blocks. We might need to write multiple files on boundary of
 	 * relation segments.
@@ -495,6 +530,19 @@ flush_pages(DirectWriter *loader)
 
 		/* Write the last block number to the load status file. */
 		UpdateLSF(loader, flush_num);
+
+#if PG_VERSION_NUM >= 90300
+		/* If we need a checksum, add it */
+	        if (DataChecksumsEnabled()){
+        		int j = 0;
+			Page contained_page;
+	        	for (  j=0; j<flush_num; j++ ) {
+                		contained_page = GetTargetPage(loader,j);
+		                ((PageHeader) contained_page)->pd_checksum = 
+					pg_checksum_page((char *) contained_page, LS_TOTAL_CNT(ls) - 1 - j);
+        		}
+		}	
+#endif
 
 		/*
 		 * Flush flush_num data block to the current file.

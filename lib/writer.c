@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer.c
  *
- *	  Copyright (c) 2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2011-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -104,7 +104,7 @@ WriterDumpParams(Writer *self)
 
 	appendStringInfo(&buf, "VERBOSE = %s\n", self->verbose ? "YES" : "NO");
 
-	LoggerLog(INFO, buf.data);
+	LoggerLog(INFO, buf.data, 0);
 	pfree(buf.data);
 
 	self->dumpParams(self);

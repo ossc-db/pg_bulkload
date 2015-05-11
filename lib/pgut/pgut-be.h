@@ -2,7 +2,7 @@
  *
  * pgut-be.h
  *
- * Copyright (c) 2009-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -172,6 +172,12 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 #elif PG_VERSION_NUM < 90000
 #define RelationSetNewRelfilenode(rel, xid) \
 	setNewRelfilenode((rel), (xid))
+#elif PG_VERSION_NUM < 90300
+#define RelationSetNewRelfilenode(rel, xid) \
+	RelationSetNewRelfilenode((rel), (xid))
+#elif PG_VERSION_NUM < 90500
+#define RelationSetNewRelfilenode(rel, xid) \
+	RelationSetNewRelfilenode((rel), (xid), (xid))
 #endif
 
 #if PG_VERSION_NUM < 80400

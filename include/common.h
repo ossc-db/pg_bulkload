@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/common.h
  *
- *	  Copyright (c) 2010-2012, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2010-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -13,5 +13,13 @@
 #define COMMON_H_INCLUDED
 
 #define PG_BULKLOAD_VERSION "3.2devel"
+
+#ifndef PG_PRINTF_ATTRIBUTE
+#ifdef WIN32
+#define PG_PRINTF_ATTRIBUTE gnu_printf
+#else
+#define PG_PRINTF_ATTRIBUTE printf
+#endif
+#endif
 
 #endif   /* COMMON_H_INCLUDED */

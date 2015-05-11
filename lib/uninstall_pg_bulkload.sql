@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: uninstall_pg_bulkload.sql
  *
- *    Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *    Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 SET search_path = public;

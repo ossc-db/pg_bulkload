@@ -28,6 +28,7 @@
 <li><a href="#details">詳細</a></li>
 <li><a href="#install">インストール方法</a></li>
 <li><a href="#requirement">動作環境</a></li>
+<li><a href="#releasenote">リリースノート<a></li>
 <li><a href="#seealso">関連項目</a></li>
 </ol>
 </div>
@@ -41,6 +42,9 @@ pg_bulkload [ OPTIONS ] [ controlfile ]
 </p>
 
 <h2 id="description">説明</h2>
+<p style="color:red">
+重要な制約: pg_bulkloadは、PITRやレプリケーション環境では期待どおりに動作しません。詳細は<a href="#restrictions">こちら</a>を参照してください。
+</p>
 <p>
 pg_bulkload は、大量のデータを高速に投入する目的のためのツールです。
 データベース制約のチェックの有無や、エラーデータをスキップして投入を継続するか否かを制御でき、入力データに応じた柔軟なデータができます。
@@ -54,7 +58,11 @@ pg_bulkload は元々は PostgreSQL 組み込みのデータロード用コマ�
 <p>
 バージョン 3.1 では、テーブルの他に固定長のバイナリファイルへ出力できます。
 入力データの整合性を確認しながらバイナリファイルに変換できるため、出力されたバイナリファイルのテーブルへのロード時間を短縮できます。
-また、マルチプロセス実行機能を改良し、より高速にロードできるようになりました。
+また、マルチプロセス実行機能を改良し、入力ファイルの読み込みと、テーブルデータの書き込みを別プロセスで並列に実行することにより、さらに高速にロードできるようになりました。
+</p>
+
+<p>
+ご利用の際はなるべく最新バージョンにてお願い致します。古いバージョンにて発覚した不具合については<a href="#releasenote">リリースノート</a>を参照ください。
 </p>
 
 <h2 id="examples">使用例</h2>
@@ -265,7 +273,7 @@ INPUT = generate_series(1, 1000)  # 1から1,000の連番をロードする
 <dd>
 ロード方式を以下のいずれかで指定します。デフォルトは DIRECT です。
 <ul>
-  <li>DIRECT   : テーブルに直接データをロードします。高速ですが特殊なリカバリ手順が必要です。WALをスキップし、共有バッファも汚しません。</li>
+  <li>DIRECT   : テーブルに直接データをロードします。高速ですが特殊なリカバリ手順が必要です。WALを<b>極力スキップ</b>し、共有バッファも汚しません。（※トランザクション管理上必要なWALは出力します。）</li>
   <li>BUFFERED : 共有バッファを使用してテーブルにデータをロードします。特殊なリカバリは不要です。ただし、WALを書き、共有バッファも汚します。</li>
   <li>BINARY   : バイナリファイルに出力します。バイナリファイルと同じディレクトリに、出力したバイナリファイルをロードするためのサンプル制御ファイルを出力します。サンプル制御ファイルのファイル名は &lt;バイナリファイル名&gt;.ctl となります。</li>
   <li>PARALLEL : 「WRITER=DIRECT」と「MULTI_PROCESS=YES」を指定した場合と同じです。
@@ -624,8 +632,8 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 <h4>PostgreSQL 起動手順</h4>
 <p>pg_bulkload がクラッシュし、.loadstatus ファイルが $PGDATA/pg_bulkload に残っていた場合、データベースは pg_bulkload 独自のリカバリ手順によってリカバリする必要があります。これは "pg_bulkload -r" コマンドを "pg_ctl start" より前に実行することにより行います。PostgreSQL の起動・停止を postgresql スクリプトにより行うことで、このリカバリをし忘れることを防ぎます。postgresql スクリプトは内部的に "pg_bulkload -r" を実行し、続けて "pg_ctl start" を行っています。そのためダイレクトロードの利用環境下では、pg_ctl を直接使わずに、postgresql スクリプトを利用することをお勧めいたします。</p>
 
-<h4>PITR</h4>
-<p>WAL を残さないために、PITR によるアーカイブログリカバリは利用できません。もし PITR を利用する場合には、ロード終了後に対象のデータベースのバックアップを取ってください。</p>
+<h4>PITR/Replication</h4>
+<p>適切なWAL を残さないため、pg_bulkloadを利用したときのWALを用いてアーカイブログリカバリ(PITR)を行うことは推奨できません。もし PITR を利用する場合には、pg_bulkloadによるロード終了後に対象のデータベースのバックアップを取って、そこからを起点に実施してください。ストリーミングレプリケーションを利用している場合は、ロード終了後のバックアップからスタンバイを作り直してください。</p>
 
 <h4>$PGDATA/pg_bulkload 内のロードステータスファイル</h4>
 <p>$PGDATA/pg_bulkload ディレクトリ中のロードステータスファイル (*.loadstatus) は絶対に削除してはいけません。 pg_bulkload のリカバリのために必要になるからです。</p>
@@ -727,6 +735,10 @@ $ make USE_PGXS=1 install</pre>
 <pre>$ postgresql start
 $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 
+<p>PostgreSQL9.2以降では、sqlファイルによる登録の他に、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
+<pre>$ psql database_name
+database_name=# CREATE EXTENSION pg_bulkload;</pre>
+
 <h3 id="rpm">RPM パッケージからのインストール</h3>
 <p>通常の RPM パッケージのインストール手順と同様です。
 pg_bulkload インストール前に postgresql-server がインストールされていることを確認してください。
@@ -744,13 +756,69 @@ pg_bulkload インストール前に postgresql-server がインストールさ�
 <pre>$ postgresql start
 $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
 
+<p>ソースコードからのインストール同様、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
+<pre>$ psql database_name
+database_name=# CREATE EXTENSION pg_bulkload;</pre>
+
+<p>なお、regression testを行うにはPostgreSQLサーバを起動させた状態で、以下のコマンドを実行してください。</p>
+<pre>$ make installcheck</pre>
+
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4</dd>
 <dt>OS</dt>
-<dd>RHEL 5.5, Fedora 12, Windows XP</dd>
+<dd>RHEL 5/6/7</dd>
 </dl>
+
+<h2 id="releasenote">リリースノート</h2>
+<p>
+<h4>3.1.8</h4>
+<ul>
+<li>PostgreSQL 9.4.1, 9.3.6, 9.2.10, 9.1.15, 9.0.19において、CHECK 制約を有効にしたロードを行った際に PostgreSQL がクラッシュする可能性がありました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.7</h4>
+<ul>
+<li>PostgreSQL 9.4 に対応しました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.6</h4>
+<ul>
+<li>WRITER=PARALLELモードを利用した際、環境変数PGHOSTのハンドリングが適切に行われていませんでした。これにより、PostgreSQLのunix_socket_directory(9.3以降はunix_socket_directories)設定値をデフォルトから変更していた場合、WRITER=PARALLELモードでのロードが動作しませんでした。</li>
+<li>PostgreSQL9.2.4以降で、SQL以外で作成したFILTER関数を使用した際に、ロードに失敗する不具合がありました。</li>
+<li>PostgreSQL 9.4beta1に対応しました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.5</h4>
+<ul>
+<li>PostgreSQL9.3に対応しました。</li>
+<li>UNLOGGEDテーブルの取り扱い時に誤ってWALを出力する不具合がありました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.4</h4>
+<ul>
+<li>PostgreSQL9.2.4において、SQLで作成したFILTER関数を用いてデータをロードした際、メモリリークが発生する不具合がありました。</li>
+<li>postgresqlスクリプトに、現在は廃止されたpg_bulkloadのオプションに関するコードが残っていました。</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.3</h4>
+<ul>
+<li>WRITER=PARALLELモードを利用した際、一部データが正しくロードされない場合がありました。</li>
+<li>ストリーミング・レプリケーション構成のPostgreSQLに対して、マスタ側にWRITER=BUFFERDモードでデータをロードした際、スレーブ側のテーブルのインデックスが破損する場合がありました。</li>
+</ul>
+</p>
+
 
 <h2 id="seealso">関連項目</h2>
 <a href="http://www.postgresql.jp/document/current/html/sql-copy.html">COPY</a>
@@ -760,7 +828,7 @@ $ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
   <a href="index_ja.html">Top</a> &gt;
   <a href="pg_bulkload-ja.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

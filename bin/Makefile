@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
@@ -38,10 +38,12 @@ ifndef MAJORVERSION
 MAJORVERSION := $(basename $(VERSION))
 endif
 
-REGRESS_OPTS += $(if $(filter 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
+REGRESS_OPTS += $(if $(filter 8.3 8.4 9.0, $(MAJORVERSION)), --multibyte=UTF8, --encoding=UTF8)
 
 sql/init.sql: sql/init-$(MAJORVERSION).sql
 	cp sql/init-$(MAJORVERSION).sql sql/init.sql
+sql/init-8.3.sql:
+	cp sql/init-legacy.sql sql/init-8.3.sql
 sql/init-8.4.sql:
 	cp sql/init-legacy.sql sql/init-8.4.sql
 sql/init-9.0.sql:
@@ -66,4 +68,4 @@ subclean:
 	rm -f sql/load_function.sql sql/load_filter.sql 
 	rm -f sql/init.sql sql/init-{8.3,8.4,9.0,9.1,9.2,9.3,9.4}.sql
 
-installcheck: sql/init.sql sql/load_function.sql sql/load_filter.sql 
+installcheck: sql/init.sql sql/load_function.sql sql/load_filter.sql

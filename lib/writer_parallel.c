@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_parallel.c
  *
- *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"
@@ -363,16 +363,28 @@ connect_to_localhost(void)
 	char   *host;
 	char	dbName[1024];
 
-	/* Also ensure backend isn't confused by this environment var. */
-	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
-
 #ifdef HAVE_UNIX_SOCKETS
+
+#if PG_VERSION_NUM >= 90300
+    /* UnixSocketDir exist only 9.2 and before. */
+    char *UnixSocketDir;
+
+    /* Use PGHOST if it is set, otherwise use unix_socket_direcotoris */
+    UnixSocketDir = getenv("PGHOST");
+    if ( UnixSocketDir == NULL ) {
+        UnixSocketDir = strtok(Unix_socket_directories, ",");
+    }
+#endif
+
 	host = (UnixSocketDir == NULL || UnixSocketDir[0] == '\0') ?
 				DEFAULT_PGSOCKET_DIR :
 				UnixSocketDir;
 #else
 	host = "localhost";
 #endif
+
+	/* Also ensure backend isn't confused by this environment var. */
+	setenv("PGCLIENTENCODING", GetDatabaseEncodingName(), 1);
 
 	/* set dbname and disable hostaddr */
 	snprintf(dbName, lengthof(dbName), "dbname='%s' hostaddr=''",

@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_strutil.c
  *
- *	  Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -25,6 +25,20 @@
 
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
+
+#if PG_VERSION_NUM >= 90300
+#include "access/htup_details.h"
+#endif
+
+#if PG_VERSION_NUM >= 90400
+
+#define parseTypeString(arg, argtype, typmod) \
+	parseTypeString(arg, argtype, typmod, false)
+
+#define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
+	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false)
+
+#endif
 
 char *
 QuoteString(char *str)

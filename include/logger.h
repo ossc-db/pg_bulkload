@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/logger.h
  *
- *	  Copyright (c) 2009-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -9,6 +9,9 @@
  * @brief Declaration of logger module
  *
  */
+
+#include "common.h"
+
 #ifndef LOGGER_H_INCLUDED
 #define LOGGER_H_INCLUDED
 
@@ -19,7 +22,8 @@
 typedef struct Logger	Logger;
 
 extern void CreateLogger(const char *path, bool verbose, bool writer);
-extern void LoggerLog(int elevel, const char *fmt,...);
+extern void LoggerLog(int elevel, const char *fmt,...)
+__attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 extern void LoggerClose(void);
 
 /*
