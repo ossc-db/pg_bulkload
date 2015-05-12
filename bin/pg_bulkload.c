@@ -18,8 +18,8 @@
 #include "pgut/pgut-list.h"
 
 const char *PROGRAM_VERSION	= PG_BULKLOAD_VERSION;
-const char *PROGRAM_URL		= "http://pgbulkload.projects.postgresql.org/";
-const char *PROGRAM_EMAIL	= "pgbulkload-general@pgfoundry.org";
+const char *PROGRAM_URL		= "http://sourceforge.net/projects/pgbulkload/";
+const char *PROGRAM_ISSUES	= "http://sourceforge.net/p/pgbulkload/tickets/";
 
 /*
  * Global variables
