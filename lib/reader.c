@@ -430,7 +430,11 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         attnums = tupDesc->natts;
         for(i = 0; i <= attnums; i++) 
         {
-            rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
+#if PG_VERSION_NUM >= 90500
+			rte->insertedCols = bms_add_member(rte->insertedCols, i);
+#else
+			rte->modifiedCols = bms_add_member(rte->modifiedCols, i);
+#endif
         }
 #endif
 
