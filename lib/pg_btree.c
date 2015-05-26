@@ -136,7 +136,11 @@ SpoolerOpen(Spooler *self,
 	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	self->relinfo->ri_TrigInstrument = NULL;
 
+#if PG_VERSION_NUM >= 90500
+	ExecOpenIndices(self->relinfo, false);
+#else
 	ExecOpenIndices(self->relinfo);
+#endif
 
 	self->estate = CreateExecutorState();
 	self->estate->es_num_result_relations = 1;
