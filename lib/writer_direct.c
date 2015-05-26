@@ -14,6 +14,7 @@
 #include "access/heapam.h"
 #include "access/transam.h"
 #include "access/tuptoaster.h"
+#include "access/xlog.h"
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
 #include "executor/executor.h"
@@ -38,6 +39,10 @@
 #include "access/heapam_xlog.h"
 #include "storage/checksum.h"
 #include "storage/checksum_impl.h"
+#endif
+
+#if PG_VERSION_NUM >= 90500
+#include "access/xloginsert.h"
 #endif
 
 #if PG_VERSION_NUM >= 90400
