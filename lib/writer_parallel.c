@@ -395,7 +395,11 @@ connect_to_localhost(void)
 		GetConfigOption("port", false, false),
 		NULL, NULL,
 		dbName,
+#if PG_VERSION_NUM >= 90500
+		GetUserNameFromId(GetUserId(), false),
+#else
 		GetUserNameFromId(GetUserId()),
+#endif
 		NULL);
 	if (PQstatus(conn) == CONNECTION_BAD)
 	{
