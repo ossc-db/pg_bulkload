@@ -36,7 +36,12 @@
 #include "logger.h"
 
 static void unused_bt_spooldestroy(BTSpool *);
+#if PG_VERSION_NUM >= 90500
+static void unused_bt_spool(BTSpool *, ItemPointer self,
+               Datum *, bool *);
+#else
 static void unused_bt_spool(IndexTuple, BTSpool *);
+#endif
 static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 
 #define _bt_spooldestroy	unused_bt_spooldestroy
@@ -342,7 +347,11 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 		{
 			IndexTuple itup = index_form_tuple(RelationGetDescr(indices[i]), values, isnull);
 			itup->t_tid = *tupleid;
+#if PG_VERSION_NUM >= 90500
+			_bt_spool(spools[i], &itup->t_tid, values, isnull);
+#else
 			_bt_spool(itup, spools[i]);
+#endif
 			pfree(itup);
 		}
 		else
