@@ -56,16 +56,47 @@ sql/init-9.3.sql:
 	cp sql/init-extension.sql sql/init-9.3.sql
 sql/init-9.4.sql:
 	cp sql/init-extension.sql sql/init-9.4.sql
-sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
-	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
+
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
+sql/load_filter-8.3.sql:
+	cp sql/load_filter-v1.sql sql/load_filter-8.3.sql
+sql/load_filter-8.4.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-8.4.sql
+sql/load_filter-9.0.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-9.0.sql
+sql/load_filter-9.1.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-9.1.sql
+sql/load_filter-9.2.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-9.2.sql
+sql/load_filter-9.3.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-9.3.sql
+sql/load_filter-9.4.sql:
+	cp sql/load_filter-v2.sql sql/load_filter-9.4.sql
+
+sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
+	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
+sql/load_function-8.3.sql:
+	cp sql/load_function-v1.sql sql/load_function-8.3.sql
+sql/load_function-8.4.sql:
+	cp sql/load_function-v2.sql sql/load_function-8.4.sql
+sql/load_function-9.0.sql:
+	cp sql/load_function-v2.sql sql/load_function-9.0.sql
+sql/load_function-9.1.sql:
+	cp sql/load_function-v2.sql sql/load_function-9.1.sql
+sql/load_function-9.2.sql:
+	cp sql/load_function-v2.sql sql/load_function-9.2.sql
+sql/load_function-9.3.sql:
+	cp sql/load_function-v2.sql sql/load_function-9.3.sql
+sql/load_function-9.4.sql:
+	cp sql/load_function-v2.sql sql/load_function-9.4.sql
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/load_function.sql sql/load_filter.sql 
 	rm -f sql/init.sql sql/init-{8.3,8.4,9.0,9.1,9.2,9.3,9.4}.sql
+	rm -f sql/load_filter.sql sql/load_filter-{8.3,8.4,9.0,9.1,9.2,9.3,9.4}.sql
+	rm -f sql/load_function.sql sql/load_function-{8.3,8.4,9.0,9.1,9.2,9.3,9.4}.sql
 
 installcheck: sql/init.sql sql/load_function.sql sql/load_filter.sql
