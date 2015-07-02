@@ -15,7 +15,22 @@ Branches
 
 How to use
 ----------
-See doc/index.html.
+pg_bulkload works with control file like below,
+
+````
+$ pg_bulkload sample_csv.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	8 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+````
+
+See documentation about detail usage.
+
+http://ossc-db.github.io/pg_bulkload/index.html
 
 How to build and install from source code
 -----------------------------------------
@@ -34,11 +49,6 @@ Start PostgreSQL server and run the below command.
 ````
  $ make installcheck
 ````
-
-Bug report
-----------
-
-https://sourceforge.net/p/pgbulkload/tickets/
 
 
 
