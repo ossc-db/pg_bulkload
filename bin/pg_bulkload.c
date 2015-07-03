@@ -18,8 +18,8 @@
 #include "pgut/pgut-list.h"
 
 const char *PROGRAM_VERSION	= PG_BULKLOAD_VERSION;
-const char *PROGRAM_URL		= "http://sourceforge.net/projects/pgbulkload/";
-const char *PROGRAM_ISSUES	= "http://sourceforge.net/p/pgbulkload/tickets/";
+const char *PROGRAM_URL		= "http://github.com/ossc-db/pg_bulkload";
+const char *PROGRAM_ISSUES	= "http://github.com/ossc-db/pg_bulkload/issues";
 
 /*
  * Global variables
