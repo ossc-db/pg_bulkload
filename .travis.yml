@@ -7,25 +7,26 @@ before_install:
   - sudo apt-get -y install bc libpam-dev libedit-dev
   - git clone https://github.com/postgres/postgres.git postgres-dev
   - cd postgres-dev
-  - export POSTGRES_HOME=/home/travis/build/bwtakacy/pg_bulkload/pgsql/$PGVERSION
-  - echo 'export POSTGRES_HOME=/home/travis/build/bwtakacy/pg_bulkload/pgsql/$PGVERSION' >> ~/.bashrc
+  - if [ $PGVERSION = 9.5 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
+  - export POSTGRES_HOME=/home/travis/build/ossc-db/pg_bulkload/pgsql/$PGVERSION
+  - echo 'export POSTGRES_HOME=/home/travis/build/ossc-db/pg_bulkload/pgsql/$PGVERSION' >> ~/.bashrc
   - ./configure --prefix=$POSTGRES_HOME
   - make -j 2
   - make install
   - echo 'export PATH=$PATH:$POSTGRES_HOME/bin' >> ~/.bashrc
   - export PATH=$PATH:$POSTGRES_HOME/bin
-  - echo 'export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
-  - export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION
+  - echo 'export PGDATA=/home/travis/build/ossc-db/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
+  - export PGDATA=/home/travis/build/ossc-db/pg_bulkload/pg_data/$PGVERSION
   - mkdir -p $PGDATA
-  - mkdir -p /home/travis/build/bwtakacy/pg_bulkload/pg_data/archivelog
+  - mkdir -p /home/travis/build/ossc-db/pg_bulkload/pg_data/archivelog
   - initdb --no-locale -D $PGDATA
   - sudo echo "logging_collector = on" >> $PGDATA/postgresql.conf
   - pg_ctl -V
   - pg_ctl -D $PGDATA start
 
 before_script:
-  - cd /home/travis/build/bwtakacy/pg_bulkload
-  - git clone https://github.com/bwtakacy/pg_bulkload.git pg_bulkload
+  - cd /home/travis/build/ossc-db/pg_bulkload
+  - git clone https://github.com/ossc-db/pg_bulkload.git pg_bulkload
   - cd pg_bulkload && git describe --alway
   - make
   - make install
@@ -42,4 +43,4 @@ compiler:
 script: make installcheck
 
 after_script:
-  - cat /home/travis/build/bwtakacy/pg_bulkload/pg_bulkload/bin/regression.diffs
+  - cat /home/travis/build/ossc-db/pg_bulkload/pg_bulkload/bin/regression.diffs
