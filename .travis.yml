@@ -10,16 +10,16 @@ before_install:
   - sudo apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::="--force-confnew" install postgresql-$PGVERSION postgresql-server-dev-$PGVERSION postgresql-contrib-$PGVERSION
   - sudo apt-cache policy libpq5
   - sudo apt-cache policy libpq-dev
-  - if [ $PGVERSION = 9.3 ] ; then sudo apt-get -y --force-yes install libpq5=9.3.7-1.pgdg12.4+1 libpq-dev=9.3.7-1.pgdg12.4+1 ; fi
-  - if [ $PGVERSION = 9.2 ] ; then sudo apt-get -y --force-yes install libpq5=9.2.11-1.pgdg12.4+1 libpq-dev=9.2.11-1.pgdg12.4+1 ; fi
-  - if [ $PGVERSION = 9.1 ] ; then sudo apt-get -y --force-yes install libpq5=9.1.16-1.pgdg12.4+1 libpq-dev=9.1.16-1.pgdg12.4+1 ; fi
-  - if [ $PGVERSION = 9.0 ] ; then sudo apt-get -y --force-yes install libpq5=9.0.20-1.pgdg12.4+1 libpq-dev=9.0.20-1.pgdg12.4+1 ; fi
+  - if [ $PGVERSION = 9.3 ] ; then sudo apt-get -y --force-yes install libpq5=9.3.9-1.pgdg12.4+1 libpq-dev=9.3.9-1.pgdg12.4+1 ; fi
+  - if [ $PGVERSION = 9.2 ] ; then sudo apt-get -y --force-yes install libpq5=9.2.13-1.pgdg12.4+1 libpq-dev=9.2.13-1.pgdg12.4+1 ; fi
+  - if [ $PGVERSION = 9.1 ] ; then sudo apt-get -y --force-yes install libpq5=9.1.18-1.pgdg12.4+1 libpq-dev=9.1.18-1.pgdg12.4+1 ; fi
+  - if [ $PGVERSION = 9.0 ] ; then sudo apt-get -y --force-yes install libpq5=9.0.22-1.pgdg12.4+1 libpq-dev=9.0.22-1.pgdg12.4+1 ; fi
   - if [ $PGVERSION = 8.4 ] ; then sudo apt-get -y --force-yes install libpq5=8.4.22-1.pgdg12.4+1 libpq-dev=8.4.22-1.pgdg12.4+1 ; fi
   - sudo service postgresql stop
   - echo 'export PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin' >> ~/.bashrc
   - export PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin
-  - echo 'export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
-  - export PGDATA=/home/travis/build/bwtakacy/pg_bulkload/pg_data/$PGVERSION
+  - echo 'export PGDATA=/home/travis/build/ossc-db/pg_bulkload/pg_data/$PGVERSION' >> ~/.bashrc
+  - export PGDATA=/home/travis/build/ossc-db/pg_bulkload/pg_data/$PGVERSION
   - mkdir pg_data
   - initdb --no-locale -D pg_data/$PGVERSION
   - sudo chmod 777 /var/run/postgresql
@@ -32,7 +32,7 @@ before_install:
   - pg_ctl -D $PGDATA start
 
 before_script:
-  - git clone https://github.com/bwtakacy/pg_bulkload.git pg_bulkload
+  - git clone https://github.com/ossc-db/pg_bulkload.git pg_bulkload
   - cd pg_bulkload && git describe --alway
   - git checkout -b VERSION3_1_STABLE origin/VERSION3_1_STABLE
   - make
@@ -55,4 +55,4 @@ compiler:
 script: make installcheck
 
 after_script:
-  - cat /home/travis/build/bwtakacy/pg_bulkload/pg_bulkload/bin/regression.diffs
+  - cat /home/travis/build/ossc-db/pg_bulkload/pg_bulkload/bin/regression.diffs
