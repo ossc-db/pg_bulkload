@@ -725,7 +725,15 @@ CHECK 制約を適用する場合は "CHECK_CONSTRAINTS=YES" を指定してく�
 </ul>
 
 <h3 id="build">ソースコードからのインストール</h3>
-<p>pgxs を使ってビルドできます。</p>
+<p>ソースコードからインストールするには、以下のライブラリが必要です。利用しているLinuxディストリビューションに応じたものをインストールしてください。
+<ul>
+<li>PostgreSQL devel package : postgresqlxx-devel(RHEL), postgresql-server-dev-x.x(Ubuntu)</li>
+<li>PAM devel package : pam-devel(RHEL), libpam-devel(Ubuntu)</li>
+<li>Readline devel or libedit devel package : readline-devel or libedit-devel(RHEL), libreadline-dev or libedit-dev(Ubuntu)</li>
+<li>C compiler and build utility : "Development Tools" (RHEL), build-essential(Ubuntu)</li>
+</ul>
+</p>
+<p>必要なライブラリが揃っていれば、pgxs を使ってビルドできます。「USE_PGXS=1」オプションは省略可能です。</p>
 <pre>$ cd pg_bulkload
 $ make USE_PGXS=1
 $ su
@@ -733,7 +741,7 @@ $ make USE_PGXS=1 install</pre>
 
 <p>pg_bulkload 用の関数を登録します。</p>
 <pre>$ postgresql start
-$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
 
 <p>PostgreSQL9.2以降では、sqlファイルによる登録の他に、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
 <pre>$ psql database_name
@@ -754,7 +762,7 @@ pg_bulkload インストール前に postgresql-server がインストールさ�
 
 <p>pg_bulkload 用の関数を登録します。上記 rpm -qs の実行結果で表示される pg_bulkload.sql のパスを確認してください。以下の例では環境変数 $PGSHARE を利用しています。</p>
 <pre>$ postgresql start
-$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
 
 <p>ソースコードからのインストール同様、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
 <pre>$ psql database_name

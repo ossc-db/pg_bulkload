@@ -799,7 +799,14 @@ pg_bulkload installation assumes the following:
 </ul>
 
 <h3 id="build">Installation from Source Code</h3>
-<p>You can build pg_bulkload with pgxs.</p>
+<p>There are some requirement libraries. Please install them before build pg_bulkload.
+<ul>
+<li>PostgreSQL devel package : postgresqlxx-devel(RHEL), postgresql-server-dev-x.x(Ubuntu)</li>
+<li>PAM devel package : pam-devel(RHEL), libpam-devel(Ubuntu)</li>
+<li>Readline devel or libedit devel package : readline-devel or libedit-devel(RHEL), libreadline-dev or libedit-dev(Ubuntu)</li>
+<li>C compiler and build utility : "Development Tools" (RHEL), build-essential(Ubuntu)</li>
+</ul>
+<p>You can build pg_bulkload with pgxs. It is optional to specify "USE_PGXS=1" explicitly.</p>
 <pre>$ cd pg_bulkload
 $ make USE_PGXS=1
 $ su
@@ -807,7 +814,7 @@ $ make USE_PGXS=1 install</pre>
 
 <p>Then, register functions to the database.</p>
 <pre>$ postgresql start
-$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
 
 <p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
 <pre>$ psql database_name
@@ -833,7 +840,7 @@ The following command will install pg_bulkload:
 The script pg_bulkload.sql is in the path diplayed by rpm -qs.
 $PGSHARE is used instead in the following example:</p>
 <pre>$ postgresql start
-$ psql -f $PGSHARE/contrib/pg_bulkload.sql database_name</pre>
+$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
 
 <p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
 <pre>$ psql database_name
