@@ -467,28 +467,30 @@ flush_pages(DirectWriter *loader)
 
 	if (num <= 0)
 		return;		/* no work */
-
-	/*
-	 * Add WAL entry (only the first page) to ensure the current xid will
-	 * be recorded in xlog. We must flush some xlog records with XLogFlush()
-	 * before write any data blocks to follow the WAL protocol.
-	 *
-	 * If postgres process, such as loader and COPY, is killed by "kill -9",
-	 * database will be rewound to the last checkpoint and recovery will
-	 * be performed using WAL.
-	 *
-	 * After the recovery, if there are xid's which have not been recorded
-	 * to WAL, such xid's will be reused.
-	 *
-	 * However, in the loader and COPY, data file is actually updated and
-	 * xid must not be reused.
-	 *
-	 * WAL entry with such xid can be added using XLogInsert().  However,
-	 * such entries are not really written to the disk immediately.
-	 * WAL entries are flushed to the disk by XLogFlush(), typically
-	 * when a transaction is commited.	COPY prevents xid reuse by
-	 * this method.
-	 */
+       /*
+         * Add WAL entry (only the first page) to ensure the current XID will
+         * be recorded in xlog.
+         *
+         * In recovery mode, PostgreSQL recognizes the current XID which was 
+         * already assigned from reading through the xlog. 
+         *
+         * As for pg_bulkload, if the first page WAL entry is not recorded, 
+         * PostgreSQL does not know what XID is being used now. 
+         * This may cause databese an inconsistent state.
+         *
+         * For example,
+         * 1. pg_bulkload is started in XID=1111.
+         * 2. PostgreSQL process crashes during the loading.
+         * 3. PostgreSQL drops all existed connections and begins crash recovery
+         *    with xlog. If pg_bulkload do not add the first page WAL entry to xlog, 
+         *    PostgreSQL recognizes that 1111 is not assigned yet.
+         * 4. After recovery, a new transaction can get 1111 as XID.
+         *    The data insufficiently loaded by pg_bulkload can be seen because
+         *    the data has the same XID.
+         *
+         * In order to prevent this issue we define that only the first page is added
+         * to WAL entry before starting load even if it is direct mode.
+         */
 #if PG_VERSION_NUM >= 90100
 	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel)
 			&& !(loader->base.rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) )
