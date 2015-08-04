@@ -467,30 +467,32 @@ flush_pages(DirectWriter *loader)
 
 	if (num <= 0)
 		return;		/* no work */
-       /*
-         * Add WAL entry (only the first page) to ensure the current XID will
-         * be recorded in xlog.
-         *
-         * In recovery mode, PostgreSQL recognizes the current XID which was 
-         * already assigned from reading through the xlog. 
-         *
-         * As for pg_bulkload, if the first page WAL entry is not recorded, 
-         * PostgreSQL does not know what XID is being used now. 
-         * This may cause databese an inconsistent state.
-         *
-         * For example,
-         * 1. pg_bulkload is started in XID=1111.
-         * 2. PostgreSQL process crashes during the loading.
-         * 3. PostgreSQL drops all existed connections and begins crash recovery
-         *    with xlog. If pg_bulkload do not add the first page WAL entry to xlog, 
-         *    PostgreSQL recognizes that 1111 is not assigned yet.
-         * 4. After recovery, a new transaction can get 1111 as XID.
-         *    The data insufficiently loaded by pg_bulkload can be seen because
-         *    the data has the same XID.
-         *
-         * In order to prevent this issue we define that only the first page is added
-         * to WAL entry before starting load even if it is direct mode.
-         */
+
+	/*
+	 * Log the first page that pg_bulkload adds to WAL to ensure the current
+	 * XID will be recorded in xlog.
+	 *
+	 * In recovery mode, PostgreSQL recognizes the current XID which was
+	 * already assigned by reading through the xlog.
+	 *
+	 * As for pg_bulkload, if the first page WAL entry were not recorded,
+	 * PostgreSQL would not remember the XID being used for this loading.
+	 * This may cause an inconsistent database state after recovery.
+	 *
+	 * For example,
+	 * 1. pg_bulkload is started in XID=1111.
+	 * 2. PostgreSQL process crashes during the loading.
+	 * 3. PostgreSQL drops all existing connections and begins crash recovery
+	 *    with xlog. If pg_bulkload had not logged the first page, PostgreSQL
+	 *    would (wrongly) fail to recognize that 1111 has been used.
+	 * 4. After recovery, a new transaction would get 1111 as XID. If that
+	 *    transaction commits eventually, the data insufficiently loaded by
+	 *    pg_bulkload would be incorrectly visible because the loaded data
+	 *    would have the same XID.
+	 *
+	 * In order to prevent that, we arrange that the first page added by
+	 * pg_bulkload is logged to WAL.
+	 */
 #if PG_VERSION_NUM >= 90100
 	if (ls->ls.create_cnt == 0 && !RELATION_IS_LOCAL(loader->base.rel)
 			&& !(loader->base.rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) )
