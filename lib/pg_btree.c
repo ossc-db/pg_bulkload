@@ -237,7 +237,9 @@ IndexSpoolEnd(Spooler *self, bool reindex)
 	BTSpool **spools = self->spools;
 	int				i;
 	RelationPtr		indices = self->relinfo->ri_IndexRelationDescs;
+#if PG_VERSION_NUM >= 90500
 	char			persistence;
+#endif
 
 	Assert(spools != NULL);
 	Assert(self->relinfo != NULL);
