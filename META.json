@@ -8,7 +8,7 @@
    "provides": {
       "pg_bulkload": {
          "abstract": "High speed data loading utility for PostgreSQL",
-         "file": "lib/pg_bulkload.sql",
+         "file": "lib/pg_bulkload.so",
          "docfile": "doc/index.html",
          "version": "3.1.8"
       }
@@ -16,7 +16,7 @@
    "prereqs": {
       "runtime": {
          "requires": {
-            "PostgreSQL": "8.4.0"
+            "PostgreSQL": "8.4 - 9.4"
          }
       }
    },
@@ -26,7 +26,7 @@
       },
       "repository": {
         "url":  "https://github.com/ossc-db/pg_bulkload.git",
-        "web":  "https://github.com/ossc-db/pg_bulkload",
+        "web":  "http://ossc-db.github.io/pg_bulkload/index.html",
         "type": "git"
       }
    },
