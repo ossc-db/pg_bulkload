@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/reader.c
  *
- *	  Copyright (c) 2007-2015, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2016, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
