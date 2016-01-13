@@ -94,8 +94,8 @@ typedef struct BTReader
 } BTReader;
 
 static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique);
-static void IndexSpoolEnd(Spooler *self , bool reindex);
-static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex);
+static void IndexSpoolEnd(Spooler *self);
+static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate);
 
 static IndexTuple BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free);
 static bool BTReaderInit(BTReader *reader, Relation rel);
@@ -158,7 +158,7 @@ SpoolerClose(Spooler *self)
 {
 	/* Merge indexes */
 	if (self->spools != NULL)
-		IndexSpoolEnd(self, true);
+		IndexSpoolEnd(self);
 
 	/* Terminate spooler. */
 	ExecDropSingleTupleTableSlot(self->slot);
@@ -181,7 +181,7 @@ SpoolerInsert(Spooler *self, HeapTuple tuple)
 {
 	/* Spool keys in the tuple */
 	ExecStoreTuple(tuple, self->slot, InvalidBuffer, false);
-	IndexSpoolInsert(self->spools, self->slot, &(tuple->t_self), self->estate, true);
+	IndexSpoolInsert(self->spools, self->slot, &(tuple->t_self), self->estate);
 	BULKLOAD_PROFILE(&prof_writer_index);
 }
 
@@ -229,10 +229,10 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 }
 
 /*
- * IndexSpoolEnd - Flush and delete spools.
+ * IndexSpoolEnd - Flush and delete spools or reindex if not a btree index.
  */
 void
-IndexSpoolEnd(Spooler *self, bool reindex)
+IndexSpoolEnd(Spooler *self)
 {
 	BTSpool **spools = self->spools;
 	int				i;
@@ -251,7 +251,7 @@ IndexSpoolEnd(Spooler *self, bool reindex)
 			_bt_mergebuild(self, spools[i]);
 			_bt_spooldestroy(spools[i]);
 		}
-		else if (reindex)
+		else
 		{
 			Oid		indexOid = RelationGetRelid(indices[i]);
 
@@ -269,10 +269,6 @@ IndexSpoolEnd(Spooler *self, bool reindex)
 			CommandCounterIncrement();
 			BULKLOAD_PROFILE(&prof_reindex);
 		}
-		else
-		{
-			/* We already done using index_insert. */
-		}
 	}
 
 	pfree(spools);
@@ -284,7 +280,7 @@ IndexSpoolEnd(Spooler *self, bool reindex)
  *	Copy from ExecInsertIndexTuples.
  */
 static void
-IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate, bool reindex)
+IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate)
 {
 	ResultRelInfo  *relinfo;
 	int				i;
@@ -321,8 +317,8 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 		if (indices[i] == NULL)
 			continue;
 
-		/* Skip non-btree indexes on reindex mode. */
-		if (reindex && spools != NULL && spools[i] == NULL)
+		/* Skip non-btree indexes. */
+		if (spools != NULL && spools[i] == NULL)
 			continue;
 
 		indexInfo = indexInfoArray[i];
