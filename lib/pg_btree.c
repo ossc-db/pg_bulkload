@@ -277,7 +277,7 @@ IndexSpoolEnd(Spooler *self)
 /*
  * IndexSpoolInsert - 
  *
- *	Copy from ExecInsertIndexTuples.
+ *	Copied from ExecInsertIndexTuples.
  */
 static void
 IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate)
@@ -313,12 +313,13 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 		Datum		values[INDEX_MAX_KEYS];
 		bool		isnull[INDEX_MAX_KEYS];
 		IndexInfo  *indexInfo;
+		IndexTuple	itup;
 
-		if (indices[i] == NULL)
-			continue;
-
-		/* Skip non-btree indexes. */
-		if (spools != NULL && spools[i] == NULL)
+		/*
+		 * Skip non-btree indexes. Such indexes are handled with reindex
+		 * at the end.
+		 */
+		if (spools[i] == NULL)
 			continue;
 
 		indexInfo = indexInfoArray[i];
@@ -350,25 +351,15 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 
 		FormIndexDatum(indexInfo, slot, estate, values, isnull);
 
-		/*
-		 * Insert or spool the tuple.
-		 */
-		if (spools != NULL && spools[i] != NULL)
-		{
-			IndexTuple itup = index_form_tuple(RelationGetDescr(indices[i]), values, isnull);
-			itup->t_tid = *tupleid;
+		/* Spool the tuple. */
+		itup = index_form_tuple(RelationGetDescr(indices[i]), values, isnull);
+		itup->t_tid = *tupleid;
 #if PG_VERSION_NUM >= 90500
-			_bt_spool(spools[i], &itup->t_tid, values, isnull);
+		_bt_spool(spools[i], &itup->t_tid, values, isnull);
 #else
-			_bt_spool(itup, spools[i]);
+		_bt_spool(itup, spools[i]);
 #endif
-			pfree(itup);
-		}
-		else
-		{
-			/* Insert one by one */
-			index_insert(indices[i], values, isnull, tupleid, heapRelation, indices[i]->rd_index->indisunique);
-		}
+		pfree(itup);
 	}
 }
 
