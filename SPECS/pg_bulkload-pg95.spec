@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 9.3
+# SPEC file for pg_bulkload on PostgreSQL 9.5
 # Copyright (C) 2009-2015 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  9.3
+%define pgmajorversion  9.5
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -17,8 +17,8 @@ Source0:        https://github.com/ossc-db/pg_bulkload/archive/VERSION%{version}
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql93-devel, postgresql93
-Requires:       postgresql93
+BuildRequires:  postgresql95-devel, postgresql95
+Requires:       postgresql95
 
 
 %description
@@ -82,33 +82,12 @@ rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
 * Mon Jan 25 2016 - Amit Langote <langote_amit_f8@lab.ntt.co.jp> 3.1.9-1
+- Support PostgreSQL 9.5
 - Update to pg_bulkload 3.1.9
 * Mon Feb 16 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.8-1
 - Update to pg_bulkload 3.1.8
 * Tue Jan 06 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.7-1
 - Update to pg_bulkload 3.1.7
-* Fri Mar 23 2014 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.6-1
-- Update to pg_bulkload 3.1.6
-* Thu Dec 12 2013 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.5-1
-- Update to pg_bulkload 3.1.5
-* Thu Jul 25 2013 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.4-1
-- Update to pg_bulkload 3.1.4
-* Tue Apr 08 2013 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.3-1
-- Update to pg_bulkload 3.1.3
-* Thu Oct 25 2012 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.2-1
-- Update to pg_bulkload 3.1.2
-* Mon Jan 31 2011 - Kenji OTSUKA <otsuka.kenji@oss.ntt.co.jp> 3.0.1-1
-- Update to pg_bulkload 3.0.1
-* Thu Dec 01 2010 - Kenji OTSUKA <otsuka.kenji@oss.ntt.co.jp> 3.0.0-1
-- Update to pg_bulkload 3.0.0 for PostgreSQL 9.0
-* Tue Apr 28 2009 - Toru SHIMOGAKI <shimogaki.toru@oss.ntt.co.jp> 2.4.0-1
-- Fix BUILD directory "%{sname}-%{version}
-* Tue Apr 28 2009 - Toru SHIMOGAKI <shimogaki.toru@oss.ntt.co.jp> 2.4beta2-1
-- No need to prepare nbtsort.c and pg_crc for rpm only, because
-  o pg_bulkload source code includes nbtsort.c, and
-  o pg_crc isn't used now because of changing the management of load status
-    file protection logic.
-* Thu Apr 24 2009 - Toru SHIMOGAKI <shimogaki.toru@oss.ntt.co.jp> 2.4beta1-2
-- Use nbtsort.c and pg_crc.c directly.
-* Thu Apr 23 2009 - Toru SHIMOGAKI <shimogaki.toru@oss.ntt.co.jp> 2.4beta1-1
+* Fri Dec 19 2014 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.6-2
+- Support PostgreSQL 9.4beta1
 - Initial packaging

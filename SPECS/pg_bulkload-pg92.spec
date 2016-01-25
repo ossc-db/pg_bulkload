@@ -9,12 +9,12 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.8
+Version:        3_1_9
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
-Source0:        http://pgfoundry.org/frs/download.php/1301/%{sname}-%{version}.tar.gz
-URL:            http://pgfoundry.org/projects/pgbulkload/
+Source0:        https://github.com/ossc-db/pg_bulkload/archive/VERSION%{version}.tar.gz
+URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
 BuildRequires:  postgresql92-devel, postgresql92
@@ -81,6 +81,8 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Mon Jan 25 2016 - Amit Langote <langote_amit_f8@lab.ntt.co.jp> 3.1.9-1
+- Update to pg_bulkload 3.1.9
 * Mon Feb 16 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.8-1
 - Update to pg_bulkload 3.1.8
 * Tue Jan 06 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.7-1
