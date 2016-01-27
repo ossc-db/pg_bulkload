@@ -9,11 +9,11 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3_1_9
+Version:        VERSION3_1_9
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
-Source0:        https://github.com/ossc-db/pg_bulkload/archive/VERSION%{version}.tar.gz
+Source0:        https://github.com/ossc-db/pg_bulkload/archive/%{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
