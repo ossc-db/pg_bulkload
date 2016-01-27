@@ -13,7 +13,8 @@ Version:        VERSION3_1_9
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
-Source0:        https://github.com/ossc-db/pg_bulkload/archive/%{sname}-%{version}.tar.gz
+# You can get the tarball by following: https://github.com/ossc-db/pg_bulkload/archive/%{version}.tar.gz
+Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
