@@ -2,7 +2,7 @@
    "name": "pg_bulkload",
    "abstract": "High speed data loading utility for PostgreSQL",
    "description": "pg_bulkload is designed to load huge amount of data to a database. You can load data to table bypassing PostgreSQL shared buffers.",
-   "version": "3.1.8",
+   "version": "3.1.9",
    "maintainer": "Takashi Ohnishi <bwtakacy@gmail.com>",
    "license": "bsd",
    "provides": {
@@ -10,13 +10,13 @@
          "abstract": "High speed data loading utility for PostgreSQL",
          "file": "lib/pg_bulkload.so",
          "docfile": "doc/index.html",
-         "version": "3.1.8"
+         "version": "3.1.9"
       }
    },
    "prereqs": {
       "runtime": {
          "requires": {
-            "PostgreSQL": ">=8.4.0, <9.5.0"
+            "PostgreSQL": ">=8.4.0, <9.6.0"
          }
       }
    },
