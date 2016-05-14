@@ -16,6 +16,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/index.h"
+#include "catalog/pg_am.h"
 #include "executor/executor.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
@@ -48,8 +49,10 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #define _bt_spool			unused_bt_spool
 #define _bt_leafbuild		unused_bt_leafbuild
 
-#if PG_VERSION_NUM >= 90600
+#if PG_VERSION_NUM >= 90700
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 90600
+#include "nbtree/nbtsort-9.6.c"
 #elif PG_VERSION_NUM >= 90500
 #include "nbtree/nbtsort-9.5.c"
 #elif PG_VERSION_NUM >= 90400
