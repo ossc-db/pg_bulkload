@@ -11,7 +11,7 @@ Branches
 --------
 
 * master : branch for pg_bulkload 3.2dev  [![Build Status](https://travis-ci.org/ossc-db/pg_bulkload.svg?branch=master)](https://travis-ci.org/ossc-db/pg_bulkload)
-* VERSION3_1_STABLE : branch for pg_bulkload 3.1 which supports PostgreSQL 8.4 to 9.4.  [![Build Status](https://travis-ci.org/ossc-db/pg_bulkload.svg?branch=VERSION3_1_STABLE)](https://travis-ci.org/ossc-db/pg_bulkload)
+* VERSION3_1_STABLE : branch for pg_bulkload 3.1 which supports PostgreSQL 8.4 to 9.6.  [![Build Status](https://travis-ci.org/ossc-db/pg_bulkload.svg?branch=VERSION3_1_STABLE)](https://travis-ci.org/ossc-db/pg_bulkload)
 
 How to use
 ----------
