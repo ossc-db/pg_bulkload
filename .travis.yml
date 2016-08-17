@@ -7,10 +7,11 @@ before_install:
   - sudo apt-get -y install bc libpam-dev libedit-dev
   - git clone https://github.com/postgres/postgres.git postgres-dev
   - cd postgres-dev
+  - if [ $PGVERSION = 9.6 ] ; then git checkout -b REL9_6_STABLE origin/REL9_6_STABLE; fi
   - if [ $PGVERSION = 9.5 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
-  - if [ $PGVERSION = 9.4 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
-  - if [ $PGVERSION = 9.3 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
-  - if [ $PGVERSION = 9.2 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
+  - if [ $PGVERSION = 9.4 ] ; then git checkout -b REL9_4_STABLE origin/REL9_4_STABLE; fi
+  - if [ $PGVERSION = 9.3 ] ; then git checkout -b REL9_3_STABLE origin/REL9_3_STABLE; fi
+  - if [ $PGVERSION = 9.2 ] ; then git checkout -b REL9_2_STABLE origin/REL9_2_STABLE; fi
   - export POSTGRES_HOME=/home/travis/build/ossc-db/pg_bulkload/pgsql/$PGVERSION
   - echo 'export POSTGRES_HOME=/home/travis/build/ossc-db/pg_bulkload/pgsql/$PGVERSION' >> ~/.bashrc
   - ./configure --prefix=$POSTGRES_HOME
