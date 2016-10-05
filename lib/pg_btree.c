@@ -381,6 +381,17 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 
 	tuplesort_performsort(btspool->sortstate);
 
+
+#if PG_VERSION_NUM >= 90300
+	/*
+	 * As of 9.3, error messages (in general) and btree error messages (in
+	 * particular) want to display the table name, for which we must save
+	 * a reference to heap as well so that error message generating code
+	 * can use it.
+	 */
+	wstate.heap = btspool->heap;
+#endif
+
 	wstate.index = btspool->index;
 
 	/*
