@@ -387,9 +387,19 @@ parse_time(const char *value, time_t *time)
 
 static char *
 prompt_for_password(void)
+#if PG_VERSION_NUM >= 100000
+{
+	char	buf[100];
+
+	simple_prompt("Password: ", buf, sizeof(buf), false);
+
+	return pg_strdup(buf);
+}
+#else
 {
 	return simple_prompt("Password: ", 100, false);
 }
+#endif
 
 #if PG_VERSION_NUM < 80300
 static bool
