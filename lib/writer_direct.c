@@ -102,8 +102,10 @@ static bool	DirectWriterParam(DirectWriter *self, const char *keyword, char *val
 static void	DirectWriterDumpParams(DirectWriter *self);
 static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *logfile, bool verbose);
 
-#define GetCurrentPage(self)	((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
-#define GetTargetPage(self,blk_offset)    ((Page) ((self)->blocks + BLCKSZ * ((self)->curblk - blk_offset)))
+#define GetCurrentPage(self) \
+			((Page) ((self)->blocks + BLCKSZ * (self)->curblk))
+#define GetTargetPage(self, blk_offset) \
+		((Page) ((self)->blocks + BLCKSZ * (blk_offset)))
 
 /**
  * @brief Total number of blocks at the time
@@ -537,25 +539,35 @@ flush_pages(DirectWriter *loader)
 		flush_num = Min(num - i, RELSEG_SIZE - relblks % RELSEG_SIZE);
 		Assert(flush_num > 0);
 
-		/* Write the last block number to the load status file. */
-		UpdateLSF(loader, flush_num);
-
 #if PG_VERSION_NUM >= 90300
-		/* If we need a checksum, add it */
-	        if (DataChecksumsEnabled()){
-        		int j = 0;
-			Page contained_page;
-	        	for (  j=0; j<flush_num; j++ ) {
-                		contained_page = GetTargetPage(loader,j);
-		                ((PageHeader) contained_page)->pd_checksum = 
-					pg_checksum_page((char *) contained_page, LS_TOTAL_CNT(ls) - 1 - j);
-        		}
+		if (DataChecksumsEnabled())
+		{
+			Page	contained_page;
+			int		j;
+
+			/*
+			 * Write checksum for pages that are going to be written to the
+			 * current file.  We will be writing flush_num pages from the
+			 * block buffer starting at block offset i.
+			 */
+			for (j = 0; j < flush_num; j++)
+			{
+				contained_page = GetTargetPage(loader, i + j);
+				PageSetChecksumInplace(contained_page, LS_TOTAL_CNT(ls) + j);
+			}
 		}	
 #endif
 
+		/* Write the last block number to the load status file. */
+		UpdateLSF(loader, flush_num);
+
 		/*
-		 * Flush flush_num data block to the current file.
-		 * Then the current file size becomes RELSEG_SIZE self->blocks.
+		 * Write flush_num blocks to the current file starting at block
+		 * offset i.  The current file might get full, ie, RELSEG_SIZE blocks
+		 * full, after writing that much (see how flush_num is calculated
+		 * above to understand why) .  We write the remaining content of the
+		 * block buffer (ie, loader->blocks) in the new file during the next
+		 * iteration.
 		 */
 		buffer = loader->blocks + BLCKSZ * i;
 		total = BLCKSZ * flush_num;
