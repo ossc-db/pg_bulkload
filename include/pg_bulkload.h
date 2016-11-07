@@ -84,7 +84,12 @@ typedef Parser *(*ParserCreate)(void);
 #define __builtin_expect(x, expected_value) (x)
 #endif
 
+#ifndef likely
 #define likely(x)   __builtin_expect((x),1)
+#endif
+
+#ifndef unlikely
 #define unlikely(x) __builtin_expect((x),0)
+#endif
 
 #endif   /* BULKLOAD_H_INCLUDED */
