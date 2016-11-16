@@ -9,7 +9,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check1.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check1.prs
@@ -74,12 +74,40 @@ SELECT * FROM target ORDER BY id;
   7 | fff        |      7
 (5 rows)
 
-\! pg_bulkload -d contrib_regression data/csv7.ctl -i data/data5.csv -l results/check2.log -P results/check2.prs -u results/check2.dup -o "PARSE_ERRORS=-1" -o CHECK_CONSTRAINTS=O
+\! pg_bulkload -d contrib_regression data/csv7.ctl -i data/data5.csv -l results/check2.log -P results/check2.prs -u results/check2.dup -o "PARSE_ERRORS=-1" -o CHECK_CONSTRAINTS=NO
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  invalid input syntax for type boolean: "O"
+ERROR: query failed: ERROR:  could not create unique index "target_pkey"
+DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/check2.log
-awk: data/adjust.awk:1: fatal: cannot open file `results/check2.log' for reading (No such file or directory)
+
+pg_bulkload 3.1.12 on <TIMESTAMP>
+
+INPUT = .../data5.csv
+PARSE_BADFILE = .../check2.prs
+LOGFILE = .../check2.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../check2.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. null value in column "str" violates not-null constraint
+Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
+Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
+could not create unique index "target_pkey"
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -117,7 +145,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check3.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check3.prs
@@ -192,7 +220,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check4.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check4.prs

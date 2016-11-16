@@ -91,7 +91,7 @@ while [ $# -gt 0 ];do
         ;;
     -V|--version)
         # Show a version of pg_bulkload and PostgreSQL and exit normally
-        echo "pg_bulkload 3.1.9"
+        echo "pg_bulkload 3.1.12"
         pg_ctl --version
         exit 0
         ;;

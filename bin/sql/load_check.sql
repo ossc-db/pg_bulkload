@@ -11,7 +11,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM target ORDER BY id;
 
-\! pg_bulkload -d contrib_regression data/csv7.ctl -i data/data5.csv -l results/check2.log -P results/check2.prs -u results/check2.dup -o "PARSE_ERRORS=-1" -o CHECK_CONSTRAINTS=O
+\! pg_bulkload -d contrib_regression data/csv7.ctl -i data/data5.csv -l results/check2.log -P results/check2.prs -u results/check2.dup -o "PARSE_ERRORS=-1" -o CHECK_CONSTRAINTS=NO
 \! awk -f data/adjust.awk results/check2.log
 
 SET enable_seqscan = on;

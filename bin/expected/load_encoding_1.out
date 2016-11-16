@@ -10,7 +10,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/encoding1.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data4.csv
 PARSE_BADFILE = .../encoding1.prs
@@ -83,7 +83,7 @@ NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid encoding for parameter "ENCODING": "UTF0"
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/encoding2.log
-awk: data/adjust.awk:1: fatal: cannot open file `results/encoding2.log' for reading (No such file or directory)
+awk: data/adjust.awk:4: fatal: cannot open file `results/encoding2.log' for reading (No such file or directory)
 SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
@@ -129,7 +129,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding3.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data4.csv
 PARSE_BADFILE = .../encoding3.prs
@@ -199,7 +199,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding4.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data4.csv
 PARSE_BADFILE = .../encoding4.prs
@@ -272,7 +272,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding5.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data4.csv
 PARSE_BADFILE = .../encoding5.prs
@@ -350,7 +350,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/encoding6.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.12 on <TIMESTAMP>
 
 INPUT = .../data4.csv
 PARSE_BADFILE = .../encoding6.prs
