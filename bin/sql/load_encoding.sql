@@ -14,7 +14,7 @@ SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT id, encode(str::bytea, 'hex'), master FROM target ORDER BY id;
 
-\! pg_bulkload -d contrib_regression_sqlascii data/csv7.ctl -i data/data4.csv -l results/encoding2.log -P results/encoding2.prs -u results/encoding2.dup -o "PARSE_ERRORS=-1" -o "ENCODING=UTF0"
+\! pg_bulkload -d contrib_regression_sqlascii data/csv7.ctl -i data/data4.csv -l results/encoding2.log -P results/encoding2.prs -u results/encoding2.dup -o "PARSE_ERRORS=-1" -o "ENCODING=UTF8"
 \! awk -f data/adjust.awk results/encoding2.log
 
 SET enable_seqscan = on;

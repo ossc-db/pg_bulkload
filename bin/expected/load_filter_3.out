@@ -50,7 +50,7 @@ DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=outarg_f()'
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "target_pkey"
-DETAIL:  Table contains duplicated values.
+DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=setof_f()'
 NOTICE: BULK LOAD START
@@ -73,7 +73,7 @@ DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=rec_mismatch_f()'
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "target_pkey"
-DETAIL:  Table contains duplicated values.
+DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 -- FILTER option error
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER="f1'

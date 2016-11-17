@@ -21,7 +21,6 @@ $$ LANGUAGE SQL;
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,A)" -l results/function_e.log
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,--5,'A''')" -l results/function_e.log
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char('1','0')" -l results/function_e.log
-\! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.lower('A')" -l results/function_e.log
 
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''')" -l results/function1.log -P results/function1.prs -u results/function1.dup -o LOAD=3
 \! awk -f data/adjust.awk results/function1.log
