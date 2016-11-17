@@ -32,7 +32,7 @@ DATA_built = pg_bulkload.sql
 DATA = pg_bulkload--1.0.sql pg_bulkload--unpackaged--1.0.sql uninstall_pg_bulkload.sql 
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
-SHLIB_LINK = $(libpq)
+SHLIB_LINK = $(libpq) -lpthread
 
 # handle to which function to be published from this shared library
 # see src/Makefile.shlib in PostgreSQL
