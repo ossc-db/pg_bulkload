@@ -654,7 +654,11 @@ BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free)
 {
 	if (*should_free)
 		pfree(itup);
+#if PG_VERSION_NUM >= 100000
+	return tuplesort_getindextuple(spool->sortstate, true);
+#else
 	return tuplesort_getindextuple(spool->sortstate, true, should_free);
+#endif
 }
 
 /**
