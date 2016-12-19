@@ -292,7 +292,6 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 	int				numIndices;
 	RelationPtr		indices;
 	IndexInfo	  **indexInfoArray;
-	Relation		heapRelation;
 	ExprContext    *econtext;
 
 	/*
@@ -302,7 +301,6 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 	numIndices = relinfo->ri_NumIndices;
 	indices = relinfo->ri_IndexRelationDescs;
 	indexInfoArray = relinfo->ri_IndexRelationInfo;
-	heapRelation = relinfo->ri_RelationDesc;
 
 	/*
 	 * We will use the EState's per-tuple context for evaluating predicates
