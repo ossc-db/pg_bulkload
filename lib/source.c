@@ -16,6 +16,7 @@
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "tcop/dest.h"
+#include "utils/memutils.h"
 
 #include "reader.h"
 
@@ -59,6 +60,12 @@ typedef struct AsyncSource
 	 * away error messsage in a message buffer.
 	 */
 	char	errmsg[ERROR_MESSAGE_LEN];
+
+	/*
+	 * A dedicated memory context for new allocations, separate from the main
+	 * thread's control
+	 */
+	MemoryContext context;
 
 	pthread_t		th;
 	pthread_mutex_t	lock;
@@ -148,6 +155,13 @@ CreateAsyncSource(const char *path, TupleDesc desc)
 	self->buffer = palloc0(self->size);
 	self->errmsg[0] = '\0';
 
+	self->context = AllocSetContextCreate(
+							CurrentMemoryContext,
+							"AsyncSource",
+							ALLOCSET_DEFAULT_MINSIZE,
+							ALLOCSET_DEFAULT_INITSIZE,
+							ALLOCSET_DEFAULT_MAXSIZE);
+
 	self->eof = false;
 	self->fd = AllocateFile(path, "r");
 	if (self->fd == NULL)
@@ -182,11 +196,13 @@ AsyncSourceRead(AsyncSource *self, void *buffer, size_t len)
 	{
 		char   *newbuf;
 		int		newsize;
+		MemoryContext	oldcxt;
 
 		/* read buffer a multiple of READ_UNIT_SIZE */
 		newsize = (len * 4 - 1) -
 				  ((len * 4 - 1) / READ_UNIT_SIZE) +
 				  READ_UNIT_SIZE;
+		oldcxt = MemoryContextSwitchTo(self->context);
 		newbuf = palloc0(newsize);
 
 		pthread_mutex_lock(&self->lock);
@@ -211,6 +227,8 @@ AsyncSourceRead(AsyncSource *self, void *buffer, size_t len)
 		self->begin = 0;
 
 		pthread_mutex_unlock(&self->lock);
+
+		MemoryContextSwitchTo(oldcxt);
 	}
 
 	/* this value that a read thread does not change */
@@ -285,8 +303,9 @@ AsyncSourceClose(AsyncSource *self)
 	}
 	self->fd = NULL;
 
-	if (self->buffer != NULL)
-		pfree(self->buffer);
+	if (self->context != NULL)
+		MemoryContextDelete(self->context);
+
 	self->buffer = NULL;
 
 	pfree(self);
