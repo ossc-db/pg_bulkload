@@ -22,11 +22,13 @@
 #include "pg_profile.h"
 
 /**
- * @brief Initial size of the record buffer and the field buffer.
+ * @brief Initial size of the record and field buffers.
  *
- * If needed more, then the size will be doubled when needed.
+ * If needed more, then the size will be doubled when needed, with
+ * MAX_BUF_LEN as the upper limit.
  */
 #define INITIAL_BUF_LEN		(1024 * 1024)
+#define MAX_BUF_LEN			(16 * INITIAL_BUF_LEN)
 
 typedef struct CSVParser
 {
@@ -247,14 +249,7 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 		}
 	} while(0);
 
-	/*
-	 * XXX Although we would like to set INITIAL_BUF_LEN size to buffer length
-	 * as initializing, only a half amount of memory has to be allocated here, 
-	 * because we would like to avoid extra "if" check for the first time 
-	 * allocation in loop(see "buflen *= 2" in this code). But this seems a 
-	 * little bit ugly...
-	 */
-	self->buf_len = INITIAL_BUF_LEN / 2;
+	self->buf_len = INITIAL_BUF_LEN;
 	self->rec_buf = palloc(self->buf_len);
 	self->rec_buf[0] = '\0';
 	self->used_len = 0;
@@ -464,7 +459,7 @@ skip_done:
 				int			j;
 				char	   *old_buf = self->field_buf;
 
-				self->buf_len *= 2;
+				self->buf_len = Min(self->buf_len * 2, MAX_BUF_LEN);
 				self->field_buf = repalloc(self->field_buf, self->buf_len);
 				/*
 				 * After repalloc(), address of each field needs to be adjusted.
