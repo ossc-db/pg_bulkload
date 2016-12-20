@@ -146,21 +146,28 @@ static Source *
 CreateAsyncSource(const char *path, TupleDesc desc)
 {
 	AsyncSource *self = palloc0(sizeof(AsyncSource));
+	MemoryContext	oldcxt;
+
 	self->base.read = (SourceReadProc) AsyncSourceRead;
 	self->base.close = (SourceCloseProc) AsyncSourceClose;
 
 	self->size = INITIAL_BUF_LEN;
 	self->begin = 0;
 	self->end = 0;
-	self->buffer = palloc0(self->size);
 	self->errmsg[0] = '\0';
 
+	/* Create a dedicated context for our allocation needs */
 	self->context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"AsyncSource",
 							ALLOCSET_DEFAULT_MINSIZE,
 							ALLOCSET_DEFAULT_INITSIZE,
 							ALLOCSET_DEFAULT_MAXSIZE);
+
+	/* Must allocate memory for self->buffer in self->context */
+	oldcxt = MemoryContextSwitchTo(self->context);
+	self->buffer = palloc0(self->size);
+	MemoryContextSwitchTo(oldcxt);
 
 	self->eof = false;
 	self->fd = AllocateFile(path, "r");
@@ -202,6 +209,8 @@ AsyncSourceRead(AsyncSource *self, void *buffer, size_t len)
 		newsize = (len * 4 - 1) -
 				  ((len * 4 - 1) / READ_UNIT_SIZE) +
 				  READ_UNIT_SIZE;
+
+		/* Switch to the dedicated context for our allocation needs */
 		oldcxt = MemoryContextSwitchTo(self->context);
 		newbuf = palloc0(newsize);
 
