@@ -62,8 +62,8 @@ typedef struct AsyncSource
 	char	errmsg[ERROR_MESSAGE_LEN];
 
 	/*
-	 * A dedicated memory context for new allocations, separate from the main
-	 * thread's control
+	 * An independently managed memory context for allocations performed by
+	 * AsyncSourceRead
 	 */
 	MemoryContext context;
 
