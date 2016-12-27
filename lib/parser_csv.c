@@ -570,6 +570,23 @@ skip_done:
 				appendToField(self, &dst, &src, i - src);
 				in_quote = false;
 			}
+			/*
+			 * Finding a newline here means that we've got a unterminated
+			 * quoted field; break to error out before we run out of buffer
+			 * space!  Considering that we may come back if we don't exceed
+			 * maximum allowed parse errors, set up self->next to point to
+			 * the next line's 1st field.
+			 */
+			else if (c == '\n')
+			{
+				self->next = self->rec_buf + i + 1;
+				if (self->rec_buf[i - 1] == '\n')
+					i--;
+				if (self->rec_buf[i - 1] == '\r')
+					i--;
+				self->rec_buf[i] = '\0';
+				break;
+			}
 		}
 		else if (inCR)
 		{
@@ -657,7 +674,8 @@ skip_done:
 	}
 
 	/*
-	 * If no corresponding (closing) quote mark is found when a record parse terminates, it's an error. 
+	 * If no corresponding (closing) quote mark is found when a record parse
+	 * terminates, it's an error.
 	 */
 	if (in_quote)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
