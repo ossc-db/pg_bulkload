@@ -849,12 +849,34 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5</dd>
+<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6</dd>
 <dt>OS</dt>
 <dd>RHEL 6/7</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.12</h4>
+<ul>
+<li>Update the version number shown when --version is specified</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.11</h4>
+<ul>
+<li>Fixed a bug in block number calculation in direct write mode. Due to this bug, pg_bulkload calculated wrong checksum in certain cases, especially, when a segment of the relation is about to get full.</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.10</h4>
+<ul>
+<li>Supports PostgreSQL 9.6</li>
+</ul>
+</p>
+
 <p>
 <h4>3.1.9</h4>
 <ul>
