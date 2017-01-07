@@ -39,7 +39,6 @@ before_script:
   - cd /home/travis/build/ossc-db/pg_bulkload
   - git clone https://github.com/ossc-db/pg_bulkload.git pg_bulkload
   - cd pg_bulkload && git describe --alway
-  - git checkout -b VERSION3_1_STABLE origin/VERSION3_1_STABLE
   - make
   - make install
 
