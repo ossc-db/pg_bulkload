@@ -1,5 +1,5 @@
 # SPEC file for pg_bulkload on PostgreSQL 9.1
-# Copyright (C) 2009-2015 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (C) 2009-2017 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
 %define pgmajorversion  9.0
