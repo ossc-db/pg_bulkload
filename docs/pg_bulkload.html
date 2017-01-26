@@ -857,6 +857,14 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="releasenote">Release Notes</h2>
 
 <p>
+<h4>3.1.13</h4>
+<ul>
+<li>Fixed a case where pg_bulkload would crash when using MULTI_PROCESS mode and the input file contained malformed record</li>
+<li>Prevented CSVParserRead() from requesting too much memory.  Before this update, requesting too much memory could cause an error</li>
+</ul>
+</p>
+
+<p>
 <h4>3.1.12</h4>
 <ul>
 <li>Update the version number shown when --version is specified</li>

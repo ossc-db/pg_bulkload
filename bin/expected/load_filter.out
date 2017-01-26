@@ -2,7 +2,7 @@
 -- normal case
 --------------------------------
 -- PL/pgSQL function
-CREATE FUNCTION plpgsql_f(int4, int4, int4, text) RETURNS record AS
+CREATE FUNCTION plpgsql_f(int4, int4, int4 DEFAULT 100, text DEFAULT 'default value') RETURNS record AS
 $$
 DECLARE
     ret target;
@@ -20,7 +20,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT;
 -- using OUT paramator function
-CREATE FUNCTION using_out_f(int4, int4, int4, text, OUT int4, OUT text, OUT int4)
+CREATE FUNCTION using_out_f(int4, int4, int4 DEFAULT 100, text DEFAULT 'default value', OUT int4, OUT text, OUT int4)
     RETURNS record AS
 $$
     SELECT plpgsql_f($1, $2, $3, $4);
@@ -30,8 +30,7 @@ INSERT INTO target VALUES(1, 'dummy', 1);
 -- FILTER option parse error
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=variadic_f(int, text)'
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  function variadic_f(integer, text) does not exist
-HINT:  No function matches the given name and argument types.
+ERROR: query failed: ERROR:  filter function does not support a valiadic function variadic_f
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=overload_f'
 NOTICE: BULK LOAD START
@@ -43,21 +42,21 @@ NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function using_out_f() does not exist
 HINT:  No function matches the given name and argument types.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
-\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, int4)'
+\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, text)'
 NOTICE: BULK LOAD START
-ERROR: query failed: ERROR:  function using_out_f(integer, integer, integer) does not exist
+ERROR: query failed: ERROR:  function using_out_f(integer, integer, text) does not exist
 HINT:  No function matches the given name and argument types.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=outarg_f()'
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "target_pkey"
-DETAIL:  Table contains duplicated values.
+DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=setof_f()'
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  filter function must not return set
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
-\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, text)' -o FORCE_NOT_NULL=id
+\! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=using_out_f(int4, int4, int4)' -o FORCE_NOT_NULL=id
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  cannot use FILTER with FORCE_NOT_NULL
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
@@ -74,7 +73,7 @@ DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data7.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER=rec_mismatch_f()'
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "target_pkey"
-DETAIL:  Table contains duplicated values.
+DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 -- FILTER option error
 \! pg_bulkload -d contrib_regression data/csv4.ctl -i data/data6.csv -l results/filter_e.log -P results/filter_e1.prs -u results/filter_e1.dup -o 'FILTER="f1'
@@ -137,14 +136,14 @@ SELECT * FROM target ORDER BY id;
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
-	3 Rows successfully loaded.
-	5 Rows not loaded due to parse errors.
+	4 Rows successfully loaded.
+	4 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter1.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.13 on <TIMESTAMP>
 
 INPUT = .../data6.csv
 PARSE_BADFILE = .../filter1.prs
@@ -172,11 +171,10 @@ Parse error Record 1: Input Record 2: Rejected - column 1. missing data for argu
 Parse error Record 2: Input Record 3: Rejected - column 5. extra data after last expected column
 Parse error Record 3: Input Record 4: Rejected. field 1 is error value
 Parse error Record 4: Input Record 5: Rejected - column 1. invalid input syntax for integer: "51a"
-Parse error Record 5: Input Record 7: Rejected - column 2. missing data for argument 3
 
   0 Rows skipped.
-  3 Rows successfully loaded.
-  5 Rows not loaded due to parse errors.
+  4 Rows successfully loaded.
+  4 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
   0 Rows replaced with new rows.
 
@@ -188,42 +186,44 @@ SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
- (null) | (null) | (null)
-(3 rows)
+   id   |      str      | master 
+--------+---------------+--------
+     25 | 14            |     11
+    172 | default value |     71
+ (null) | (null)        | (null)
+ (null) | (null)        | (null)
+(4 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
- (null) | (null) | (null)
-(3 rows)
+   id   |      str      | master 
+--------+---------------+--------
+     25 | 14            |     11
+    172 | default value |     71
+ (null) | (null)        | (null)
+ (null) | (null)        | (null)
+(4 rows)
 
-\! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data6.csv -l results/filter2.log -P results/filter2.prs -u results/filter2.dup -o "PARSE_ERRORS=5" --option FILTER=plpgsql_f
+\! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data6.csv -l results/filter2.log -P results/filter2.prs -u results/filter2.dup -o "PARSE_ERRORS=4" --option FILTER=plpgsql_f
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
-	3 Rows successfully loaded.
-	5 Rows not loaded due to parse errors.
+	4 Rows successfully loaded.
+	4 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter2.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.13 on <TIMESTAMP>
 
 INPUT = .../data6.csv
 PARSE_BADFILE = .../filter2.prs
 LOGFILE = .../filter2.log
 LIMIT = INFINITE
-PARSE_ERRORS = 5
+PARSE_ERRORS = 4
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
@@ -245,11 +245,10 @@ Parse error Record 1: Input Record 2: Rejected - column 1. missing data for argu
 Parse error Record 2: Input Record 3: Rejected - column 5. extra data after last expected column
 Parse error Record 3: Input Record 4: Rejected. field 1 is error value
 Parse error Record 4: Input Record 5: Rejected - column 1. invalid input syntax for integer: "51a"
-Parse error Record 5: Input Record 7: Rejected - column 2. missing data for argument 3
 
   0 Rows skipped.
-  3 Rows successfully loaded.
-  5 Rows not loaded due to parse errors.
+  4 Rows successfully loaded.
+  4 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
   0 Rows replaced with new rows.
 
@@ -261,42 +260,44 @@ SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
- (null) | (null) | (null)
-(3 rows)
+   id   |      str      | master 
+--------+---------------+--------
+     25 | 14            |     11
+    172 | default value |     71
+ (null) | (null)        | (null)
+ (null) | (null)        | (null)
+(4 rows)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
- (null) | (null) | (null)
-(3 rows)
+   id   |      str      | master 
+--------+---------------+--------
+     25 | 14            |     11
+    172 | default value |     71
+ (null) | (null)        | (null)
+ (null) | (null)        | (null)
+(4 rows)
 
-\! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data6.csv -l results/filter3.log -P results/filter3.prs -u results/filter3.dup -o "PARSE_ERRORS=4" -o 'FILTER=plpgsql_f(int4, int4, int4, text)'
+\! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data6.csv -l results/filter3.log -P results/filter3.prs -u results/filter3.dup -o "PARSE_ERRORS=3" -o 'FILTER=plpgsql_f(int4, int4, int4, text)'
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
-	2 Rows successfully loaded.
-	5 Rows not loaded due to parse errors.
+	1 Rows successfully loaded.
+	4 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter3.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.13 on <TIMESTAMP>
 
 INPUT = .../data6.csv
 PARSE_BADFILE = .../filter3.prs
 LOGFILE = .../filter3.log
 LIMIT = INFINITE
-PARSE_ERRORS = 4
+PARSE_ERRORS = 3
 CHECK_CONSTRAINTS = NO
 TYPE = CSV
 SKIP = 0
@@ -318,12 +319,11 @@ Parse error Record 1: Input Record 2: Rejected - column 1. missing data for argu
 Parse error Record 2: Input Record 3: Rejected - column 5. extra data after last expected column
 Parse error Record 3: Input Record 4: Rejected. field 1 is error value
 Parse error Record 4: Input Record 5: Rejected - column 1. invalid input syntax for integer: "51a"
-Parse error Record 5: Input Record 7: Rejected - column 2. missing data for argument 3
-Maximum parse error count exceeded - 5 error(s) found in input file
+Maximum parse error count exceeded - 4 error(s) found in input file
 
   0 Rows skipped.
-  2 Rows successfully loaded.
-  5 Rows not loaded due to parse errors.
+  1 Rows successfully loaded.
+  4 Rows not loaded due to parse errors.
   0 Rows not loaded due to duplicate errors.
   0 Rows replaced with new rows.
 
@@ -335,21 +335,19 @@ SET enable_seqscan = on;
 SET enable_indexscan = off;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
-(2 rows)
+ id | str | master 
+----+-----+--------
+ 25 | 14  |     11
+(1 row)
 
 SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM target_like ORDER BY id;
-   id   |  str   | master 
---------+--------+--------
-     25 | 14     |     11
- (null) | (null) | (null)
-(2 rows)
+ id | str | master 
+----+-----+--------
+ 25 | 14  |     11
+(1 row)
 
 \! pg_bulkload -d contrib_regression data/csv5.ctl -i data/data7.csv -l results/filter4.log -P results/filter4.prs -u results/filter4.dup -o 'FILTER=no_arg_f()'
 NOTICE: BULK LOAD START
@@ -361,7 +359,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/filter4.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.13 on <TIMESTAMP>
 
 INPUT = .../data7.csv
 PARSE_BADFILE = .../filter4.prs
@@ -433,7 +431,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/filter5.log
 
-pg_bulkload 3.1.9 on <TIMESTAMP>
+pg_bulkload 3.1.13 on <TIMESTAMP>
 
 INPUT = .../data4.bin
 PARSE_BADFILE = .../filter5.prs
