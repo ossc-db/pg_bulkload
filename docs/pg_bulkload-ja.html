@@ -781,6 +781,13 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
 <h2 id="releasenote">リリースノート</h2>
 <p>
+<h4>3.1.13</h4>
+<ul>
+<li>MULTI_PROCESSモードが有効かつ入力ファイルに不正なレコードが含まれる場合にpg_bulkloadがクラッシュする問題を修正しました。</li>
+<li>CSVParserRead()が大量のメモリを要求しないよう修正しました。以前は、この動作によりエラーが発生することがありました。</li>
+</ul>
+</p>
+<p>
 <h4>3.1.12</h4>
 <ul>
 <li>--version オプション時に表示されるバージョン番号が適切でありませんでした。</li>
