@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/parser_binary.c
  *
- *	  Copyright (c) 2007-2016, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2017, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**

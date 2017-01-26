@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/pg_strutil.h
  *
- *	  Copyright (c) 2007-2016, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2017, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 #ifndef STRUTIL_H_INCLUDED
 #define STRUTIL_H_INCLUDED

@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_binary.c
  *
- *	  Copyright (c) 2011-2016, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2011-2017, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "pg_bulkload.h"
