@@ -250,7 +250,6 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 		{
 			Expr	   *expr = (Expr *) lfirst(l);
 			ExprState  *argstate;
-			ExprDoneCond thisArgIsDone;
 
 			/* probably shouldn't happen ... */
 			if (nargs >= FUNC_MAX_ARGS)
@@ -262,13 +261,7 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 			self->fcinfo.arg[nargs] = ExecEvalExpr(argstate,
 												   self->arg_econtext,
-												   &self->fcinfo.argnull[nargs],
-												   &thisArgIsDone);
-
-			if (thisArgIsDone != ExprSingleResult)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("functions and operators can take at most one set argument")));
+												   &self->fcinfo.argnull[nargs]);
 
 			nargs++;
 		}

@@ -838,19 +838,12 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 		{
 			Expr		   *expr = (Expr *) lfirst(l);
 			ExprState	   *argstate;
-			ExprDoneCond	thisArgIsDone;
 
 			argstate = ExecInitExpr(expr, NULL);
 
 			filter->defaultValues[i] = ExecEvalExpr(argstate,
 													filter->econtext,
-													&filter->defaultIsnull[i],
-													&thisArgIsDone);
-
-			if (thisArgIsDone != ExprSingleResult)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("functions and operators can take at most one set argument")));
+													&filter->defaultIsnull[i]);
 
 			i++;
 		}
