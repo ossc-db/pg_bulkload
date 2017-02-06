@@ -540,7 +540,11 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
 
 		/* Check the constraints of the tuple */
+#if PG_VERSION_NUM >= 100000
 		ExecConstraints(checker->resultRelInfo, checker->slot, checker->slot, checker->estate);
+#else
+		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
+#endif
 	}
 	else if (checker->has_not_null && HeapTupleHasNulls(tuple))
 	{
@@ -838,12 +842,26 @@ FilterInit(Filter *filter, TupleDesc desc, Oid collation)
 		{
 			Expr		   *expr = (Expr *) lfirst(l);
 			ExprState	   *argstate;
+#if PG_VERSION_NUM < 100000
+			ExprDoneCond	thisArgIsDone;
+#endif
 
 			argstate = ExecInitExpr(expr, NULL);
 
 			filter->defaultValues[i] = ExecEvalExpr(argstate,
 													filter->econtext,
-													&filter->defaultIsnull[i]);
+													&filter->defaultIsnull[i]
+#if PG_VERSION_NUM < 100000
+													,&thisArgIsDone
+#endif
+													);
+
+#if PG_VERSION_NUM < 100000
+			if (thisArgIsDone != ExprSingleResult)
+				ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("functions and operators can take at most one set argument")));
+#endif
 
 			i++;
 		}
