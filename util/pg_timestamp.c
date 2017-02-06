@@ -7,6 +7,10 @@
 
 #include "utils/datetime.h"
 
+#if PG_VERSION_NUM >= 10000
+#include "utils/builtins.h"
+#endif
+
 PG_MODULE_MAGIC;
 
 /* prototype of static function */

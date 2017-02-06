@@ -30,6 +30,10 @@
 #include "access/htup_details.h"
 #endif
 
+#if PG_VERSION_NUM >= 10000
+#include "utils/regproc.h"
+#endif
+
 #if PG_VERSION_NUM >= 90400
 
 #define parseTypeString(arg, argtype, typmod) \
