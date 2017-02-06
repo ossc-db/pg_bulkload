@@ -45,6 +45,10 @@
 #include "access/xloginsert.h"
 #endif
 
+#if PG_VERSION_NUM >= 10000
+#include "utils/regproc.h"
+#endif
+
 #if PG_VERSION_NUM >= 90400
 
 #define log_newpage(rnode, forknum, blk, page) \

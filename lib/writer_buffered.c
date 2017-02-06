@@ -20,6 +20,10 @@
 #include "pg_strutil.h"
 #include "pgut/pgut-be.h"
 
+#if PG_VERSION_NUM >= 10000
+#include "utils/regproc.h"
+#endif
+
 typedef struct BufferedWriter
 {
 	Writer			base;
