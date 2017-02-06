@@ -7,7 +7,7 @@
 
 #include "utils/datetime.h"
 
-#if PG_VERSION_NUM >= 10000
+#if PG_VERSION_NUM >= 100000
 #include "utils/builtins.h"
 #endif
 

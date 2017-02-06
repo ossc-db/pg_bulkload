@@ -30,7 +30,7 @@
 #include "access/htup_details.h"
 #endif
 
-#if PG_VERSION_NUM >= 10000
+#if PG_VERSION_NUM >= 100000
 #include "utils/regproc.h"
 #endif
 
