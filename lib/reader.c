@@ -541,7 +541,7 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
 
 		/* Check the constraints of the tuple */
-		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
+		ExecConstraints(checker->resultRelInfo, checker->slot, checker->slot, checker->estate);
 	}
 	else if (checker->has_not_null && HeapTupleHasNulls(tuple))
 	{
