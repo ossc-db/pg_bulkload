@@ -84,3 +84,17 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 \! diff data/data3.csv results/csv7.prs
+
+-- test whether multiline field columns can be loaded.
+\! pg_bulkload -d contrib_regression data/csv2.ctl -i data/data8.csv -o "VERBOSE=YES" -l results/csv8.log -P results/csv8.prs -u results/csv8.dup
+\! awk -f data/adjust.awk results/csv8.log
+
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM customer ORDER BY c_id;
