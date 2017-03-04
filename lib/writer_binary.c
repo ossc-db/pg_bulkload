@@ -8,6 +8,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #include "access/heapam.h"
 #include "catalog/pg_type.h"
