@@ -348,7 +348,11 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 			}
 
 			/* Skip this index-update if the predicate isn'loader satisfied */
+#if PG_VERSION_NUM >= 100000
+			if (!ExecQual(predicate, econtext))
+#else
 			if (!ExecQual(predicate, econtext, false))
+#endif
 				continue;
 		}
 
