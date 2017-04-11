@@ -541,11 +541,7 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
 
 		/* Check the constraints of the tuple */
-#if PG_VERSION_NUM >= 100000
-		ExecConstraints(checker->resultRelInfo, checker->slot, checker->slot, checker->estate);
-#else
 		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
-#endif
 	}
 	else if (checker->has_not_null && HeapTupleHasNulls(tuple))
 	{
