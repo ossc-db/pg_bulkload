@@ -330,7 +330,7 @@ checkFieldIsNull(CSVParser *self, int field_num, int len)
  * release these memory by releasing whole memory context.
  *
  * @param rd [in/out] Control Info.
- * @return Returns tru when successful, false when EOF is found.
+ * @return Returns true when successful, false when EOF is found.
  * @note When an error is found, it returns to the caller through ereport().
  */
 static HeapTuple
