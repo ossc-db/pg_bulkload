@@ -9,7 +9,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        VERSION3_1_9
+Version:        3.1.13
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -59,8 +59,8 @@ install -m 644 lib/pg_bulkload--unpackaged--1.0.sql         %{buildroot}%{pg_ext
 
 # sample_*.ctl files are needed for rpm users.
 # %{sname}-%{version} is the same path with "%setup -n"'s argument.
-install -m 644 doc/sample_bin.ctl              %{buildroot}%{pg_contribdir}/sample_bin.ctl
-install -m 644 doc/sample_csv.ctl              %{buildroot}%{pg_contribdir}/sample_csv.ctl
+install -m 644 docs/sample_bin.ctl              %{buildroot}%{pg_contribdir}/sample_bin.ctl
+install -m 644 docs/sample_csv.ctl              %{buildroot}%{pg_contribdir}/sample_csv.ctl
 
 %files
 %defattr(755,root,root,755)
@@ -82,6 +82,19 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Mon Jan 27 2017 - Atsushi Torikoshi <torikoshi_atsushi_z2@lab.ntt.co.jp> 3.1.13-1
+- Fixed crash when using MULTI_PROCESS mode with input file containing a malformed record
+- Prevented CSVParserRead() from requesting too much memory causing error eventually
+- Update to pg_bulkload 3.1.13
+* Mon Nov 16 2016 - Atsushi Torikoshi <torikoshi_atsushi_z2@lab.ntt.co.jp> 3.1.12-1
+- Update version number and fix regression test expected output
+- Update to pg_bulkload 3.1.12
+* Mon Nov 11 2016 - Atsushi Torikoshi <torikoshi_atsushi_z2@lab.ntt.co.jp> 3.1.11-1
+- Fixed a bug in block number calculation in direct write mode
+- Update to pg_bulkload 3.1.11
+* Mon Sep 29 2016 - Masanori Ooyama <oyama_masanori_c5@lab.ntt.co.jp> 3.1.10-1
+- Support PostgreSQL 9.6
+- Update to pg_bulkload 3.1.10
 * Mon Jan 25 2016 - Amit Langote <langote_amit_f8@lab.ntt.co.jp> 3.1.9-1
 - Support PostgreSQL 9.5
 - Update to pg_bulkload 3.1.9

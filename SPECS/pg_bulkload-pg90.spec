@@ -9,7 +9,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.5
+Version:        3.1.13
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -61,8 +61,8 @@ install -m 644 lib/pg_bulkload--unpackaged--1.0.sql         %{buildroot}%{pg_ext
 
 # sample_*.ctl files are needed for rpm users.
 # %{sname}-%{version} is the same path with "%setup -n"'s argument.
-install -m 644 doc/sample_bin.ctl              %{buildroot}%{pg_contribdir}/sample_bin.ctl
-install -m 644 doc/sample_csv.ctl              %{buildroot}%{pg_contribdir}/sample_csv.ctl
+install -m 644 docs/sample_bin.ctl              %{buildroot}%{pg_contribdir}/sample_bin.ctl
+install -m 644 docs/sample_csv.ctl              %{buildroot}%{pg_contribdir}/sample_csv.ctl
 
 %files
 %defattr(755,root,root,755)
