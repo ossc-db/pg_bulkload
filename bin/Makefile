@@ -118,3 +118,5 @@ subclean:
 	rm -f sql/load_function.sql sql/load_function-{8.3,8.4,9.0,9.1,9.2,9.3,9.4,9.5,9.6,10}.sql
 
 installcheck: sql/init.sql sql/load_function.sql sql/load_filter.sql
+
+LDFLAGS+=-Wl,--build-id

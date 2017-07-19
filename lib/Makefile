@@ -69,3 +69,5 @@ clean: subclean
 
 subclean:
 	rm -f nbtsort.c
+
+LDFLAGS+=-Wl,--build-id
