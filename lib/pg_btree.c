@@ -334,16 +334,26 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 		/* Check for partial index */
 		if (indexInfo->ii_Predicate != NIL)
 		{
+#if PG_VERSION_NUM >= 100000
+			ExprState	   *predicate;
+#else
 			List		   *predicate;
+#endif
 
 			/*
 			 * If predicate state not set up yet, create it (in the estate's
 			 * per-query context)
 			 */
 			predicate = indexInfo->ii_PredicateState;
+#if PG_VERSION_NUM >= 100000
+			if (predicate == NULL)
+			{
+				predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
+#else
 			if (predicate == NIL)
 			{
 				predicate = (List *) ExecPrepareExpr((Expr *) indexInfo->ii_Predicate, estate);
+#endif
 				indexInfo->ii_PredicateState = predicate;
 			}
 
