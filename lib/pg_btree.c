@@ -36,19 +36,6 @@
 
 #include "logger.h"
 
-static void unused_bt_spooldestroy(BTSpool *);
-#if PG_VERSION_NUM >= 90500
-static void unused_bt_spool(BTSpool *, ItemPointer self,
-               Datum *, bool *);
-#else
-static void unused_bt_spool(IndexTuple, BTSpool *);
-#endif
-static void unused_bt_leafbuild(BTSpool *, BTSpool *);
-
-#define _bt_spooldestroy	unused_bt_spooldestroy
-#define _bt_spool			unused_bt_spool
-#define _bt_leafbuild		unused_bt_leafbuild
-
 #if PG_VERSION_NUM >= 100100
 #error unsupported PostgreSQL version
 #elif PG_VERSION_NUM >= 100000
@@ -74,11 +61,6 @@ static void unused_bt_leafbuild(BTSpool *, BTSpool *);
 #else
 #error unsupported PostgreSQL version
 #endif
-
-#undef _bt_spoolinit
-#undef _bt_spooldestroy
-#undef _bt_spool
-#undef _bt_leafbuild
 
 #include "pg_btree.h"
 #include "pg_profile.h"
