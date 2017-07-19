@@ -379,6 +379,12 @@ VerifyTarget(Relation rel, int64 max_dup_errors)
 		const char *type;
 		switch (rel->rd_rel->relkind)
 		{
+			case RELKIND_PARTITIONED_TABLE:
+				type = "partitioned table";
+				break;
+			case RELKIND_FOREIGN_TABLE:
+				type = "foreign table";
+				break;
 			case RELKIND_VIEW:
 				type = "view";
 				break;
