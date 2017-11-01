@@ -82,7 +82,7 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Thurs Nov 01 2017 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.14-1
+* Thu Nov 02 2017 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.14-1
 - Support PostgreSQL 10
 - Update to pg_bulkload 3.1.14
 * Mon Jan 27 2017 - Atsushi Torikoshi <torikoshi_atsushi_z2@lab.ntt.co.jp> 3.1.13-1

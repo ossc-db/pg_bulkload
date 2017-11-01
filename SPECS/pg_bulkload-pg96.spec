@@ -82,7 +82,7 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Thurs Nov 01 2017 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.14-1
+* Thu Nov 02 2017 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.14-1
 - Support PostgreSQL 10
 - Update to pg_bulkload 3.1.14
 * Mon Jan 27 2017 - Atsushi Torikoshi <torikoshi_atsushi_z2@lab.ntt.co.jp> 3.1.13-1
@@ -98,13 +98,3 @@ rm -rf %{_libdir}/pgxs/src/backend/
 * Mon Sep 29 2016 - Masanori Ooyama <oyama_masanori_c5@lab.ntt.co.jp> 3.1.10-1
 - Support PostgreSQL 9.6
 - Update to pg_bulkload 3.1.10
-* Mon Jan 25 2016 - Amit Langote <langote_amit_f8@lab.ntt.co.jp> 3.1.9-1
-- Support PostgreSQL 9.5
-- Update to pg_bulkload 3.1.9
-* Mon Feb 16 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.8-1
-- Update to pg_bulkload 3.1.8
-* Tue Jan 06 2015 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.7-1
-- Update to pg_bulkload 3.1.7
-* Fri Dec 19 2014 - Takashi OHNISHI <onishi_takashi_d5@lab.ntt.co.jp> 3.1.6-2
-- Support PostgreSQL 9.4beta1
-- Initial packaging
