@@ -61,7 +61,7 @@ NOTICE: BULK LOAD END
 	0 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function1.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = public.load_function1(1,5,'A''')
 PARSE_BADFILE = .../function1.prs
@@ -123,7 +123,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function2.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public.load_function1( - - - 3, -+- 5,'''B')"
 PARSE_BADFILE = .../function2.prs
@@ -200,7 +200,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function3.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public	.	load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function3.prs
@@ -279,7 +279,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function4.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function3.prs
 PARSE_BADFILE = .../function4.prs
@@ -327,7 +327,7 @@ NOTICE: BULK LOAD END
 	3 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function5.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function3.prs
 PARSE_BADFILE = .../function5.prs
@@ -411,7 +411,7 @@ NOTICE: BULK LOAD END
 	4 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function6.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public . load_function1	 (	 3	 ,	 '7'	 ,	 nUlL	 )	 "
 PARSE_BADFILE = .../function6.prs
@@ -492,7 +492,7 @@ NOTICE: BULK LOAD END
 	1 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function7.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public.load_function1(7, 10)"
 PARSE_BADFILE = .../function7.prs
@@ -576,7 +576,7 @@ NOTICE: BULK LOAD END
 	6 Rows replaced with new rows.
 \! awk -f data/adjust.awk results/function8.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public.load_function2('216', 0, 'function2', -2, 2, 4, 6, 8, 10, 12)"
 PARSE_BADFILE = .../function8.prs
@@ -668,7 +668,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function9.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = "public.load_function2('216', 0, 'function2 duplicate', 1,1,1,1,1)"
 PARSE_BADFILE = .../function9.prs
@@ -759,7 +759,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function10.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function9.dup
 PARSE_BADFILE = .../function10.prs
@@ -876,7 +876,7 @@ DETAIL:  Key (c_id, c_w_id, c_d_id)=(1, 0, 216) is duplicated.
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function13.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function9.dup
 PARSE_BADFILE = .../function13.prs
@@ -907,7 +907,7 @@ ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
 DETAIL: query was: SELECT * FROM pg_bulkload($1)
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function9.dup
 PARSE_BADFILE = .../function14.prs
@@ -944,7 +944,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/function14.log
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function9.dup
 PARSE_BADFILE = .../function14.prs
@@ -971,7 +971,7 @@ Duplicate error Record 1: Rejected - duplicate key value violates unique constra
 Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "customer_pkey"
 Maximum duplicate error count exceeded
 
-pg_bulkload 3.1.13 on <TIMESTAMP>
+pg_bulkload 3.1.14 on <TIMESTAMP>
 
 INPUT = .../function9.dup
 PARSE_BADFILE = .../function14.prs
