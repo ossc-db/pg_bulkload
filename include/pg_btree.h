@@ -18,7 +18,7 @@
 
 typedef struct Spooler
 {
-	BTSpool		  **spools;		/**< index spool */
+	struct BTSpool **spools;		/**< index spool */
 	ResultRelInfo  *relinfo;	/**<  */
 	EState		   *estate;		/**<  */
 	TupleTableSlot *slot;		/**<  */

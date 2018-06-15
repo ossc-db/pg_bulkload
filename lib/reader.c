@@ -458,7 +458,11 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 
 		checker->desc = CreateTupleDescCopy(desc);
 		for (i = 0; i < desc->natts; i++)
+#if PG_VERSION_NUM >= 110000
+			checker->desc->attrs[i].attnotnull = desc->attrs[i].attnotnull;
+#else
 			checker->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
+#endif
 	}
 }
 
@@ -540,7 +544,12 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
 
 		/* Check the constraints of the tuple */
+#if PG_VERSION_NUM == 100000
+		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate,
+						true);
+#else
 		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
+#endif
 	}
 	else if (checker->has_not_null && HeapTupleHasNulls(tuple))
 	{
@@ -552,14 +561,24 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 
 		for (i = 0; i < desc->natts; i++)
 		{
+#if PG_VERSION_NUM >= 110000
+			if (desc->attrs[i].attnotnull &&
+				att_isnull(i, tuple->t_data->t_bits))
+#else
 			if (desc->attrs[i]->attnotnull &&
 				att_isnull(i, tuple->t_data->t_bits))
+#endif
+
 			{
 				*parsing_field = i + 1;	/* 1 origin */
 				ereport(ERROR,
 						(errcode(ERRCODE_NOT_NULL_VIOLATION),
 						 errmsg("null value in column \"%s\" violates not-null constraint",
+#if PG_VERSION_NUM >= 110000
+						NameStr(desc->attrs[i].attname))));
+#else
 						NameStr(desc->attrs[i]->attname))));
+#endif
 			}
 		}
 	}
@@ -577,7 +596,11 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 
 	former->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)
+#if PG_VERSION_NUM >= 110000
+		former->desc->attrs[i].attnotnull = desc->attrs[i].attnotnull;
+#else
 		former->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
+#endif
 
 	/*
 	 * allocate buffer to store columns or function arguments
@@ -622,12 +645,29 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 	}
 	else
 	{
+#if PG_VERSION_NUM >= 110000
+		FormData_pg_attribute  *attrs;
+#else
 		Form_pg_attribute  *attrs;
+#endif
 
 		attrs = desc->attrs;
 		former->maxfields = 0;
 		for (i = 0; i < natts; i++)
 		{
+#if PG_VERSION_NUM >= 110000
+			/* ignore dropped columns */
+			if (attrs[i].attisdropped)
+				continue;
+
+			/* get type information and input function */
+			getTypeInputInfo(attrs[i].atttypid,
+							 &in_func_oid, &former->typIOParam[i]);
+			fmgr_info(in_func_oid, &former->typInput[i]);
+
+			former->typMod[i] = attrs[i].atttypmod;
+			former->typId[i] = attrs[i].atttypid;
+#else
 			/* ignore dropped columns */
 			if (attrs[i]->attisdropped)
 				continue;
@@ -639,6 +679,7 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 
 			former->typMod[i] = attrs[i]->atttypmod;
 			former->typId[i] = attrs[i]->atttypid;
+#endif
 
 			/* update valid column information */
 			former->attnum[former->maxfields] = i;
@@ -730,6 +771,19 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 
 	for (i = 0; i < dst_tupdesc->natts; i++)
 	{
+#if PG_VERSION_NUM >= 110000
+		FormData_pg_attribute dattr = dst_tupdesc->attrs[i];
+		FormData_pg_attribute sattr = src_tupdesc->attrs[i];
+
+		if (dattr.atttypid == sattr.atttypid)
+			continue;			/* no worries */
+		if (!dattr.attisdropped)
+			return false;
+
+		if (dattr.attlen != sattr.attlen ||
+			dattr.attalign != sattr.attalign)
+			return false;
+#else
 		Form_pg_attribute dattr = dst_tupdesc->attrs[i];
 		Form_pg_attribute sattr = src_tupdesc->attrs[i];
 
@@ -741,6 +795,7 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 		if (dattr->attlen != sattr->attlen ||
 			dattr->attalign != sattr->attalign)
 			return false;
+#endif
 	}
 
 	return true;
@@ -1057,9 +1112,7 @@ CreateTupleChecker(TupleDesc desc)
 
 	context = AllocSetContextCreate(CurrentMemoryContext,
 									"TupleChecker",
-									ALLOCSET_DEFAULT_MINSIZE,
-									ALLOCSET_DEFAULT_INITSIZE,
-									ALLOCSET_DEFAULT_MAXSIZE);
+									ALLOCSET_DEFAULT_SIZES);
 
 	oldcontext = MemoryContextSwitchTo(context);
 
@@ -1138,6 +1191,19 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 
 		for (i = 0; i < natts; i++)
 		{
+#if PG_VERSION_NUM >= 110000
+			if (self->sourceDesc->attrs[i].atttypid ==
+				self->targetDesc->attrs[i].atttypid)
+				continue;
+
+			getTypeOutputInfo(self->sourceDesc->attrs[i].atttypid,
+							  &iofunc, &self->typIsVarlena[i]);
+			fmgr_info(iofunc, &self->typOutput[i]);
+
+			getTypeInputInfo(self->targetDesc->attrs[i].atttypid, &iofunc,
+							 &self->typIOParam[i]);
+			fmgr_info(iofunc, &self->typInput[i]);
+#else
 			if (self->sourceDesc->attrs[i]->atttypid ==
 				self->targetDesc->attrs[i]->atttypid)
 				continue;
@@ -1149,6 +1215,7 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 			getTypeInputInfo(self->targetDesc->attrs[i]->atttypid, &iofunc,
 							 &self->typIOParam[i]);
 			fmgr_info(iofunc, &self->typInput[i]);
+#endif
 		}
 
 		MemoryContextSwitchTo(oldcontext);
@@ -1160,6 +1227,32 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 	{
 		*parsing_field = i + 1;
 
+#if PG_VERSION_NUM >= 110000
+		/* Ignore dropped columns in datatype */
+		if (self->targetDesc->attrs[i].attisdropped)
+			continue;
+
+		if (self->nulls[i])
+		{
+			/* emit nothing... */
+			continue;
+		}
+		else if (self->sourceDesc->attrs[i].atttypid ==
+				 self->targetDesc->attrs[i].atttypid)
+		{
+			continue;
+		}
+		else
+		{
+			char   *value;
+
+			value = OutputFunctionCall(&self->typOutput[i], self->values[i]);
+			self->values[i] = InputFunctionCall(&self->typInput[i], value,
+										self->typIOParam[i],
+										self->targetDesc->attrs[i].atttypmod);
+		}
+	}
+#else
 		/* Ignore dropped columns in datatype */
 		if (self->targetDesc->attrs[i]->attisdropped)
 			continue;
@@ -1184,6 +1277,7 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 										self->targetDesc->attrs[i]->atttypmod);
 		}
 	}
+#endif
 
 	*parsing_field = -1;
 }

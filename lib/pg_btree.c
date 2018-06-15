@@ -36,8 +36,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 100100
+#if PG_VERSION_NUM >= 120000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 110000
+#include "nbtree/nbtsort-11.c"
 #elif PG_VERSION_NUM >= 100000
 #include "nbtree/nbtsort-10.c"
 #elif PG_VERSION_NUM >= 90600
@@ -1032,7 +1034,11 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 		bool		nq;
 
 		/* Ignore dropped columns in datatype */
+#if PG_VERSION_NUM >= 110000
+		if (tupdesc->attrs[i].attisdropped)
+#else
 		if (tupdesc->attrs[i]->attisdropped)
+#endif
 			continue;
 
 		if (needComma)
@@ -1049,7 +1055,11 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 			Oid			foutoid;
 			bool		typisvarlena;
 
+#if PG_VERSION_NUM >= 110000
+			getTypeOutputInfo(tupdesc->attrs[i].atttypid,
+#else
 			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
+#endif
 							  &foutoid, &typisvarlena);
 			value = OidOutputFunctionCall(foutoid, values[i]);
 		}

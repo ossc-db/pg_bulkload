@@ -642,12 +642,12 @@ ParseFunction(const char *value, bool argistype)
 	/* Check permission to access and call function. */
 	aclresult = pg_namespace_aclcheck(pp->pronamespace, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
+		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   get_namespace_name(pp->pronamespace));
 
 	aclresult = pg_proc_aclcheck(ret.oid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, ACL_KIND_PROC,
+		aclcheck_error(aclresult, OBJECT_FUNCTION,
 					   get_func_name(ret.oid));
 
 	ReleaseSysCache(ftup);

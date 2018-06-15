@@ -201,8 +201,13 @@ DirectWriterInit(DirectWriter *self)
 	 * load to the same table.
 	 */
 	BULKLOAD_LSF_PATH(self->lsf_path, ls);
+#if PG_VERSION_NUM >= 110000
+	self->lsf_fd = BasicOpenFilePerm(self->lsf_path,
+		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
+#else
 	self->lsf_fd = BasicOpenFile(self->lsf_path,
 		O_CREAT | O_EXCL | O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
+#endif
 	if (self->lsf_fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
 			errmsg("could not create loadstatus file \"%s\": %m", self->lsf_path)));
@@ -632,7 +637,11 @@ open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum)
 		pfree(fname);
 		fname = tmp;
 	}
+#if PG_VERSION_NUM >= 110000
+	fd = BasicOpenFilePerm(fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR);
+#else
 	fd = BasicOpenFile(fname, O_CREAT | O_WRONLY | PG_BINARY, S_IRUSR | S_IWUSR);
+#endif
 	if (fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not open data file: %m")));

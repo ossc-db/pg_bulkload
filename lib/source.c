@@ -160,9 +160,7 @@ CreateAsyncSource(const char *path, TupleDesc desc)
 	self->context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"AsyncSource",
-							ALLOCSET_DEFAULT_MINSIZE,
-							ALLOCSET_DEFAULT_INITSIZE,
-							ALLOCSET_DEFAULT_MAXSIZE);
+							ALLOCSET_DEFAULT_SIZES);
 
 	/* Must allocate memory for self->buffer in self->context */
 	oldcxt = MemoryContextSwitchTo(self->context);
@@ -477,7 +475,11 @@ CreateRemoteSource(const char *path, TupleDesc desc)
 		/* count valid fields */
 		for (nattrs = 0, i = 0; i < desc->natts; i++)
 		{
+#if PG_VERSION_NUM >= 110000
+			if (desc->attrs[i].attisdropped)
+#else
 			if (desc->attrs[i]->attisdropped)
+#endif
 				continue;
 			nattrs++;
 		}

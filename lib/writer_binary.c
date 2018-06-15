@@ -145,9 +145,7 @@ BinaryWriterInit(BinaryWriter *self)
 	self->base.context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"BinaryWriter",
-							ALLOCSET_DEFAULT_MINSIZE,
-							ALLOCSET_DEFAULT_INITSIZE,
-							ALLOCSET_DEFAULT_MAXSIZE);
+							ALLOCSET_DEFAULT_SIZES);
 }
 
 static void
@@ -418,8 +416,13 @@ open_output_file(char *fname, char *filetype, bool check)
 {
 	int	fd = -1;
 
+#if PG_VERSION_NUM >= 110000
+	fd = BasicOpenFilePerm(fname, O_WRONLY | O_CREAT | O_EXCL | PG_BINARY,
+					   S_IRUSR | S_IWUSR);
+#else
 	fd = BasicOpenFile(fname, O_WRONLY | O_CREAT | O_EXCL | PG_BINARY,
 					   S_IRUSR | S_IWUSR);
+#endif
 	if (fd == -1)
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not open %s: %m", filetype)));

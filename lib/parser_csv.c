@@ -233,7 +233,11 @@ CSVParserInit(CSVParser *self, Checker *checker, const char *infile, TupleDesc d
 		{
 			for (i = 0; i < desc->natts; i++)
 			{
+#if PG_VERSION_NUM >= 110000
+				if (strcmp(lfirst(name), desc->attrs[i].attname.data) == 0)
+#else
 				if (strcmp(lfirst(name), desc->attrs[i]->attname.data) == 0)
+#endif
 				{
 					self->fnn[i] = true;
 					break;
@@ -691,7 +695,11 @@ skip_done:
 		else
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 							errmsg("missing data for column \"%s\"",
+#if PG_VERSION_NUM >= 110000
+								   NameStr(self->former.desc->attrs[self->former.attnum[self->base.parsing_field]].attname)),
+#else
 								   NameStr(self->former.desc->attrs[self->former.attnum[self->base.parsing_field]]->attname)),
+#endif
 							errdetail("only %d columns, required %d", self->base.parsing_field, self->former.maxfields)));
 
 	}

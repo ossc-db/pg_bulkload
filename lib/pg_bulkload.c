@@ -15,6 +15,7 @@
 
 #include "access/heapam.h"
 #include "access/reloptions.h"
+#include "catalog/objectaddress.h"
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
 #include "funcapi.h"
@@ -410,7 +411,12 @@ VerifyTarget(Relation rel, int64 max_dup_errors)
 	aclresult = pg_class_aclmask(
 		RelationGetRelid(rel), GetUserId(), required_access, ACLMASK_ALL);
 	if (required_access != aclresult)
-		aclcheck_error(ACLCHECK_NO_PRIV, ACL_KIND_CLASS,
+		aclcheck_error(ACLCHECK_NO_PRIV,
+#if PG_VERSION_NUM >= 110000
+					   get_relkind_objtype(rel->rd_rel->relkind),
+#else
+					   ACL_KIND_CLASS,
+#endif
 					   RelationGetRelationName(rel));
 }
 
