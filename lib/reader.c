@@ -1112,7 +1112,13 @@ CreateTupleChecker(TupleDesc desc)
 
 	context = AllocSetContextCreate(CurrentMemoryContext,
 									"TupleChecker",
+#if PG_VERSION_NUM >= 90600
 									ALLOCSET_DEFAULT_SIZES);
+#else
+									ALLOCSET_SMALL_MINSIZE,
+									ALLOCSET_SMALL_INITSIZE,
+									ALLOCSET_DEFAULT_MAXSIZE);
+#endif
 
 	oldcontext = MemoryContextSwitchTo(context);
 

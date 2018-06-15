@@ -145,7 +145,13 @@ BinaryWriterInit(BinaryWriter *self)
 	self->base.context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"BinaryWriter",
-							ALLOCSET_DEFAULT_SIZES);
+#if PG_VERSION_NUM >= 90600
+									ALLOCSET_DEFAULT_SIZES);
+#else
+									ALLOCSET_SMALL_MINSIZE,
+									ALLOCSET_SMALL_INITSIZE,
+									ALLOCSET_DEFAULT_MAXSIZE);
+#endif
 }
 
 static void

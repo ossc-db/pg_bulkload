@@ -115,7 +115,13 @@ ParallelWriterInit(ParallelWriter *self)
 	self->base.context = AllocSetContextCreate(
 							CurrentMemoryContext,
 							"ParallelWriter",
-							ALLOCSET_DEFAULT_SIZES);
+#if PG_VERSION_NUM >= 90600
+									ALLOCSET_DEFAULT_SIZES);
+#else
+									ALLOCSET_SMALL_MINSIZE,
+									ALLOCSET_SMALL_INITSIZE,
+									ALLOCSET_DEFAULT_MAXSIZE);
+#endif
 
 	/* create queue */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
