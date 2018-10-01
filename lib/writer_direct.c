@@ -435,7 +435,7 @@ DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueName, char *l
 	params[7] = (self->base.truncate ? "true" : "no");
 
 	return PQsendQueryParams(conn,
-		"SELECT * FROM pg_bulkload(ARRAY["
+		"SELECT * FROM pgbulkload.pg_bulkload(ARRAY["
 		"'TYPE=TUPLE',"
 		"'INPUT=' || $1,"
 		"'WRITER=DIRECT',"
