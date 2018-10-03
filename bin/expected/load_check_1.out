@@ -78,7 +78,7 @@ SELECT * FROM target ORDER BY id;
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "target_pkey"
 DETAIL:  Table contains duplicated values.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/check2.log
 
 pg_bulkload 3.1.13 on <TIMESTAMP>
