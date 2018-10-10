@@ -4,12 +4,10 @@
  *    Copyright (c) 2007-2011, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-SET search_path = public;
-
 BEGIN;
 
 -- Register the user defined function
-CREATE FUNCTION pg_timestamp_in(cstring, oid, int4)
+CREATE FUNCTION public.pg_timestamp_in(cstring, oid, int4)
 	RETURNS timestamp
 	LANGUAGE C
 	as 'MODULE_PATHNAME', 'pg_timestamp_in';

@@ -148,7 +148,7 @@ SELECT * FROM customer ORDER BY c_id;
 \! pg_bulkload -d contrib_regression data/csv1.ctl -i data/data2.csv -l results/csv2.log -P results/csv2.prs -u results/csv2.dup -o "PARSE_ERRORS=50"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv2.log
 
 pg_bulkload 3.1.14 on <TIMESTAMP>
@@ -430,7 +430,7 @@ NOTICE: BULK LOAD START
 WARNING:  Parse error Record 1: Input Record 2: Rejected - column 3. invalid input syntax for integer: "int4"
 WARNING:  Maximum parse error count exceeded - 1 error(s) found in input file
 ERROR: query failed: ERROR:  integer out of range
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/csv6.log
 
 pg_bulkload 3.1.14 on <TIMESTAMP>

@@ -12,45 +12,45 @@ $$ LANGUAGE SQL;
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function public.load_function(integer, integer, unknown) does not exist
 HINT:  No function matches the given name and argument types.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''','B')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function public.load_function1(integer, integer, unknown, unknown) does not exist
 HINT:  No function matches the given name and argument types.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1('A',5,'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid input syntax for integer: "A"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A'')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5,'A'')
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A'''" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5,'A'''
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5 'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,5 'A''')
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''',1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  functions cannot have more than 100 arguments
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,A)" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid input syntax for type numeric: "A"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,--5,'A''')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function call syntax error: public.load_function1(1,--5,'A''')
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=pg_catalog.to_char('1','0')" -l results/function_e.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  function pg_catalog.to_char(unknown, unknown) is not unique
 HINT:  Could not choose a best candidate function.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/function1.ctl -o "INFILE=public.load_function1(1,5,'A''')" -l results/function1.log -P results/function1.prs -u results/function1.dup -o LOAD=3
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
@@ -873,7 +873,7 @@ SELECT :LOAD1 < :LOAD10000 AS "LOAD1 is fast";
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "customer_pkey"
 DETAIL:  Key (c_id, c_w_id, c_d_id)=(1, 0, 216) is duplicated.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/function13.log
 
 pg_bulkload 3.1.14 on <TIMESTAMP>
@@ -904,7 +904,7 @@ TRUNCATE customer;
 \! pg_bulkload -d contrib_regression data/csv3.ctl -i results/function9.dup -o "SKIP=2" -l results/function14.log -P results/function14.prs -u results/function14.dup -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=1"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  Maximum duplicate error count exceeded
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/function14.log
 
 pg_bulkload 3.1.14 on <TIMESTAMP>

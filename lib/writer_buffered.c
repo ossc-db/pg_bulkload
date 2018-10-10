@@ -222,7 +222,7 @@ BufferedWriterSendQuery(BufferedWriter *self, PGconn *conn, char *queueName, cha
 	params[7] = (self->base.truncate ? "true" : "no");
 
 	return PQsendQueryParams(conn,
-		"SELECT * FROM pg_bulkload(ARRAY["
+		"SELECT * FROM pgbulkload.pg_bulkload(ARRAY["
 		"'TYPE=TUPLE',"
 		"'INPUT=' || $1,"
 		"'WRITER=BUFFERED',"

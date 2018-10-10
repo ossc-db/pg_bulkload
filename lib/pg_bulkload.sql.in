@@ -5,11 +5,11 @@
  */
 
 -- Adjust this setting to control where the objects get created.
-SET search_path = public;
-
 BEGIN;
 
-CREATE FUNCTION pg_bulkload(
+CREATE SCHEMA pgbulkload;
+
+CREATE FUNCTION pgbulkload.pg_bulkload(
 	IN options text[],
 	OUT skip bigint,
 	OUT count bigint,

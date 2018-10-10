@@ -4,6 +4,5 @@
  *    Copyright (c) 2007-2017, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-SET search_path = public;
-
-DROP FUNCTION pg_bulkload(text[]);
+DROP FUNCTION pgbulkload.pg_bulkload(text[]);
+DROP SCHEMA pgbulkload;

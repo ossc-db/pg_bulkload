@@ -478,6 +478,12 @@ pgut_connect(const char *info, YesNo prompt, int elevel)
 				termStringInfo(&add_pass);
 			free(passwd);
 
+			/* Set the search_path to value of pg_catalog, pg_temp, public 
+			 * before connecting to Postgres 
+			 * by respond to vulnerabilities of CVE-2018-1058.
+			 */
+			pgut_command(conn, "SET search_path TO pg_catalog, pg_temp, public", 0, NULL);
+
 			return conn;
 		}
 

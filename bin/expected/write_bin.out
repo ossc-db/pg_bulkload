@@ -22,54 +22,54 @@ $$ LANGUAGE SQL;
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o TRUNCATE=YES
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid keyword "TRUNCATE"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! touch results/binout1.bin results/binout1.bin.ctl
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not open binary output file: File exists
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! rm results/binout1.bin
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not open sample control file: File exists
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! rm results/binout1.bin.ctl
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -u results/binout1.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid keyword "duplicate-badfile"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o DUPLICATE_BADFILE=/tmp/binout1.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid keyword "DUPLICATE_BADFILE"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o DUPLICATE_ERRORS=0
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid keyword "DUPLICATE_ERRORS"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o ON_DUPLICATE_KEEP=NEW
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  invalid keyword "ON_DUPLICATE_KEEP"
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o "OUT_COL=CHAR(100+10)"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  TYPE argument must be ( L )
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o "OUT_COL=CHAR(100:110)"
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  TYPE argument must be ( L )
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O data/binout1.csv
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.log
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.prs
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
-DETAIL: query was: SELECT * FROM pg_bulkload($1)
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 /* normal case */
 \! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
 NOTICE: BULK LOAD START

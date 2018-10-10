@@ -384,7 +384,7 @@ BinaryWriterSendQuery(BinaryWriter *self, PGconn *conn, char *queueName, char *l
 
 	initStringInfo(&buf);
 	appendStringInfoString(&buf, 
-		"SELECT * FROM pg_bulkload(ARRAY["
+		"SELECT * FROM pgbulkload.pg_bulkload(ARRAY["
 		"'TYPE=TUPLE',"
 		"'INPUT=' || $1,"
 		"'WRITER=BINARY',"

@@ -3,8 +3,10 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_bulkload" to load this file. \quit
 
+CREATE SCHEMA pgbulkload;
+
 -- Adjust this setting to control where the objects get created.
-CREATE FUNCTION pg_bulkload(
+CREATE FUNCTION pgbulkload.pg_bulkload(
 	IN options text[],
 	OUT skip bigint,
 	OUT count bigint,

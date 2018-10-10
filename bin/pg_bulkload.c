@@ -308,7 +308,7 @@ LoaderLoadMain(List *options)
 
 	command("BEGIN", 0, NULL);
 	params[0] = buf.data;
-	res = execute("SELECT * FROM pg_bulkload($1)", 1, params);
+	res = execute("SELECT * FROM pgbulkload.pg_bulkload($1)", 1, params);
 	if (PQresultStatus(res) == PGRES_COPY_IN)
 	{
 		PQclear(res);
