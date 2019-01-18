@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_bulkload.c
  *
- *	  Copyright (c) 2007-2017, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2019, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
