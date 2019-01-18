@@ -9,7 +9,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.14
+Version:        3.1.15
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -87,6 +87,9 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Mon Jan 21 2019 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.15-1
+- Fixed pg_bulkload to mitigate attacks described in CVE-2018-1058
+- Update to pg_bulkload 3.1.15
 * Thu Nov 02 2017 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.14-1
 - Support PostgreSQL 10
 - Update to pg_bulkload 3.1.14
