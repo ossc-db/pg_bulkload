@@ -1,6 +1,5 @@
 SET client_min_messages = warning;
 \set ECHO none
-CREATE LANGUAGE 'plpgsql';
 RESET client_min_messages;
 CREATE TABLE customer (
     c_id            int4 NOT NULL,

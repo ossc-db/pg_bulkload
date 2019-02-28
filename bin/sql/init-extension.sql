@@ -5,7 +5,6 @@ DROP DATABASE IF EXISTS contrib_regression_sqlascii;
 DROP DATABASE IF EXISTS contrib_regression_utf8;
 SET client_min_messages = fatal;
 \set ECHO all
-CREATE LANGUAGE 'plpgsql';
 RESET client_min_messages;
 
 CREATE TABLE customer (
