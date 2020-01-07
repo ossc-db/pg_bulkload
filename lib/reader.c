@@ -446,10 +446,14 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         ExecCheckRTPerms(range_table, true);
 #endif
 
+		/* Some APIs have changed significantly as of v12. */
+#if PG_VERSION_NUM >= 120000
+		ExecInitRangeTable(checker->estate, range_table);
+		checker->slot = MakeSingleTupleTableSlot(desc, &TTSOpsHeapTuple);
+#else
 		checker->estate->es_range_table = range_table;
-
-		/* Set up a tuple slot too */
 		checker->slot = MakeSingleTupleTableSlot(desc);
+#endif
 	}
 
 	if (!checker->has_constraints && checker->has_not_null)
@@ -541,7 +545,11 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 		*parsing_field = 0;
 
 		/* Place tuple in tuple slot */
+#if PG_VERSION_NUM >= 120000
+		ExecStoreHeapTuple(tuple, checker->slot, false);
+#else
 		ExecStoreTuple(tuple, checker->slot, InvalidBuffer, false);
+#endif
 
 		/* Check the constraints of the tuple */
 		ExecConstraints(checker->resultRelInfo, checker->slot, checker->estate);
@@ -750,12 +758,14 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 {
 	int			i;
 
+#if PG_VERSION_NUM < 120000
 	if (dst_tupdesc->tdhasoid != src_tupdesc->tdhasoid)
 		ereport(ERROR,
 				(errcode(ERRCODE_DATATYPE_MISMATCH),
 				 errmsg("function return record definition and target table record definition do not match"),
 				 errdetail("Returned record hasoid %d, but target table hasoid %d.",
 						   src_tupdesc->tdhasoid, dst_tupdesc->tdhasoid)));
+#endif
 
 	if (dst_tupdesc->natts != src_tupdesc->natts)
 		ereport(ERROR,
@@ -967,7 +977,11 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	PgStat_FunctionCallUsage	fcusage;
 #endif
 	int						i;
+#if PG_VERSION_NUM >= 120000
+	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+#else
 	FunctionCallInfoData	fcinfo;
+#endif
 	FmgrInfo				flinfo;
 	MemoryContext			oldcontext;
 	ResourceOwner			oldowner;
@@ -1015,7 +1029,10 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	}
 #endif
 
-#if PG_VERSION_NUM >= 90100
+#if PG_VERSION_NUM >= 120000
+	InitFunctionCallInfoData(*fcinfo, &flinfo, filter->nargs,
+							 filter->collation, NULL, NULL);
+#elif PG_VERSION_NUM >= 90100
 	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, filter->collation, NULL, NULL);
 #else
 	InitFunctionCallInfoData(fcinfo, &flinfo, filter->nargs, NULL, NULL);
@@ -1023,8 +1040,14 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 
 	for (i = 0; i < filter->nargs; i++)
 	{
+#if PG_VERSION_NUM >= 120000
+		fcinfo->args[i].value = former->values[i];
+		fcinfo->args[i].isnull = former->isnull[i];
+
+#else
 		fcinfo.arg[i] = former->values[i];
 		fcinfo.argnull[i] = former->isnull[i];
+#endif
 	}
 
 	/*
@@ -1043,13 +1066,25 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	MemoryContextSwitchTo(oldcontext);
 
 	*parsing_field = 0;
+#if PG_VERSION_NUM >= 120000
+	pgstat_init_function_usage(fcinfo, &fcusage);
+#else
 	pgstat_init_function_usage(&fcinfo, &fcusage);
+#endif
 
+#if PG_VERSION_NUM >= 120000
+	fcinfo->isnull = false;
+#else
 	fcinfo.isnull = false;
+#endif
 
 	PG_TRY();
 	{
+#if PG_VERSION_NUM >= 120000
+		datum = FunctionCallInvoke(fcinfo);
+#else
 		datum = FunctionCallInvoke(&fcinfo);
+#endif
 	}
 	PG_CATCH();
 	{
@@ -1076,7 +1111,11 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	/*
 	 * If function result is NULL, return tuple, it's all columns of null.
 	 */
+#if PG_VERSION_NUM >= 120000
+	if (fcinfo->isnull)
+#else
 	if (fcinfo.isnull)
+#endif
 		return TupleFormerNullTuple(former);
 
 	filter->tuple.t_data = DatumGetHeapTupleHeader(datum);

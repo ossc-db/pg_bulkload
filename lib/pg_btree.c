@@ -21,10 +21,15 @@
 #include "storage/fd.h"
 #include "storage/lmgr.h"
 #include "storage/smgr.h"
+#if PG_VERSION_NUM >= 120000
+#include "storage/md.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#if PG_VERSION_NUM < 120000
 #include "utils/tqual.h"
+#endif
 
 #if PG_VERSION_NUM >= 80400
 #include "utils/snapmgr.h"
@@ -36,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= 130000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 120000
+#include "nbtree/nbtsort-12.c"
 #elif PG_VERSION_NUM >= 110000
 #include "nbtree/nbtsort-11.c"
 #elif PG_VERSION_NUM >= 100000
@@ -136,7 +143,11 @@ SpoolerOpen(Spooler *self,
 	self->estate->es_result_relations = self->relinfo;
 	self->estate->es_result_relation_info = self->relinfo;
 
+#if PG_VERSION_NUM >= 120000
+	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsHeapTuple);
+#else
 	self->slot = MakeSingleTupleTableSlot(RelationGetDescr(rel));
+#endif
 
 	self->spools = IndexSpoolBegin(self->relinfo,
 								   max_dup_errors == 0);
@@ -169,7 +180,11 @@ void
 SpoolerInsert(Spooler *self, HeapTuple tuple)
 {
 	/* Spool keys in the tuple */
+#if PG_VERSION_NUM >= 120000
+	ExecStoreHeapTuple(tuple, self->slot, false);
+#else
 	ExecStoreTuple(tuple, self->slot, InvalidBuffer, false);
+#endif
 	IndexSpoolInsert(self->spools, self->slot, &(tuple->t_self), self->estate);
 	BULKLOAD_PROFILE(&prof_writer_index);
 }
@@ -389,6 +404,9 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 #endif
 
 	wstate.index = btspool->index;
+#if PG_VERSION_NUM >= 120000
+	wstate.inskey = _bt_mkscankey(wstate.index, NULL);
+#endif
 
 	/*
 	 * We need to log index creation in WAL iff WAL archiving is enabled AND
@@ -457,6 +475,9 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	bool			should_free = false;
 	TupleDesc		tupdes = RelationGetDescr(wstate->index);
 	int				keysz = RelationGetNumberOfAttributes(wstate->index);
+#if PG_VERSION_NUM >= 120000
+	BTScanInsert	btIndexScanKey;
+#endif
 	ScanKey			indexScanKey;
 	ON_DUPLICATE	on_duplicate = self->on_duplicate;
 
@@ -465,7 +486,12 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	/* the preparation of merge */
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
+#if PG_VERSION_NUM >= 120000
+	btIndexScanKey = _bt_mkscankey(wstate->index, NULL);
+	indexScanKey = btIndexScanKey->scankeys;
+#else
 	indexScanKey = _bt_mkscankey_nodata(wstate->index);
+#endif
 
 	for (;;)
 	{
@@ -610,7 +636,12 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 		}
 		BULKLOAD_PROFILE(&prof_merge_insert);
 	}
+
+#if PG_VERSION_NUM >= 120000
+	pfree(btIndexScanKey);
+#else
 	_bt_freeskey(indexScanKey);
+#endif
 
 	/* Close down final pages and write the metapage */
 	_bt_uppershutdown(wstate, state);
@@ -947,7 +978,11 @@ heap_is_visible(Relation heapRel, ItemPointer htid)
 	 * Visibility checking is simplified compared with _bt_check_unique
 	 * because we have exclusive lock on the relation. (XXX: Is it true?)
 	 */
+#if PG_VERSION_NUM >= 120000
+	return table_index_fetch_tuple_check(heapRel, htid, &SnapshotDirty, NULL);
+#else
 	return heap_hot_search(htid, heapRel, &SnapshotDirty, NULL);
+#endif
 }
 
 static void

@@ -110,7 +110,11 @@ BinaryWriterInit(BinaryWriter *self)
 	self->ctl_fd = open_output_file(path, "sample control file", true);
 
 	/* create TupleDesc */
+#if PG_VERSION_NUM >= 120000
+	tupdesc = CreateTemplateTupleDesc(self->nfield);
+#else
 	tupdesc = CreateTemplateTupleDesc(self->nfield, false);
+#endif
 	for (i = 0; i < self->nfield; i++)
 	{
 		TupleDescInitEntry(tupdesc, i + 1, "out col", self->fields[i].typeid,

@@ -37,15 +37,20 @@ typedef struct FunctionParser
 {
 	Parser	base;
 
-	FmgrInfo				flinfo;
-	FunctionCallInfoData	fcinfo;
-	TupleDesc				desc;
-	EState				   *estate;
-	ExprContext			   *econtext;
-	ExprContext			   *arg_econtext;
-	ReturnSetInfo			rsinfo;
-	HeapTupleData			tuple;
-	TupleTableSlot		   *funcResultSlot;
+	FmgrInfo					flinfo;
+#if PG_VERSION_NUM >= 120000
+	FunctionCallInfo			fcinfo;
+#else
+	FunctionCallInfoData		fcinfo;
+#endif
+
+	TupleDesc					desc;
+	EState					   *estate;
+	ExprContext			       *econtext;
+	ExprContext			       *arg_econtext;
+	ReturnSetInfo				rsinfo;
+	HeapTupleData				tuple;
+	TupleTableSlot		       *funcResultSlot;
 } FunctionParser;
 
 static void	FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
@@ -82,6 +87,9 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	int					i;
 	ParsedFunction		function;
 	int					nargs;
+#if PG_VERSION_NUM >= 120000
+	int					total_nargs;
+#endif
 	Oid					funcid;
 	HeapTuple			ftup;
 	Form_pg_proc		pp;
@@ -137,6 +145,12 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	 * assign arguments
 	 */
 	nargs = function.nargs;
+
+#if PG_VERSION_NUM >= 120000
+	total_nargs = nargs + (function.nvargs > 0 ? 1 : 0) + function.ndargs;
+	self->fcinfo = (FunctionCallInfo) palloc0(SizeForFunctionCallInfo(total_nargs));
+#endif
+
 	for (i = 0;
 #if PG_VERSION_NUM >= 80400
 		i < nargs - function.nvargs;
@@ -150,7 +164,11 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 			if (self->flinfo.fn_strict)
 				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					errmsg("function is strict, but argument %d is NULL", i)));
+#if PG_VERSION_NUM >= 120000
+			self->fcinfo->args[i].isnull = true;
+#else
 			self->fcinfo.argnull[i] = true;
+#endif
 		}
 		else
 		{
@@ -158,9 +176,16 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 			Oid			typioparam;
 
 			getTypeInputInfo(pp->proargtypes.values[i], &typinput, &typioparam);
+#if PG_VERSION_NUM >= 120000
+			self->fcinfo->args[i].value = OidInputFunctionCall(typinput,
+									(char *) function.args[i], typioparam, -1);
+			self->fcinfo->args[i].isnull = false;
+
+#else
 			self->fcinfo.arg[i] = OidInputFunctionCall(typinput,
 									(char *) function.args[i], typioparam, -1);
 			self->fcinfo.argnull[i] = false;
+#endif
 			pfree(function.args[i]);
 		}
 	}
@@ -213,7 +238,11 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 		lbs[0] = 1;
 		arry = construct_md_array(elems, nulls, 1, dims, lbs, element_type,
 								  elmlen, elmbyval, elmalign);
+#if PG_VERSION_NUM >= 120000
+		self->fcinfo->args[nfixedarg].value = PointerGetDatum(arry);
+#else
 		self->fcinfo.arg[nfixedarg] = PointerGetDatum(arry);
+#endif
 	}
 
 	/*
@@ -262,13 +291,20 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 			argstate = ExecInitExpr(expr, NULL);
 
+#if PG_VERSION_NUM >= 120000
+			self->fcinfo->args[nargs].value = ExecEvalExpr(argstate,
+														  self->arg_econtext,
+														  &self->fcinfo->args[nargs].isnull);
+#elif PG_VERSION_NUM >= 100000
+			self->fcinfo.arg[nargs] = ExecEvalExpr(argstate,
+												   self->arg_econtext,
+												   &self->fcinfo.argnull[nargs]);
+#else
 			self->fcinfo.arg[nargs] = ExecEvalExpr(argstate,
 												   self->arg_econtext,
 												   &self->fcinfo.argnull[nargs]
-#if PG_VERSION_NUM < 100000
-												   ,&thisArgIsDone
+												   ,&thisArgIsDone);
 #endif
-												   );
 
 #if PG_VERSION_NUM < 100000
 			if (thisArgIsDone != ExprSingleResult)
@@ -284,7 +320,10 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 	ReleaseSysCache(ftup);
 
-#if PG_VERSION_NUM >= 90100
+#if PG_VERSION_NUM >= 120000
+	InitFunctionCallInfoData(*self->fcinfo, &self->flinfo, nargs,
+		collation, NULL, (Node *) &self->rsinfo);
+#elif PG_VERSION_NUM >= 90100
 	InitFunctionCallInfoData(self->fcinfo, &self->flinfo, nargs,
 		collation, NULL, (Node *) &self->rsinfo);
 #else
@@ -310,7 +349,11 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 	self->rsinfo.isDone = ExprSingleResult;
 	self->rsinfo.setResult = NULL;
 	self->rsinfo.setDesc = NULL;
+#if PG_VERSION_NUM >= 120000
+	self->funcResultSlot = MakeSingleTupleTableSlot(self->desc, &TTSOpsHeapTuple);
+#else
 	self->funcResultSlot = MakeSingleTupleTableSlot(self->desc);
+#endif
 }
 
 static int64
@@ -370,7 +413,11 @@ restart:
 									 self->funcResultSlot))
 			return NULL;
 
+#if PG_VERSION_NUM >= 120000
+		datum = ExecFetchSlotHeapTupleDatum(self->funcResultSlot);
+#else
 		datum = ExecFetchSlotTupleDatum(self->funcResultSlot);
+#endif
 		set_datum_tuple(self, datum);
 
 		return &self->tuple;
@@ -378,11 +425,23 @@ restart:
 
 	BULKLOAD_PROFILE(&prof_reader_parser);
 
+#if PG_VERSION_NUM >= 120000
+	pgstat_init_function_usage(self->fcinfo, &fcusage);
+#else
 	pgstat_init_function_usage(&self->fcinfo, &fcusage);
+#endif
 
+#if PG_VERSION_NUM >= 120000
+	self->fcinfo->isnull = false;
+#else
 	self->fcinfo.isnull = false;
+#endif
 	self->rsinfo.isDone = ExprSingleResult;
+#if PG_VERSION_NUM >= 120000
+	datum = FunctionCallInvoke(self->fcinfo);
+#else
 	datum = FunctionCallInvoke(&self->fcinfo);
+#endif
 
 	pgstat_end_function_usage(&fcusage,
 							  self->rsinfo.isDone != ExprMultipleResult);
@@ -401,7 +460,11 @@ restart:
 		/*
 		 * For a function returning set, we consider this a protocol violation.
 		 */
+#if PG_VERSION_NUM >= 120000
+		if (self->fcinfo->isnull)
+#else
 		if (self->fcinfo.isnull)
+#endif
 			ereport(ERROR,
 					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 					 errmsg("function returning set of rows cannot return null value")));

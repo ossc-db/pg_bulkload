@@ -54,6 +54,42 @@ sql/init-10.sql:
 	cp sql/init-extension.sql sql/init-10.sql
 sql/init-11.sql:
 	cp sql/init-extension.sql sql/init-11.sql
+sql/init-12.sql:
+	cp sql/init-extension-v2.sql sql/init-12.sql
+
+sql/load_bin.sql: sql/load_bin-$(MAJORVERSION).sql
+	cp sql/load_bin-$(MAJORVERSION).sql sql/load_bin.sql
+sql/load_bin-9.3.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-9.3.sql
+sql/load_bin-9.4.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-9.4.sql
+sql/load_bin-9.5.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-9.5.sql
+sql/load_bin-9.6.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-9.6.sql
+sql/load_bin-10.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-10.sql
+sql/load_bin-11.sql:
+	cp sql/load_bin-v1.sql sql/load_bin-11.sql
+sql/load_bin-12.sql:
+	cp sql/load_bin-v2.sql sql/load_bin-12.sql
+
+sql/load_csv.sql: sql/load_csv-$(MAJORVERSION).sql
+	cp sql/load_csv-$(MAJORVERSION).sql sql/load_csv.sql
+sql/load_csv-9.3.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-9.3.sql
+sql/load_csv-9.4.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-9.4.sql
+sql/load_csv-9.5.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-9.5.sql
+sql/load_csv-9.6.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-9.6.sql
+sql/load_csv-10.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-10.sql
+sql/load_csv-11.sql:
+	cp sql/load_csv-v1.sql sql/load_csv-11.sql
+sql/load_csv-12.sql:
+	cp sql/load_csv-v2.sql sql/load_csv-12.sql
 
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
@@ -69,6 +105,8 @@ sql/load_filter-10.sql:
 	cp sql/load_filter-v2.sql sql/load_filter-10.sql
 sql/load_filter-11.sql:
 	cp sql/load_filter-v2.sql sql/load_filter-11.sql
+sql/load_filter-12.sql:
+	cp sql/load_filter-v3.sql sql/load_filter-12.sql
 
 sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
 	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
@@ -84,15 +122,19 @@ sql/load_function-10.sql:
 	cp sql/load_function-v2.sql sql/load_function-10.sql
 sql/load_function-11.sql:
 	cp sql/load_function-v2.sql sql/load_function-11.sql
+sql/load_function-12.sql:
+	cp sql/load_function-v3.sql sql/load_function-12.sql
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11}.sql
-	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11}.sql
-	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11}.sql
+	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12}.sql
+	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12}.sql
+	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12}.sql
+	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12}.sql
+	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12}.sql
 
-installcheck: sql/init.sql sql/load_function.sql sql/load_filter.sql
+installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql
 
 LDFLAGS+=-Wl,--build-id

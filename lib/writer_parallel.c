@@ -15,6 +15,7 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
+#include "storage/lmgr.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -81,15 +82,17 @@ ParallelWriterInit(ParallelWriter *self)
 	unsigned	queryKey;
 	char		queueName[MAXPGPATH];
 	PGresult   *res;
+	Relation	rel = NULL;
 
 	Assert(self->base.truncate == false);
 
+	/* Initialize information needed to check tuples when reading. */
 	if (self->base.relid != InvalidOid)
 	{
 		TupleDesc	resultDesc;
 
-		/* open relation without any relation locks */
-		self->base.rel = heap_open(self->base.relid, NoLock);
+		/* open relation to get the TupleDesc */
+		self->base.rel = rel = heap_open(self->base.relid, AccessShareLock);
 		self->base.desc = RelationGetDescr(self->base.rel);
 		self->base.tchecker = CreateTupleChecker(self->base.desc);
 		self->base.tchecker->checker = (CheckerTupleProc) CoercionCheckerTuple;
@@ -123,11 +126,30 @@ ParallelWriterInit(ParallelWriter *self)
 									ALLOCSET_DEFAULT_MAXSIZE);
 #endif
 
-	/* create queue */
+	/*
+	 * Create a queue through which we will send the validated rows to
+	 * the actual writer process that we will set up below.
+	 */
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
 	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
-	/* connect to localhost */
+	/*
+	 * Connect to a new backend process that will actually perform the writes.
+	 * As the new process will take an AccessExclusiveLock on the target
+	 * relation, we must relinquish ours.  Note that we don't "close" the
+	 * relation though, because we will need to set up a Checker; see
+	 * CheckerInit().
+	 *
+	 * NB: This is quite a hack, because there is a window between our
+	 * releasing the lock here and the new process acquiring its own during
+	 * which the relation schema might change, but maybe that's something we
+	 * have to live with.  Note that that's always been the case, because
+	 * we never even took a lock in this process before supporting Postgres
+	 * 12.  Warn users through documentation that there is such risk when
+	 * using the MULTI_PROCESS=TRUE mode.
+	 */
+	if (rel)
+		UnlockRelation(rel, AccessShareLock);
 	self->conn = connect_to_localhost();
 
 	/* start transaction */
@@ -145,6 +167,10 @@ ParallelWriterInit(ParallelWriter *self)
 	if (!self->writer->dup_badfile)
 		self->writer->dup_badfile = self->base.dup_badfile;
 
+	/*
+	 * The following executes pg_bulkload() in the new process with a
+	 * DirectWriter writer; see DirectWriterSendQuery() for more details.
+	 */
 	if (1 != self->writer->sendQuery(self->writer, self->conn, queueName,
 									 self->base.logfile,
 									 self->base.verbose))

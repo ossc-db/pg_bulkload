@@ -16,6 +16,9 @@
 #include "access/heapam.h"
 #include "access/reloptions.h"
 #include "catalog/objectaddress.h"
+#if PG_VERSION_NUM >= 120000
+#include "catalog/pg_am.h"
+#endif
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
 #include "funcapi.h"
@@ -418,6 +421,13 @@ VerifyTarget(Relation rel, int64 max_dup_errors)
 					   ACL_KIND_CLASS,
 #endif
 					   RelationGetRelationName(rel));
+
+#if PG_VERSION_NUM >= 120000
+	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("pg_bulkload only supports tables with \"heap\" access method")));
+#endif
 }
 
 /*

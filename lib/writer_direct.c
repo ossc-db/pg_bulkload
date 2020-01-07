@@ -242,12 +242,14 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 		tuple = toast_insert_or_update(self->base.rel, tuple, NULL, 0);
 	BULKLOAD_PROFILE(&prof_writer_toast);
 
+#if PG_VERSION_NUM < 120000
 	/* Assign oids if needed. */
 	if (self->base.rel->rd_rel->relhasoids)
 	{
 		Assert(!OidIsValid(HeapTupleGetOid(tuple)));
 		HeapTupleSetOid(tuple, GetNewOid(self->base.rel));
 	}
+#endif
 
 	/* Assume the tuple has been toasted already. */
 	if (MAXALIGN(tuple->t_len) > MaxHeapTupleSize)

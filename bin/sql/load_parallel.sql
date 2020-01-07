@@ -1,3 +1,4 @@
+SET extra_float_digits = 0;
 \set BEFORE_NSHM `ipcs -m | grep -c [0-9]`
 TRUNCATE customer;
 
