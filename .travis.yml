@@ -13,9 +13,8 @@ before_install:
   - if [ $PGVERSION = 9.5 ] ; then git checkout -b REL9_5_STABLE origin/REL9_5_STABLE; fi
   - if [ $PGVERSION = 9.4 ] ; then git checkout -b REL9_4_STABLE origin/REL9_4_STABLE; fi
   - if [ $PGVERSION = 9.3 ] ; then git checkout -b REL9_3_STABLE origin/REL9_3_STABLE; fi
-  - if [ $PGVERSION = 9.2 ] ; then git checkout -b REL9_2_STABLE origin/REL9_2_STABLE; fi
   - export POSTGRES_HOME=/home/travis/build/ossc-db/pg_bulkload/pgsql/$PGVERSION
-  - if [ $PGVERSION != 8.4 ] ; then ./configure --prefix=$POSTGRES_HOME; fi
+  - ./configure --prefix=$POSTGRES_HOME
   - make -j 2
   - make install
   - echo 'export PATH=$PATH:$POSTGRES_HOME/bin' >> ~/.bashrc
@@ -48,7 +47,6 @@ env:
     - PGVERSION=9.5
     - PGVERSION=9.4
     - PGVERSION=9.3
-    - PGVERSION=9.2
 
 language: cpp
 compiler:
