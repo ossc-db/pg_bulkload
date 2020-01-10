@@ -483,6 +483,10 @@ The default is NO.
 If WRITER is PARALLEL, MULTI_PROCESS is ignored.
 If password authentication is configured to the database to load,
 you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+Please make sure when enabling MULTI_PROCESS that no other PostgreSQL backend
+process is trying to modify the schema of the table, because it may cause the
+schema of the table as seen by the reader and the writer processes to differ
+and cause problems.
 </dd>
 
 </dl>
