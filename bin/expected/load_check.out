@@ -9,7 +9,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check1.log
 
-pg_bulkload 3.1.15 on <TIMESTAMP>
+pg_bulkload <VERSION> on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check1.prs
@@ -81,7 +81,7 @@ DETAIL:  Key (id)=(1) is duplicated.
 DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
 \! awk -f data/adjust.awk results/check2.log
 
-pg_bulkload 3.1.15 on <TIMESTAMP>
+pg_bulkload <VERSION> on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check2.prs
@@ -145,7 +145,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check3.log
 
-pg_bulkload 3.1.15 on <TIMESTAMP>
+pg_bulkload <VERSION> on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check3.prs
@@ -220,7 +220,7 @@ NOTICE: BULK LOAD END
 WARNING: some rows were not loaded due to errors.
 \! awk -f data/adjust.awk results/check4.log
 
-pg_bulkload 3.1.15 on <TIMESTAMP>
+pg_bulkload <VERSION> on <TIMESTAMP>
 
 INPUT = .../data5.csv
 PARSE_BADFILE = .../check4.prs
