@@ -1,7 +1,7 @@
 #
 # sample_csv.ctl -- Control file to load CSV input data
 #
-#    Copyright (c) 2007-2019, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2020, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 OUTPUT = foo                   # [<schema_name>.]table_name
 INPUT = /tmp/foo.csv  # Input data location (absolute path)

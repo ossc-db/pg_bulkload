@@ -1,7 +1,7 @@
 #
 # pg_bulkload: lib/Makefile
 #
-#    Copyright (c) 2007-2019, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2020, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = \
 	binary.c \
