@@ -853,12 +853,29 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 8.3, 8.4, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6</dd>
+<dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11</dd>
 <dt>OS</dt>
 <dd>RHEL 6/7</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.15</h4>
+<ul>
+<li>Added support for PostgreSQL 11</li>
+<li>Fixed pg_bulkload to mitigate attacks described in CVE-2018-1058</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.14</h4>
+<ul>
+<li>Added support for PostgreSQL 10</li>
+<li>Changed name of RPM to standard naming convention as follows:
+From pg_bulkload-VERSIONX_X_X-X.pgXX.rhelX.rpm to pg_bulkload-X.X.XX-X.pgXX.rhelX.rpm</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.13</h4>
