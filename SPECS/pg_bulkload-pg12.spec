@@ -102,3 +102,4 @@ rm -rf %{_libdir}/pgxs/src/backend/
 * Mon Jan xx 2020 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.16-1
 - Update to pg_bulkload 3.1.16
 - Warn users of some risks of using parallel/multi-process mode
+- Document restriction that pg_bulkload supports only tables of "heap" access method
