@@ -632,6 +632,14 @@ The length of the hex value must be the same as that of the type.</li>
 
 <h2 id="restrictions">Restrictions</h2>
 
+<h3>Support for pluggable table access methods in PostgreSQL 12</h3>
+ <p>
+  pg_bulkload currently only supports loading data into tables of access method
+  named "heap".  Note that it is the method that core PostgreSQL has always
+  used, but has been revised in PostgreSQL 12 to go through the new pluggable
+  table access API.
+ </p>
+
 <h3>Exit code of pg_bulkload</h3>
 <p>
 pg_bulkload returns 0 when succesfully loaded.
