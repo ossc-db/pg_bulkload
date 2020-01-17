@@ -589,6 +589,13 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 
 <h2 id="restrictions">使用上の注意と制約</h2>
 
+<h3>PostgreSQL 12のプラガブルなテーブルアクセスメソッドをサポート。</h3>
+ <p>
+  pg_bulkload「ヒープ」構造のテーブルへのデータロードのみサポートしています。
+  PostgreSQL 12では新しいプラガブルなテーブルアクセスメソッドAPIを通過するように修正されていることになりますが、
+  pg_bulkloadは「ヒープ」構造以外はサポートしません。
+ </p>
+
 <h3>pg_bulkload の終了コード</h3>
 <p>
 データロードが正常に終了した場合は 0 が返ります。
@@ -787,6 +794,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <ul>
 <li>PostgreSQL 12に対応</li>
 <li>pg_bulkloadのPARALLELやMULTI_PROCESS機能を有効化して使用する場合、いくつかの注意点をドキュメントに追加しました</li>
+<li>pg_bulkloadは「ヒープ」構造のテーブルのみサポートになることをドキュメントに追加しました</li>
 </ul>
 </p>
 
