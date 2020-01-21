@@ -458,8 +458,9 @@ YES の場合は、データの読み取り、パース処理および書き出�
 NO の場合は並行処理を行わず、シングルスレッドで実行します。デフォルトは NO です。
 「WRITER=PARALLEL」と指定した場合は、MULTI_PROCESS は無視されます。
 なお、ロード先のデータベースに対してパスワード認証を必要とする場合には .pgpass を設定しなければなりません。
-詳細は<a href="#restrictions">使用上の注意と制約</a>を参照して下さい。pg_bulkloadのMULTI_PROCESSやparallelを有効にして実行場合、他のPostgreSQLバックエンドプロセスがテーブルスキーマを変更しないようにください。
-データの読み取りするプロセスとデータを書き出しプロセスで見られるテーブルスキーマが異なり、問題が発生する可能性があります。
+詳細は<a href="#restrictions">使用上の注意と制約</a>を参照して下さい。
+pg_bulkloadのMULTI_PROCESSやPARALLELを有効にして実行する場合、他のPostgreSQLバックエンドプロセスがテーブルスキーマを変更しないようにしてください。
+データを読み取るプロセスとデータを書き出すプロセスで見られるテーブルスキーマが異なり、問題が発生する可能性があります。
 </dd>
 
 </dl>
@@ -794,7 +795,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <ul>
 <li>PostgreSQL 12に対応</li>
 <li>pg_bulkloadのPARALLELやMULTI_PROCESS機能を有効化して使用する場合、いくつかの注意点をドキュメントに追加しました</li>
-<li>pg_bulkloadは「ヒープ」構造のテーブルのみサポートになることをドキュメントに追加しました</li>
+<li>pg_bulkloadは「ヒープ」構造のテーブルのみサポートすることをドキュメントに追加しました</li>
 </ul>
 </p>
 
