@@ -94,12 +94,12 @@ static void IndexSpoolEnd(Spooler *self);
 static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, EState *estate);
 
 static IndexTuple BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free);
-static bool BTReaderInit(BTReader *reader, Relation rel);
+static int BTReaderInit(BTReader *reader, Relation rel);
 static void BTReaderTerm(BTReader *reader);
 static void BTReaderReadPage(BTReader *reader, BlockNumber blkno);
 static IndexTuple BTReaderGetNextItem(BTReader *reader);
 
-static void _bt_mergebuild(Spooler *self, BTSpool *btspool);
+static bool _bt_mergebuild(Spooler *self, BTSpool *btspool);
 static void _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool,
 						  BTReader *btspool2, Relation heapRel);
 static int compare_indextuple(const IndexTuple itup1, const IndexTuple itup2,
@@ -250,9 +250,8 @@ IndexSpoolEnd(Spooler *self)
 
 	for (i = 0; i < self->relinfo->ri_NumIndices; i++)
 	{
-		if (spools[i] != NULL)
+		if (spools[i] != NULL && _bt_mergebuild(self, spools[i]))
 		{
-			_bt_mergebuild(self, spools[i]);
 			_bt_spooldestroy(spools[i]);
 		}
 		else
@@ -380,18 +379,17 @@ IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot, ItemPointer tupleid, ES
 }
 
 
-static void
+static bool
 _bt_mergebuild(Spooler *self, BTSpool *btspool)
 {
 	Relation heapRel = self->relinfo->ri_RelationDesc;
 	BTWriteState	wstate;
 	BTReader		reader;
-	bool			merge;
+	int				merge;
 
 	Assert(btspool->index->rd_index->indisvalid);
 
 	tuplesort_performsort(btspool->sortstate);
-
 
 #if PG_VERSION_NUM >= 90300
 	/*
@@ -436,6 +434,8 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	BULKLOAD_PROFILE(&prof_flush);
 
 	merge = BTReaderInit(&reader, wstate.index);
+	if (merge == -1)
+		return false;
 
 	elog(DEBUG1, "pg_bulkload: build \"%s\" %s merge (%s wal)",
 		RelationGetRelationName(wstate.index),
@@ -461,6 +461,8 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	}
 
 	BTReaderTerm(&reader);
+
+	return true;
 }
 
 /*
@@ -568,12 +570,20 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 
 		if (load1)
 		{
-			IndexTuple	next_itup = NULL;
+			IndexTuple	next_itup = NULL, tmp_itup = NULL;
 			bool		next_should_free = false;
 
 			for (;;)
 			{
 				/* get next item */
+				if (itup)
+				{
+					tmp_itup = CopyIndexTuple(itup);
+					if (should_free)
+						pfree(itup);
+					should_free = true;
+					itup = tmp_itup;
+				}
 				next_itup = BTSpoolGetNextItem(btspool, next_itup,
 											   &next_should_free);
 
@@ -707,9 +717,9 @@ BTSpoolGetNextItem(BTSpool *spool, IndexTuple itup, bool *should_free)
  * - page : Left-most leaf page, or undefined if no leaf page.
  *
  * @param reader [in/out] B-Tree index reader
- * @return true iff there are some tuples
+ * @return 1 iff there are some tuples, -1 if unexpected failure, or 0 otherwise
  */
-static bool
+static int
 BTReaderInit(BTReader *reader, Relation rel)
 {
 	BTPageOpaque	metaopaque;
@@ -768,7 +778,7 @@ BTReaderInit(BTReader *reader, Relation rel)
 	{
 		/* No root page; We ignore the index in the subsequent build. */
 		reader->blkno = InvalidBlockNumber;
-		return false;
+		return 0;
 	}
 
 	/* Go to the fast root page. */
@@ -785,6 +795,14 @@ BTReaderInit(BTReader *reader, Relation rel)
 		/* Get the block number of the left child */
 		firstid = PageGetItemId(reader->page, P_FIRSTDATAKEY(opaque));
 		itup = (IndexTuple) PageGetItem(reader->page, firstid);
+
+		if ((itup->t_tid).ip_posid == 0)
+		{
+			elog(DEBUG1, "pg_bulkload: failded in BTReaderInit for \"%s\"",
+				RelationGetRelationName(rel));
+			return -1;
+		}
+
 		blkno = ItemPointerGetBlockNumber(&(itup->t_tid));
 
 		/* Go down to children */
@@ -800,13 +818,13 @@ BTReaderInit(BTReader *reader, Relation rel)
 			{
 				/* We reach end of the index without any valid leaves. */
 				reader->blkno = InvalidBlockNumber;
-				return false;
+				return 0;
 			}
 			blkno = opaque->btpo_next;
 		}
 	}
 	
-	return true;
+	return 1;
 }
 
 /**
