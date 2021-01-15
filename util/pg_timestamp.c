@@ -14,7 +14,9 @@
 PG_MODULE_MAGIC;
 
 /* prototype of static function */
+#if PG_VERSION_NUM < 130000
 static void AdjustTimestampForTypmod(Timestamp *time, int32 typmod);
+#endif
 extern Datum pg_timestamp_in(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(pg_timestamp_in);
@@ -210,6 +212,7 @@ pg_timestamp_in(PG_FUNCTION_ARGS)
 	PG_RETURN_TIMESTAMP(result);
 }
 
+#if PG_VERSION_NUM < 130000
 /*------------------------------------------------------------------------
  *	 The following lines were taken from the original PostgreSQL source.
  *	   - AdjustTimestampForTypmod		No modification is made here.
@@ -294,3 +297,4 @@ AdjustTimestampForTypmod(Timestamp *time, int32 typmod)
 #endif
 	}
 }
+#endif

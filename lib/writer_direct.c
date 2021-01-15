@@ -13,7 +13,11 @@
 
 #include "access/heapam.h"
 #include "access/transam.h"
+#if PG_VERSION_NUM >= 130000
+#include "access/heaptoast.h"
+#else
 #include "access/tuptoaster.h"
+#endif
 #include "access/xlog.h"
 #include "catalog/catalog.h"
 #include "catalog/namespace.h"
@@ -164,8 +168,11 @@ DirectWriterInit(DirectWriter *self)
 	 */
 	if (self->base.max_dup_errors < -1)
 		self->base.max_dup_errors = DEFAULT_MAX_DUP_ERRORS;
-
+#if PG_VERSION_NUM >= 130000
+	self->base.rel = table_open(self->base.relid, AccessExclusiveLock);
+#else
 	self->base.rel = heap_open(self->base.relid, AccessExclusiveLock);
+#endif
 	VerifyTarget(self->base.rel, self->base.max_dup_errors);
 
 	self->base.desc = RelationGetDescr(self->base.rel);
@@ -239,7 +246,11 @@ DirectWriterInsert(DirectWriter *self, HeapTuple tuple)
 
 	/* Compress the tuple data if needed. */
 	if (tuple->t_len > TOAST_TUPLE_THRESHOLD)
+#if PG_VERSION_NUM >= 130000
+		tuple = heap_toast_insert_or_update(self->base.rel, tuple, NULL, 0);
+#else
 		tuple = toast_insert_or_update(self->base.rel, tuple, NULL, 0);
+#endif
 	BULKLOAD_PROFILE(&prof_writer_toast);
 
 #if PG_VERSION_NUM < 120000
@@ -329,7 +340,11 @@ DirectWriterClose(DirectWriter *self, bool onError)
 		ret.num_dup_old = self->spooler.dup_old;
 
 		if (self->base.rel)
+#if PG_VERSION_NUM >= 130000
+			table_close(self->base.rel, AccessExclusiveLock);
+#else
 			heap_close(self->base.rel, AccessExclusiveLock);
+#endif
 
 		if (self->blocks)
 			pfree(self->blocks);

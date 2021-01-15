@@ -41,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 130000
+#if PG_VERSION_NUM >= 140000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 130000
+#include "nbtree/nbtsort-13.c"
 #elif PG_VERSION_NUM >= 120000
 #include "nbtree/nbtsort-12.c"
 #elif PG_VERSION_NUM >= 110000
@@ -631,7 +633,11 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 							 errmsg("Maximum duplicate error count exceeded")));
 			}
 
+#if PG_VERSION_NUM >= 130000
+			_bt_buildadd(wstate, state, itup, 0);
+#else
 			_bt_buildadd(wstate, state, itup);
+#endif
 
 			if (should_free)
 				pfree(itup);
@@ -641,7 +647,11 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 		}
 		else
 		{
+#if PG_VERSION_NUM >= 130000
+			_bt_buildadd(wstate, state, itup2, 0);
+#else
 			_bt_buildadd(wstate, state, itup2);
+#endif
 			itup2 = BTReaderGetNextItem(btspool2);
 		}
 		BULKLOAD_PROFILE(&prof_merge_insert);

@@ -22,7 +22,11 @@
 
 #include "reader.h"
 
+#if PG_VERSION_NUM >= 130000
+#define MAXINT8LEN		20
+#else
 #define MAXINT8LEN		25
+#endif
 
 #define DEFAULT_MAX_DUP_ERRORS	0
 

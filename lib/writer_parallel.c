@@ -92,7 +92,11 @@ ParallelWriterInit(ParallelWriter *self)
 		TupleDesc	resultDesc;
 
 		/* open relation to get the TupleDesc */
+#if PG_VERSION_NUM >= 130000
+		self->base.rel = rel = table_open(self->base.relid, AccessShareLock);
+#else
 		self->base.rel = rel = heap_open(self->base.relid, AccessShareLock);
+#endif
 		self->base.desc = RelationGetDescr(self->base.rel);
 		self->base.tchecker = CreateTupleChecker(self->base.desc);
 		self->base.tchecker->checker = (CheckerTupleProc) CoercionCheckerTuple;
@@ -285,7 +289,11 @@ ParallelWriterClose(ParallelWriter *self, bool onError)
 		MemoryContextDelete(self->base.context);
 
 		if (self->base.rel)
+#if PG_VERSION_NUM >= 130000
+			table_close(self->base.rel, NoLock);
+#else
 			heap_close(self->base.rel, NoLock);
+#endif
 	}
 
 	return ret;
