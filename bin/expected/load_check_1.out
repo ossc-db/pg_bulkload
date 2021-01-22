@@ -1,0 +1,286 @@
+\! pg_bulkload -d contrib_regression data/csv7.ctl -o "DUPLICATE_ERRORS=50" -i data/data5.csv -l results/check1.log -P results/check1.prs -u results/check1.dup -o "PARSE_ERRORS=-1"
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	5 Rows successfully loaded.
+	3 Rows not loaded due to parse errors.
+	2 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/check1.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../data5.csv
+PARSE_BADFILE = .../check1.prs
+LOGFILE = .../check1.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../check1.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. null value in column "str" violates not-null constraint
+Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
+Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+
+  0 Rows skipped.
+  5 Rows successfully loaded.
+  3 Rows not loaded due to parse errors.
+  2 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+  7 | fff        |      7
+(5 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+  7 | fff        |      7
+(5 rows)
+
+\! pg_bulkload -d contrib_regression data/csv7.ctl -i data/data5.csv -l results/check2.log -P results/check2.prs -u results/check2.dup -o "PARSE_ERRORS=-1" -o CHECK_CONSTRAINTS=NO
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not create unique index "target_pkey"
+DETAIL:  Key (id)=(1) is duplicated.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! awk -f data/adjust.awk results/check2.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../data5.csv
+PARSE_BADFILE = .../check2.prs
+LOGFILE = .../check2.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../check2.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. null value in column "str" violates not-null constraint
+Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
+Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
+could not create unique index "target_pkey"
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+  7 | fff        |      7
+(5 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+  7 | fff        |      7
+(5 rows)
+
+\! pg_bulkload -d contrib_regression data/csv7.ctl -o "DUPLICATE_ERRORS=50" -i data/data5.csv -l results/check3.log -P results/check3.prs -u results/check3.dup -o "PARSE_ERRORS=2" -o CHECK_CONSTRAINTS=NO
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	4 Rows successfully loaded.
+	3 Rows not loaded due to parse errors.
+	2 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/check3.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../data5.csv
+PARSE_BADFILE = .../check3.prs
+LOGFILE = .../check3.log
+LIMIT = INFINITE
+PARSE_ERRORS = 2
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../check3.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 3: Rejected - column 2. null value in column "str" violates not-null constraint
+Parse error Record 2: Input Record 6: Rejected - column 1. null value in column "id" violates not-null constraint
+Parse error Record 3: Input Record 9: Rejected - column 1. null value in column "id" violates not-null constraint
+Maximum parse error count exceeded - 3 error(s) found in input file
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+
+  0 Rows skipped.
+  4 Rows successfully loaded.
+  3 Rows not loaded due to parse errors.
+  2 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+(4 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id |    str     | master 
+----+------------+--------
+  1 | aaa        |      1
+  2 | 1234567890 |      1
+  5 | ddd        |      4
+  6 | eee        |      6
+(4 rows)
+
+\! pg_bulkload -d contrib_regression data/csv7.ctl -o "DUPLICATE_ERRORS=50" -i data/data5.csv -l results/check4.log -P results/check4.prs -u results/check4.dup -o "PARSE_ERRORS=4" -o CHECK_CONSTRAINTS=YES
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	4 Rows successfully loaded.
+	4 Rows not loaded due to parse errors.
+	2 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/check4.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../data5.csv
+PARSE_BADFILE = .../check4.prs
+LOGFILE = .../check4.log
+LIMIT = INFINITE
+PARSE_ERRORS = 4
+CHECK_CONSTRAINTS = YES
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = public.target
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../check4.dup
+DUPLICATE_ERRORS = 50
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = YES
+
+Parse error Record 1: Input Record 2: Rejected. new row for relation "target" violates check constraint "target_str_check"
+Parse error Record 2: Input Record 3: Rejected. null value in column "str" of relation "target" violates not-null constraint
+Parse error Record 3: Input Record 6: Rejected. null value in column "id" of relation "target" violates not-null constraint
+Parse error Record 4: Input Record 9: Rejected. null value in column "id" of relation "target" violates not-null constraint
+Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "target_pkey"
+Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "target_str_key"
+
+  0 Rows skipped.
+  4 Rows successfully loaded.
+  4 Rows not loaded due to parse errors.
+  2 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SET enable_seqscan = on;
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id | str | master 
+----+-----+--------
+  1 | aaa |      1
+  5 | ddd |      4
+  6 | eee |      6
+  7 | fff |      7
+(4 rows)
+
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM target ORDER BY id;
+ id | str | master 
+----+-----+--------
+  1 | aaa |      1
+  5 | ddd |      4
+  6 | eee |      6
+  7 | fff |      7
+(4 rows)
+

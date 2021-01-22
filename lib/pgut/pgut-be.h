@@ -182,7 +182,7 @@ extern Datum ExecFetchSlotTupleDatum(TupleTableSlot *slot);
 #define RelationSetNewRelfilenode(rel, xid) \
 	RelationSetNewRelfilenode((rel), (rel->rd_rel->relpersistence), \
 		(xid), (xid))
-#elif PG_VERSION_NUM < 130000
+#elif PG_VERSION_NUM < 140000
 #define RelationSetNewRelfilenode(rel, xid) \
 	RelationSetNewRelfilenode((rel), (rel->rd_rel->relpersistence))
 #endif
