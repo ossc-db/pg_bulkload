@@ -135,6 +135,26 @@ sql/load_function-12.sql:
 sql/load_function-13.sql:
 	cp sql/load_function-v3.sql sql/load_function-13.sql
 
+sql/write_bin.sql: sql/write_bin-$(MAJORVERSION).sql
+	cp sql/write_bin-$(MAJORVERSION).sql sql/write_bin.sql
+sql/write_bin-9.3.sql:
+	cp sql/write_bin.sql sql/write_bin-9.3.sql
+sql/write_bin-9.4.sql:
+	cp sql/write_bin.sql sql/write_bin-9.4.sql
+sql/write_bin-9.5.sql:
+	cp sql/write_bin.sql sql/write_bin-9.5.sql
+sql/write_bin-9.6.sql:
+	cp sql/write_bin.sql sql/write_bin-9.6.sql
+sql/write_bin-10.sql:
+	cp sql/write_bin.sql sql/write_bin-10.sql
+sql/write_bin-11.sql:
+	cp sql/write_bin.sql sql/write_bin-11.sql
+sql/write_bin-12.sql:
+	cp sql/write_bin.sql sql/write_bin-12.sql
+sql/write_bin-13.sql:
+	cp sql/write_bin-v2.sql sql/write_bin-13.sql
+
+
 .PHONY: subclean
 clean: subclean
 
@@ -144,7 +164,8 @@ subclean:
 	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13}.sql
 	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13}.sql
 	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13}.sql
+	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13}.sql
 
-installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql
+installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 
 LDFLAGS+=-Wl,--build-id

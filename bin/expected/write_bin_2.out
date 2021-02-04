@@ -1,0 +1,420 @@
+CREATE TABLE binout1 (
+  val1 smallint NOT NULL,
+  val2 integer NOT NULL,
+  val3 bigint NOT NULL,
+  val4 integer NOT NULL,
+  val5 bigint NOT NULL,
+  val6 real NOT NULL,
+  val7 double precision NOT NULL,
+  val8 text NOT NULL
+);
+CREATE TABLE binout2 (LIKE binout1);
+CREATE TABLE binout3 (
+  val1 smallint NOT NULL,
+  val2 integer NOT NULL,
+  val3 bigint NOT NULL,
+  val4 integer NOT NULL,
+  val5 bigint NOT NULL,
+  val6 real NOT NULL,
+  val7 double precision NOT NULL
+);
+CREATE FUNCTION binout_f1() RETURNS SETOF RECORD AS $$
+	VALUES (11, 12, 13, 14, 15, 1.1, 1.2)
+	      ,(21, 22, 23, 24, 25, 2.1, 2.2)
+	      ,(31, 32, 33, 34, 35, 3.1, 3.2)
+	      ,(41, 42, 43, 44, 45, 4.1, 4.2)
+	      ,(51, 52, 53, 54, 55, 5.1, 5.2)
+	;
+$$ LANGUAGE SQL;
+/* error case */
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o TRUNCATE=YES
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid keyword "TRUNCATE"
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! touch results/binout1.bin results/binout1.bin.ctl
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not open binary output file: File exists
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! rm results/binout1.bin
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not open sample control file: File exists
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! rm results/binout1.bin.ctl
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -u results/binout1.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid keyword "duplicate-badfile"
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o DUPLICATE_BADFILE=/tmp/binout1.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid keyword "DUPLICATE_BADFILE"
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o DUPLICATE_ERRORS=0
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid keyword "DUPLICATE_ERRORS"
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o ON_DUPLICATE_KEEP=NEW
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  invalid keyword "ON_DUPLICATE_KEEP"
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o "OUT_COL=CHAR(100+10)"
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  TYPE argument must be ( L )
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin -o "OUT_COL=CHAR(100:110)"
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  TYPE argument must be ( L )
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O data/binout1.csv
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.log
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.prs
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  INPUT, PARSE_BADFILE, OUTPUT, LOGFILE and sample control file cannot set the same file name.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+/* normal case */
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i data/binout1.csv -l results/binout1.log -P results/binout1.prs -o TYPE=CSV -O results/binout1.bin
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	7 Rows successfully loaded.
+	16 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/binout1.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../binout1.csv
+PARSE_BADFILE = .../binout1.prs
+LOGFILE = .../binout1.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = .../binout1.bin
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = BINARY
+OUT_COL = SMALLINT (2)
+OUT_COL = INTEGER (4)
+OUT_COL = BIGINT (8)
+OUT_COL = UNSIGNED SMALLINT (2)
+OUT_COL = UNSIGNED INTEGER (4)
+OUT_COL = FLOAT (4)
+OUT_COL = DOUBLE (8)
+OUT_COL = CHAR (10)
+
+Parse error Record 1: Input Record 6: Rejected - column 1. value "-32769" is out of range for type smallint
+Parse error Record 2: Input Record 7: Rejected - column 2. value "-2147483649" is out of range for type integer
+Parse error Record 3: Input Record 8: Rejected - column 3. value "-9223372036854775809" is out of range for type bigint
+Parse error Record 4: Input Record 9: Rejected - column 6. "-1E+39" is out of range for type real
+Parse error Record 5: Input Record 10: Rejected - column 7. "-1E+309" is out of range for type double precision
+Parse error Record 6: Input Record 11: Rejected - column 4. value "-1" is out of range for type unsigned smallint
+Parse error Record 7: Input Record 12: Rejected - column 5. value "-1" is out of range for type unsigned integer
+Parse error Record 8: Input Record 13: Rejected - column 8. null value violates not-null constraint
+Parse error Record 9: Input Record 15: Rejected - column 1. value "32768" is out of range for type smallint
+Parse error Record 10: Input Record 16: Rejected - column 2. value "2147483648" is out of range for type integer
+Parse error Record 11: Input Record 17: Rejected - column 3. value "9223372036854775808" is out of range for type bigint
+Parse error Record 12: Input Record 18: Rejected - column 6. "1E+39" is out of range for type real
+Parse error Record 13: Input Record 19: Rejected - column 7. "1E+309" is out of range for type double precision
+Parse error Record 14: Input Record 20: Rejected - column 4. value "65536" is out of range for type unsigned smallint
+Parse error Record 15: Input Record 21: Rejected - column 5. value "4294967296" is out of range for type unsigned integer
+Parse error Record 16: Input Record 22: Rejected - column 8. value too long for type character(10)
+
+  0 Rows skipped.
+  7 Rows successfully loaded.
+  16 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+\! pg_bulkload -d contrib_regression results/binout1.bin.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	7 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+\! awk -f data/adjust.awk results/binout1.bin.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../binout1.bin
+PARSE_BADFILE = .../binout1.bin.prs
+LOGFILE = .../binout1.bin.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = BINARY
+SKIP = 0
+STRIDE = 42
+COL = SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = UNSIGNED SMALLINT (2)
+COL = UNSIGNED INTEGER (4)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+COL = CHAR (10)
+OUTPUT = public.binout1
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../binout1.bin.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
+
+
+  0 Rows skipped.
+  7 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SELECT * FROM binout1 ORDER BY val1;
+  val1  |    val2     |         val3         | val4  |    val5    |  val6  |  val7   |    val8    
+--------+-------------+----------------------+-------+------------+--------+---------+------------
+ -32768 | -2147483648 | -9223372036854775808 |     0 |          0 | -1e+37 | -1e+308 | 8
+     11 |          12 |                   13 |    14 |         15 |    1.1 |     1.2 | test1
+     21 |          22 |                   23 |    24 |         25 |    2.1 |     2.2 | test2
+     31 |          32 |                   33 |    34 |         35 |    3.1 |     3.2 | test3
+     41 |          42 |                   43 |    44 |         45 |    4.1 |     4.2 | test4
+     51 |          52 |                   53 |    54 |         55 |    5.1 |     5.2 | test5
+  32767 |  2147483647 |  9223372036854775807 | 65535 | 4294967295 |  1e+37 |  1e+308 | test     8
+(7 rows)
+
+\! pg_bulkload -d contrib_regression data/binout2.ctl -i data/binout2.csv -l results/binout2.log -P results/binout2.prs -o TYPE=CSV -O results/binout2.bin
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	10 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+\! awk -f data/adjust.awk results/binout2.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../binout2.csv
+PARSE_BADFILE = .../binout2.prs
+LOGFILE = .../binout2.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = CSV
+SKIP = 0
+DELIMITER = ,
+QUOTE = "\""
+ESCAPE = "\""
+NULL = 
+OUTPUT = .../binout2.bin
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = BINARY
+OUT_COL = SMALLINT (2) NULLIF 0102
+OUT_COL = INTEGER (4) NULLIF 01020304
+OUT_COL = BIGINT (8) NULLIF 0102030405060708
+OUT_COL = UNSIGNED SMALLINT (2) NULLIF 0102
+OUT_COL = UNSIGNED INTEGER (4) NULLIF 01020304
+OUT_COL = FLOAT (4) NULLIF 01020304
+OUT_COL = DOUBLE (8) NULLIF 0102030405060708
+OUT_COL = CHAR (16) NULLIF 'null string     '
+
+
+  0 Rows skipped.
+  10 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+\! pg_bulkload -d contrib_regression results/binout2.bin.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	1 Rows successfully loaded.
+	9 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+\! awk -f data/adjust.awk results/binout2.bin.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../binout2.bin
+PARSE_BADFILE = .../binout2.bin.prs
+LOGFILE = .../binout2.bin.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = BINARY
+SKIP = 0
+STRIDE = 48
+COL = SMALLINT (2) NULLIF 0102
+COL = INTEGER (4) NULLIF 01020304
+COL = BIGINT (8) NULLIF 0102030405060708
+COL = UNSIGNED SMALLINT (2) NULLIF 0102
+COL = UNSIGNED INTEGER (4) NULLIF 01020304
+COL = FLOAT (4) NULLIF 01020304
+COL = DOUBLE (8) NULLIF 0102030405060708
+COL = CHAR (16) NULLIF 'null string     '
+OUTPUT = public.binout2
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../binout2.bin.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
+
+Parse error Record 1: Input Record 2: Rejected - column 1. null value in column "val1" violates not-null constraint
+Parse error Record 2: Input Record 3: Rejected - column 2. null value in column "val2" violates not-null constraint
+Parse error Record 3: Input Record 4: Rejected - column 3. null value in column "val3" violates not-null constraint
+Parse error Record 4: Input Record 5: Rejected - column 4. null value in column "val4" violates not-null constraint
+Parse error Record 5: Input Record 6: Rejected - column 5. null value in column "val5" violates not-null constraint
+Parse error Record 6: Input Record 7: Rejected - column 6. null value in column "val6" violates not-null constraint
+Parse error Record 7: Input Record 8: Rejected - column 7. null value in column "val7" violates not-null constraint
+Parse error Record 8: Input Record 9: Rejected - column 8. null value in column "val8" violates not-null constraint
+Parse error Record 9: Input Record 10: Rejected - column 1. null value in column "val1" violates not-null constraint
+
+  0 Rows skipped.
+  1 Rows successfully loaded.
+  9 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SELECT * FROM binout2 ORDER BY val1;
+ val1 | val2 | val3 | val4 | val5 | val6 | val7 | val8  
+------+------+------+------+------+------+------+-------
+    1 |    2 |    3 |    4 |    5 |  0.1 |  0.2 | test0
+(1 row)
+
+\! pg_bulkload -d contrib_regression data/binout3.ctl -i "binout_f1()" -l results/binout3.log -P results/binout3.prs -o TYPE=FUNCTION -O results/binout3.bin
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	5 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+\! awk -f data/adjust.awk results/binout3.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = binout_f1()
+PARSE_BADFILE = .../binout3.prs
+LOGFILE = .../binout3.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = FUNCTION
+OUTPUT = .../binout3.bin
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = BINARY
+OUT_COL = SMALLINT (2)
+OUT_COL = INTEGER (4)
+OUT_COL = BIGINT (8)
+OUT_COL = UNSIGNED SMALLINT (2)
+OUT_COL = UNSIGNED INTEGER (4)
+OUT_COL = FLOAT (4)
+OUT_COL = DOUBLE (8)
+
+
+  0 Rows skipped.
+  5 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+\! pg_bulkload -d contrib_regression results/binout3.bin.ctl
+NOTICE: BULK LOAD START
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	5 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	0 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+\! awk -f data/adjust.awk results/binout3.bin.log
+
+pg_bulkload <VERSION> on <TIMESTAMP>
+
+INPUT = .../binout3.bin
+PARSE_BADFILE = .../binout3.bin.prs
+LOGFILE = .../binout3.bin.log
+LIMIT = INFINITE
+PARSE_ERRORS = INFINITE
+CHECK_CONSTRAINTS = NO
+TYPE = BINARY
+SKIP = 0
+STRIDE = 32
+COL = SMALLINT (2)
+COL = INTEGER (4)
+COL = BIGINT (8)
+COL = UNSIGNED SMALLINT (2)
+COL = UNSIGNED INTEGER (4)
+COL = FLOAT (4)
+COL = DOUBLE (8)
+OUTPUT = public.binout3
+MULTI_PROCESS = YES
+VERBOSE = NO
+WRITER = DIRECT
+DUPLICATE_BADFILE = .../binout3.bin.dup
+DUPLICATE_ERRORS = 0
+ON_DUPLICATE_KEEP = NEW
+TRUNCATE = NO
+
+
+  0 Rows skipped.
+  5 Rows successfully loaded.
+  0 Rows not loaded due to parse errors.
+  0 Rows not loaded due to duplicate errors.
+  0 Rows replaced with new rows.
+
+Run began on <TIMESTAMP>
+Run ended on <TIMESTAMP>
+
+CPU <TIME>s/<TIME>u sec elapsed <TIME> sec
+SELECT * FROM binout3 ORDER BY val1;
+ val1 | val2 | val3 | val4 | val5 | val6 | val7 
+------+------+------+------+------+------+------
+   11 |   12 |   13 |   14 |   15 |  1.1 |  1.2
+   21 |   22 |   23 |   24 |   25 |  2.1 |  2.2
+   31 |   32 |   33 |   34 |   35 |  3.1 |  3.2
+   41 |   42 |   43 |   44 |   45 |  4.1 |  4.2
+   51 |   52 |   53 |   54 |   55 |  5.1 |  5.2
+(5 rows)
+
