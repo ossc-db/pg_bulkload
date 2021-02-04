@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 11
+# SPEC file for pg_bulkload on PostgreSQL 13
 # Copyright (C) 2009-2020 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  11
+%define pgmajorversion  13
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.16
+Version:        3.1.17
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql11-devel, postgresql11
-Requires:       postgresql11
+BuildRequires:  postgresql13-devel, postgresql13
+Requires:       postgresql13
 
 
 %description
@@ -30,8 +30,8 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql11-server, postgresql11-llvmjit
-Requires: pg_bulkload = 3.1.16
+Requires: postgresql13-server, postgresql13-llvmjit
+Requires: pg_bulkload = 3.1.17
 Summary:  Just-in-time compilation support for pg_bulkload
 
 %description llvmjit
@@ -99,11 +99,4 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Wed Jan 22 2020 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.16-1
-- Update to pg_bulkload 3.1.16
-- Warn users of some risks of using parallel/multi-process mode
-- Document restriction that pg_bulkload supports only tables of "heap" access method
-* Mon Jan 21 2019 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.15-1
-- Fixed pg_bulkload to mitigate attacks described in CVE-2018-1058
-- Added llvm.rpm for pg_bulkload to support llvmjit of PostgreSQL
-- Update to pg_bulkload 3.1.15
+* Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
