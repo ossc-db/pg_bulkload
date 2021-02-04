@@ -100,3 +100,4 @@ rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
 * Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
+- Update to pg_bulkload 3.1.17
