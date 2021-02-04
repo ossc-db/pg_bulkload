@@ -9,21 +9,14 @@ CREATE TABLE binout1 (
   val8 text NOT NULL
 );
 CREATE TABLE binout2 (LIKE binout1);
-CREATE TABLE binout3 (
-  val1 smallint NOT NULL,
-  val2 integer NOT NULL,
-  val3 bigint NOT NULL,
-  val4 integer NOT NULL,
-  val5 bigint NOT NULL,
-  val6 real NOT NULL,
-  val7 double precision NOT NULL
-);
+CREATE TABLE binout3 (LIKE binout1);
+
 CREATE FUNCTION binout_f1() RETURNS SETOF RECORD AS $$
-	VALUES (11, 12, 13, 14, 15, 1.1, 1.2)
-	      ,(21, 22, 23, 24, 25, 2.1, 2.2)
-	      ,(31, 32, 33, 34, 35, 3.1, 3.2)
-	      ,(41, 42, 43, 44, 45, 4.1, 4.2)
-	      ,(51, 52, 53, 54, 55, 5.1, 5.2)
+	VALUES ('11', '12', '13', '14', '15', '1.1', '1.2', 'test1')
+		  ,('21', '22', '23', '24', '25', '2.1', '2.2', 'test2')
+		  ,('31', '32', '33', '34', '35', '3.1', '3.2', 'test3')
+		  ,('41', '42', '43', '44', '45', '4.1', '4.2', 'test4')
+		  ,('51', '52', '53', '54', '55', '5.1', '5.2', 'test5')
 	;
 $$ LANGUAGE SQL;
 
@@ -64,7 +57,7 @@ SELECT * FROM binout1 ORDER BY val1;
 
 SELECT * FROM binout2 ORDER BY val1;
 
-\! pg_bulkload -d contrib_regression data/binout3.ctl -i "binout_f1()" -l results/binout3.log -P results/binout3.prs -o TYPE=FUNCTION -O results/binout3.bin
+\! pg_bulkload -d contrib_regression data/binout1.ctl -i "binout_f1()" -l results/binout3.log -P results/binout3.prs -o TYPE=FUNCTION -O results/binout3.bin
 \! awk -f data/adjust.awk results/binout3.log
 
 \! pg_bulkload -d contrib_regression results/binout3.bin.ctl

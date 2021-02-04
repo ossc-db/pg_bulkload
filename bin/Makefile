@@ -138,19 +138,19 @@ sql/load_function-13.sql:
 sql/write_bin.sql: sql/write_bin-$(MAJORVERSION).sql
 	cp sql/write_bin-$(MAJORVERSION).sql sql/write_bin.sql
 sql/write_bin-9.3.sql:
-	cp sql/write_bin.sql sql/write_bin-9.3.sql
+	cp sql/write_bin-v1.sql sql/write_bin-9.3.sql
 sql/write_bin-9.4.sql:
-	cp sql/write_bin.sql sql/write_bin-9.4.sql
+	cp sql/write_bin-v1.sql sql/write_bin-9.4.sql
 sql/write_bin-9.5.sql:
-	cp sql/write_bin.sql sql/write_bin-9.5.sql
+	cp sql/write_bin-v1.sql sql/write_bin-9.5.sql
 sql/write_bin-9.6.sql:
-	cp sql/write_bin.sql sql/write_bin-9.6.sql
+	cp sql/write_bin-v1.sql sql/write_bin-9.6.sql
 sql/write_bin-10.sql:
-	cp sql/write_bin.sql sql/write_bin-10.sql
+	cp sql/write_bin-v1.sql sql/write_bin-10.sql
 sql/write_bin-11.sql:
-	cp sql/write_bin.sql sql/write_bin-11.sql
+	cp sql/write_bin-v1.sql sql/write_bin-11.sql
 sql/write_bin-12.sql:
-	cp sql/write_bin.sql sql/write_bin-12.sql
+	cp sql/write_bin-v1.sql sql/write_bin-12.sql
 sql/write_bin-13.sql:
 	cp sql/write_bin-v2.sql sql/write_bin-13.sql
 
