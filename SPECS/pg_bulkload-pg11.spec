@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.16
+Version:        3.1.17
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -31,7 +31,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 %package llvmjit
 Requires: postgresql11-server, postgresql11-llvmjit
-Requires: pg_bulkload = 3.1.16
+Requires: pg_bulkload = 3.1.17
 Summary:  Just-in-time compilation support for pg_bulkload
 
 %description llvmjit
@@ -99,6 +99,7 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
 * Wed Jan 22 2020 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.16-1
 - Update to pg_bulkload 3.1.16
 - Warn users of some risks of using parallel/multi-process mode
