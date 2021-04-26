@@ -273,14 +273,24 @@ The value is treated as following depending on the TYPE option:
   <li>A SQL function:
       Specify a SQL function with arguments that returns set of input data.
       It is available only when "TYPE=FUNCTION".
-      The following example uses a built-in function, but you can also use any user-defined functions.
+      You can use not only build-in functions but also any user-defined functions.
+      The defined functions should return the type as SETOF sometype, or as RETURNS TABLE(columns).
+      Note that you specify attributes types if you use sometype. Because there is a case that
+      assignment cast to cstring type which pg_bulkload uses internally, doesn't be permitted.
       Note that you might need to develop those function with C language instead of PL/pgSQL
       because the function must use SFRM_ValuePerCall mode for streaming loading.
+      <p>Here is an example of user-defined function.</p>
+<pre>$ CREATE TYPE sample_type AS (sum integer, name char(10));
+$ CREATE FUNCTION sample_function() RETURNS SETOF sample_type
+    AS $$ SELECT id1 + id2, upper(name) FROM INPUT_TABLE $$
+    LANGUAGE SQL;
+</pre>
+      <p>Here is an example of a control file.</p>
 <pre>TABLE = sample_table
 TYPE = FUNCTION
 WRITER = DIRECT
-INPUT = generate_series(1, 1000)  # sequential numbers from 1 to 1000
-...</pre></li>
+INPUT = sample_function()          # if to use the user-defined function
+#INPUT = generate_series(1, 1000)  # if to use the build-in function, which generate sequential numbers from 1 to 1000
 </ul>
 </dd>
 
@@ -861,7 +871,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11, 12</dd>
+<dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11, 12, 13</dd>
 <dt>OS</dt>
 <dd>RHEL 6/7</dd>
 </dl>
