@@ -17,10 +17,10 @@ jobs:
     strategy:
       matrix:
         PGVERSION:                # TODO: build with master branch
-          - 13.2
-          - 12.6
-          - 11.11
-          - 10.16
+          - 13.2                  # TODO: build with another version
+          #- 12.6
+          #- 11.11
+          #- 10.16
           #- 9.6.21
           #- 9.5.25
           #- 9.4.26
