@@ -9,6 +9,7 @@ CREATE TABLE binout1 (
   val8 text NOT NULL
 );
 CREATE TABLE binout2 (LIKE binout1);
+
 CREATE TABLE binout3 (
   val1 smallint NOT NULL,
   val2 integer NOT NULL,
@@ -16,14 +17,34 @@ CREATE TABLE binout3 (
   val4 integer NOT NULL,
   val5 bigint NOT NULL,
   val6 real NOT NULL,
-  val7 double precision NOT NULL
+  val7 double precision NOT NULL,
+  val8 char(5) NOT NULL,
+  val9 char(10) NOT NULL,
+  val10 varchar(5) NOT NULL,
+  val11 varchar(10) NOT NULL,
+  val12 text NOT NULL
 );
-CREATE FUNCTION binout_f1() RETURNS SETOF RECORD AS $$
-	VALUES (11, 12, 13, 14, 15, 1.1, 1.2)
-	      ,(21, 22, 23, 24, 25, 2.1, 2.2)
-	      ,(31, 32, 33, 34, 35, 3.1, 3.2)
-	      ,(41, 42, 43, 44, 45, 4.1, 4.2)
-	      ,(51, 52, 53, 54, 55, 5.1, 5.2)
+
+CREATE TYPE test_type AS (
+  val1 smallint,
+  val2 integer,
+  val3 bigint,
+  val4 integer,
+  val5 bigint,
+  val6 real,
+  val7 double precision,
+  val8 char(5),
+  val9 char(10),
+  val10 varchar(5),
+  val11 varchar(10),
+  val12 text
+);
+CREATE FUNCTION binout_f1() RETURNS SETOF test_type AS $$
+	VALUES (11, 12, 13, 14, 15, 1.1, 1.2, 'test1', 'test1', 'test1', 'test1', 'test1')
+		    ,(21, 22, 23, 24, 25, 2.1, 2.2, 'test2', 'test2', 'test2', 'test2', 'test2')
+		    ,(31, 32, 33, 34, 35, 3.1, 3.2, 'test3', 'test3', 'test3', 'test3', 'test3')
+		    ,(41, 42, 43, 44, 45, 4.1, 4.2, 'test4', 'test4', 'test4', 'test4', 'test4')
+		    ,(51, 52, 53, 54, 55, 5.1, 5.2, 'test5', 'test5', 'test5', 'test5', 'test5')
 	;
 $$ LANGUAGE SQL;
 
