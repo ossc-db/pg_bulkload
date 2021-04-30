@@ -255,16 +255,26 @@ DEBUG, INFO, NOTICE, WARNING, ERROR, LOG, FATAL, PANIC から選択します。
       「INPUT=stdin」と記述すると、pg_bulkload コマンドの標準入力から入力データを読み取ります。
       入力ファイルとデータベースが異なるサーバに配置されている場合には、こちらの形式を使用してください。「TYPE=CSV」および「TYPE=BINARY」と指定した場合のみ使用可能です。使用例を以下に示します。
 <pre>$ pg_bulkload csv_load.ctl &lt; DATA.csv</pre></li>
-  <li>SQL関数の結果：入力データを返す SQL 関数の呼び出し式を指定します。
-      この形式で使用するSQL関数は、SETOF RECORD を返す必要があります。
+  <li>SQL関数：入力データを返す SQL 関数の呼び出し式を指定します。
       「TYPE=FUNCTION」と指定した場合のみ使用可能です。
-      以下の使用例では組み込みの関数を指定していますが、ユーザ定義関数を指定することも可能です。
-      ただし、大量のデータをロードする場合には PL/pgSQL ではなく C言語での関数作成を推奨します。
-      ストリーミング・ロードを行うため SFRM_ValuePerCall モードで実装される必要があるためです。
+      組み込みの関数だけでなく、ユーザ定義関数を指定することも可能です。
+      この形式で使用するSQL関数は、SETOF sometype型、もしくは、RETURNS TABLE(columns)を返す必要があります。
+      ただし、sometype型は、各属性の型も定義をしてください。内部的にcstring型を
+      利用していますが、record型では、各属性の代入キャストが出来ないケースがあるためです。
+      なお、大量のデータをロードする場合には PL/pgSQL ではなく C言語での関数作成を推奨します。
+      ストリーミング・ロードを行うため SFRM_ValuePerCall モードで実装される必要があるためです。<br>
+      <p>ユーザ関数の定義例を以下に示します。</p>
+<pre>$ CREATE TYPE sample_type AS (sum integer, name char(10));
+$ CREATE FUNCTION sample_function() RETURNS SETOF sample_type
+    AS $$ SELECT id1 + id2, upper(name) FROM INPUT_TABLE $$
+    LANGUAGE SQL;
+</pre>
+      <p>制御ファイルの作成例を以下に示します。</p>
 <pre>TABLE = sample_table
 TYPE = FUNCTION
 WRITER = DIRECT
-INPUT = generate_series(1, 1000)  # 1から1,000の連番をロードする
+INPUT = sample_function()          # ユーザ定義の関数を利用する場合
+#INPUT = generate_series(1, 1000)  # 組み込みの関数を利用する場合。1から1,000の連番をロードする
 ...</pre></li>
 </ul>
 </dd>
@@ -783,7 +793,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11, 12</dd>
+<dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11, 12, 13</dd>
 <dt>OS</dt>
 <dd>RHEL 6/7</dd>
 </dl>
