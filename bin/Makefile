@@ -30,6 +30,10 @@ include $(makefile_global)
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
+# libs pgport, pgcommon moved somewhere else in some ubuntu version
+# see ticket #97
+PG_LIBS += -L$(shell $(PG_CONFIG) --pkglibdir)
+
 # remove dependency to libxml2 and libxslt
 LIBS := $(filter-out -lxml2, $(LIBS))
 LIBS := $(filter-out -lxslt, $(LIBS))
