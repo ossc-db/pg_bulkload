@@ -70,4 +70,7 @@ clean: subclean
 subclean:
 	rm -f nbtsort.c
 
-LDFLAGS+=-Wl,--build-id
+UNAME := $(shell uname)
+ifneq ($(UNAME), Darwin)     # osx's ld doesn't support build-id option
+	LDFLAGS+=-Wl,--build-id
+endif

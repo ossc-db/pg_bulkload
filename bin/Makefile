@@ -168,4 +168,7 @@ subclean:
 
 installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 
-LDFLAGS+=-Wl,--build-id
+UNAME := $(shell uname)
+ifneq ($(UNAME), Darwin)     # osx's ld doesn't support build-id option
+	LDFLAGS+=-Wl,--build-id
+endif
