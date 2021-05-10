@@ -8,6 +8,10 @@
 
 #include "libpq-fe.h"
 
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #include "access/heapam.h"
 #include "access/xact.h"
 #include "commands/dbcommands.h"
