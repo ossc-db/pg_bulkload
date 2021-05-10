@@ -1,0 +1,50 @@
+name: Build_with_MacOS
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: "0 1 * * SUN"      # only master
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      PGVERSION: 13                 # only test for postgresql version 13
+
+    steps:
+    - name: cat osx version
+      shell: bash -xe {0}
+      run: sw_vers
+
+    - name: get current branch name
+      shell: bash -xe {0}
+      run: |
+        if [ ${{ github.event_name }} = "pull_request" ]; then
+          echo "BRANCH=${{ github.base_ref }}" >>  $GITHUB_ENV
+        else # push
+          echo "BRANCH=${GITHUB_REF##*/}" >>  $GITHUB_ENV
+        fi
+
+    - name: download packages for building
+      shell: bash -xe {0}
+      run: |
+        brew update
+        brew install postgresql@${{ env.PGVERSION }}
+        psql --version
+        pg_config
+
+    - uses: actions/checkout@v2
+
+    - name: make  # only check if build is success. The tests are skipped because another workload do so.
+      shell: bash -xe {0}
+      run: make
+
+    - name: check version
+      shell: bash -xe {0}
+      run: bin/pg_bulkload --version
