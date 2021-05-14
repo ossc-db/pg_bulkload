@@ -13,6 +13,7 @@
 #include "pgut-list.h"
 #include "postgres_fe.h"
 
+#if PG_VERSION_NUM >= 130000
 #ifdef USE_VALGRIND
 #include <valgrind/memcheck.h>
 #else
@@ -30,12 +31,14 @@
 /* Overhead for the fixed part of a List header, measured in ListCells */
 #define LIST_HEADER_OVERHEAD  \
 	((int) ((offsetof(List, initial_elements) - 1) / sizeof(ListCell) + 1))
+#endif
 
 /*
  * Macros to simplify writing assertions about the type of a list; a
  * NIL list is considered to be an empty list of any type.
  */
 #define IsPointerList(l)		((l) == NIL || IsA((l), List))
+#if PG_VERSION_NUM >= 130000
 #define IsIntegerList(l)		((l) == NIL || IsA((l), IntList))
 #define IsOidList(l)			((l) == NIL || IsA((l), OidList))
 
@@ -226,6 +229,31 @@ list_make4_impl(NodeTag t, ListCell datum1, ListCell datum2,
 	check_list_invariants(list);
 	return list;
 }
+#else /* PG_VERSION under 13 */
+/*
+ * Return a freshly allocated List. Since empty non-NIL lists are
+ * invalid, new_list() also allocates the head cell of the new list:
+ * the caller should be sure to fill in that cell's data.
+ */
+static List *
+new_list(NodeTag type)
+{
+	List	   *new_list;
+	ListCell   *new_head;
+
+	new_head = pgut_new(ListCell);
+	new_head->next = NULL;
+	/* new_head->data is left undefined! */
+
+	new_list = pgut_new(List);
+	new_list->type = type;
+	new_list->length = 1;
+	new_list->head = new_head;
+	new_list->tail = new_head;
+
+	return new_list;
+}
+#endif
 
 /*
  * Make room for a new head cell in the given (non-NIL) list.
@@ -236,12 +264,21 @@ list_make4_impl(NodeTag t, ListCell datum1, ListCell datum2,
 static void
 new_head_cell(List *list)
 {
+#if PG_VERSION_NUM >= 130000	
 	/* Enlarge array if necessary */
 	if (list->length >= list->max_length)
 		enlarge_list(list, list->length + 1);
 	/* Now shove the existing data over */
 	memmove(&list->elements[1], &list->elements[0],
 			list->length * sizeof(ListCell));
+#else
+	ListCell   *new_head;
+
+	new_head = pgut_new(ListCell);
+	new_head->next = list->head;
+
+	list->head = new_head;
+#endif				
 	list->length++;
 }
 
@@ -254,9 +291,19 @@ new_head_cell(List *list)
 static void
 new_tail_cell(List *list)
 {
+#if PG_VERSION_NUM >= 130000	
 	/* Enlarge array if necessary */
 	if (list->length >= list->max_length)
 		enlarge_list(list, list->length + 1);
+#else
+	ListCell   *new_tail;
+
+	new_tail = pgut_new(ListCell);
+	new_tail->next = NULL;
+
+	list->tail->next = new_tail;
+	list->tail = new_tail;
+#endif			
 	list->length++;
 }
 
@@ -273,15 +320,24 @@ lappend(List *list, void *datum)
 	Assert(IsPointerList(list));
 
 	if (list == NIL)
+#if PG_VERSION_NUM >= 130000	
 		list = new_list(T_List, 1);
+#else
+		list = new_list(T_List);
+#endif				
 	else
 		new_tail_cell(list);
 
+#if PG_VERSION_NUM >= 130000
 	lfirst(list_tail(list)) = datum;
 	check_list_invariants(list);
+#else
+	lfirst(list->tail) = datum;
+#endif		
 	return list;
 }
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Append an integer to the specified list. See lappend()
  */
@@ -387,6 +443,49 @@ list_insert_nth_oid(List *list, int pos, Oid datum)
 	check_list_invariants(list);
 	return list;
 }
+#else  /* PG_VERSION under 13 */
+/*
+ * Add a new cell to the list, in the position after 'prev_cell'. The
+ * data in the cell is left undefined, and must be filled in by the
+ * caller. 'list' is assumed to be non-NIL, and 'prev_cell' is assumed
+ * to be non-NULL and a member of 'list'.
+ */
+static ListCell *
+add_new_cell(List *list, ListCell *prev_cell)
+{
+	ListCell   *new_cell;
+
+	new_cell = pgut_new(ListCell);
+	/* new_cell->data is left undefined! */
+	new_cell->next = prev_cell->next;
+	prev_cell->next = new_cell;
+
+	if (list->tail == prev_cell)
+		list->tail = new_cell;
+
+	list->length++;
+
+	return new_cell;
+}
+
+/*
+ * Add a new cell to the specified list (which must be non-NIL);
+ * it will be placed after the list cell 'prev' (which must be
+ * non-NULL and a member of 'list'). The data placed in the new cell
+ * is 'datum'. The newly-constructed cell is returned.
+ */
+ListCell *
+lappend_cell(List *list, ListCell *prev, void *datum)
+{
+	ListCell   *new_cell;
+
+	Assert(IsPointerList(list));
+
+	new_cell = add_new_cell(list, prev);
+	lfirst(new_cell) = datum;
+	return new_cell;
+}
+#endif
 
 /*
  * Prepend a new element to the list. A pointer to the modified list
@@ -405,15 +504,24 @@ lcons(void *datum, List *list)
 	Assert(IsPointerList(list));
 
 	if (list == NIL)
+#if PG_VERSION_NUM >= 130000
 		list = new_list(T_List, 1);
+#else
+		list = new_list(T_List);
+#endif				
 	else
 		new_head_cell(list);
 
+#if PG_VERSION_NUM >= 130000
 	lfirst(list_head(list)) = datum;
 	check_list_invariants(list);
+#else
+	lfirst(list->head) = datum;
+#endif	
 	return list;
 }
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Prepend an integer to the list. See lcons()
  */
@@ -521,6 +629,39 @@ list_concat_copy(const List *list1, const List *list2)
 	check_list_invariants(result);
 	return result;
 }
+#else /* PG_VERSION under 13 */
+/*
+ * Concatenate list2 to the end of list1, and return list1. list1 is
+ * destructively changed. Callers should be sure to use the return
+ * value as the new pointer to the concatenated list: the 'list1'
+ * input pointer may or may not be the same as the returned pointer.
+ *
+ * The nodes in list2 are merely appended to the end of list1 in-place
+ * (i.e. they aren't copied), and the list2 handle is free-ed. This is
+ * an incopatible change from backend codes.
+ */
+List *
+list_concat(List *list1, List *list2)
+{
+	if (list1 == NIL)
+		return list2;
+	if (list2 == NIL)
+		return list1;
+	if (list1 == list2)
+		return list1;
+
+	Assert(list1->type == list2->type);
+
+	list1->length += list2->length;
+	list1->tail->next = list2->head;
+	list1->tail = list2->tail;
+
+	/* Note: free list2 handle but keep items in it */
+	free(list2);
+
+	return list1;
+}
+#endif
 
 /*
  * Truncate 'list' to contain no more than 'new_size' elements. This
@@ -534,10 +675,15 @@ list_concat_copy(const List *list1, const List *list2)
 List *
 list_truncate(List *list, int new_size)
 {
+#if PG_VERSION_NUM < 130000
+	ListCell   *cell;
+	int			n;
+#endif
 	if (new_size <= 0)
 		return NIL;				/* truncate to zero length */
 
 	/* If asked to effectively extend the list, do nothing */
+#if PG_VERSION_NUM >= 130000	
 	if (new_size < list_length(list))
 		list->length = new_size;
 
@@ -550,10 +696,88 @@ list_truncate(List *list, int new_size)
 	 * for not wiping the memory of the deleted cells: the old code didn't
 	 * free them either.  Perhaps later we'll tighten this up.
 	 */
+#else
+	if (new_size >= list_length(list))
+		return list;
+
+	n = 1;
+	foreach(cell, list)
+	{
+		if (n == new_size)
+		{
+			cell->next = NULL;
+			list->tail = cell;
+			list->length = new_size;
+			return list;
+		}
+		n++;
+	}
+
+	/* keep the compiler quiet; never reached */
+	Assert(false);
+#endif
 
 	return list;
 }
 
+#if PG_VERSION_NUM < 90200
+/*
+ * Locate the n'th cell (counting from 0) of the list.  It is an assertion
+ * failure if there is no such cell.
+ */
+static ListCell *
+list_nth_cell(List *list, int n)
+{
+	ListCell   *match;
+
+	Assert(list != NIL);
+	Assert(n >= 0);
+	Assert(n < list->length);
+
+	/* Does the caller actually mean to fetch the tail? */
+	if (n == list->length - 1)
+		return list->tail;
+
+	for (match = list->head; n-- > 0; match = match->next)
+		;
+
+	return match;
+}
+
+/*
+ * Return the data value contained in the n'th element of the
+ * specified list. (List elements begin at 0.)
+ */
+void *
+list_nth(List *list, int n)
+{
+	Assert(IsPointerList(list));
+	return lfirst(list_nth_cell(list, n));
+}
+#endif
+
+#if PG_VERSION_NUM < 90200
+/*
+ * Return true iff 'datum' is a member of the list. Equality is
+ * determined by using simple pointer comparison.
+ */
+bool
+list_member_ptr(List *list, void *datum)
+{
+	ListCell   *cell;
+
+	Assert(IsPointerList(list));
+
+	foreach(cell, list)
+	{
+		if (lfirst(cell) == datum)
+			return true;
+	}
+
+	return false;
+}
+
+#elif PG_VERSION_NUM >= 130000
 /*
  * Return true iff 'datum' is a member of the list. Equality is
  * determined via equal(), so callers should ensure that they pass a
@@ -636,7 +860,9 @@ list_member_oid(const List *list, Oid datum)
 
 	return false;
 }
+#endif
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Delete the n'th cell (counting from 0) in list.
  *
@@ -706,26 +932,79 @@ list_delete(List *list, void *datum)
 	/* Didn't find a match: return the list unmodified */
 	return list;
 }
+#else  /* PG_VERSION under 13 */
+/*
+ * Delete 'cell' from 'list'; 'prev' is the previous element to 'cell'
+ * in 'list', if any (i.e. prev == NULL iff list->head == cell)
+ *
+ * The cell is free'd, as is the List header if this was the last member.
+ */
+List *
+list_delete_cell(List *list, ListCell *cell, ListCell *prev)
+{
+	Assert(prev != NULL ? lnext(prev) == cell : list_head(list) == cell);
+
+	/*
+	 * If we're about to delete the last node from the list, free the whole
+	 * list instead and return NIL, which is the only valid representation of
+	 * a zero-length list.
+	 */
+	if (list->length == 1)
+	{
+		list_free(list);
+		return NIL;
+	}
+
+	/*
+	 * Otherwise, adjust the necessary list links, deallocate the particular
+	 * node we have just removed, and return the list we were given.
+	 */
+	list->length--;
+
+	if (prev)
+		prev->next = cell->next;
+	else
+		list->head = cell->next;
+
+	if (list->tail == cell)
+		list->tail = prev;
+
+	free(cell);
+	return list;
+}
+#endif
 
 /* As above, but use simple pointer equality */
 List *
 list_delete_ptr(List *list, void *datum)
 {
 	ListCell   *cell;
+#if PG_VERSION_NUM < 130000
+	ListCell   *prev;
+#endif		
 
 	Assert(IsPointerList(list));
+#if PG_VERSION_NUM >= 130000	
 	check_list_invariants(list);
+#else
+	prev = NULL;
+#endif	
 
 	foreach(cell, list)
 	{
 		if (lfirst(cell) == datum)
+#if PG_VERSION_NUM >= 130000			
 			return list_delete_cell(list, cell);
+#else
+			return list_delete_cell(list, cell, prev);
+#endif						
 	}
 
 	/* Didn't find a match: return the list unmodified */
 	return list;
 }
 
+#if PG_VERSION_NUM >= 130000
 /* As above, but for integers */
 List *
 list_delete_int(List *list, int datum)
@@ -763,6 +1042,7 @@ list_delete_oid(List *list, Oid datum)
 	/* Didn't find a match: return the list unmodified */
 	return list;
 }
+#endif
 
 /*
  * Delete the first element of the list.
@@ -775,14 +1055,21 @@ list_delete_oid(List *list, Oid datum)
 List *
 list_delete_first(List *list)
 {
+#if PG_VERSION_NUM >= 130000	
 	check_list_invariants(list);
+#endif
 
 	if (list == NIL)
 		return NIL;				/* would an error be better? */
 
+#if PG_VERSION_NUM >= 130000
 	return list_delete_nth_cell(list, 0);
+#else
+	return list_delete_cell(list, list_head(list), NULL);
+#endif		
 }
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Delete the last element of the list.
  *
@@ -806,7 +1093,9 @@ list_delete_last(List *list)
 
 	return list_truncate(list, list_length(list) - 1);
 }
+#endif
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Generate the union of two lists. This is calculated by copying
  * list1 via list_copy(), then adding to it all the members of list2
@@ -1279,6 +1568,7 @@ list_free_private(List *list, bool deep)
 		pfree(list->elements);
 	pfree(list);
 }
+#endif
 
 /*
  * Free all the cells of the list, as well as the list itself. Any
@@ -1291,7 +1581,11 @@ list_free_private(List *list, bool deep)
 void
 list_free(List *list)
 {
+#if PG_VERSION_NUM >= 130000	
 	list_free_private(list, false);
+#else
+	list_destroy(list, NULL);
+#endif		
 }
 
 /*
@@ -1309,12 +1603,56 @@ list_free_deep(List *list)
 	 * A "deep" free operation only makes sense on a list of pointers.
 	 */
 	Assert(IsPointerList(list));
+#if PG_VERSION_NUM >= 130000	
 	list_free_private(list, true);
+#else
+	list_destroy(list, free);
+#endif	
 }
 
 /*
  * Return a shallow copy of the specified list.
  */
+#if PG_VERSION_NUM < 90200
+List *
+list_copy(List *oldlist)
+{
+	List	   *newlist;
+	ListCell   *newlist_prev;
+	ListCell   *oldlist_cur;
+
+	if (oldlist == NIL)
+		return NIL;
+
+	newlist = new_list(oldlist->type);
+	newlist->length = oldlist->length;
+
+	/*
+	 * Copy over the data in the first cell; new_list() has already allocated
+	 * the head cell itself
+	 */
+	newlist->head->data = oldlist->head->data;
+
+	newlist_prev = newlist->head;
+	oldlist_cur = oldlist->head->next;
+	while (oldlist_cur)
+	{
+		ListCell   *newlist_cur;
+
+		newlist_cur = pgut_new(ListCell);
+		newlist_cur->data = oldlist_cur->data;
+		newlist_prev->next = newlist_cur;
+
+		newlist_prev = newlist_cur;
+		oldlist_cur = oldlist_cur->next;
+	}
+
+	newlist_prev->next = NULL;
+	newlist->tail = newlist_prev;
+
+	return newlist;
+}
+#elif PG_VERSION_NUM >= 130000
 List *
 list_copy(const List *oldlist)
 {
@@ -1330,10 +1668,61 @@ list_copy(const List *oldlist)
 	check_list_invariants(newlist);
 	return newlist;
 }
+#endif
 
 /*
  * Return a shallow copy of the specified list, without the first N elements.
  */
+#if PG_VERSION_NUM < 90200
+List *
+list_copy_tail(List *oldlist, int nskip)
+{
+	List	   *newlist;
+	ListCell   *newlist_prev;
+	ListCell   *oldlist_cur;
+
+	if (nskip < 0)
+		nskip = 0;				/* would it be better to elog? */
+
+	if (oldlist == NIL || nskip >= oldlist->length)
+		return NIL;
+
+	newlist = new_list(oldlist->type);
+	newlist->length = oldlist->length - nskip;
+
+	/*
+	 * Skip over the unwanted elements.
+	 */
+	oldlist_cur = oldlist->head;
+	while (nskip-- > 0)
+		oldlist_cur = oldlist_cur->next;
+
+	/*
+	 * Copy over the data in the first remaining cell; new_list() has already
+	 * allocated the head cell itself
+	 */
+	newlist->head->data = oldlist_cur->data;
+
+	newlist_prev = newlist->head;
+	oldlist_cur = oldlist_cur->next;
+	while (oldlist_cur)
+	{
+		ListCell   *newlist_cur;
+
+		newlist_cur = pgut_new(ListCell);
+		newlist_cur->data = oldlist_cur->data;
+		newlist_prev->next = newlist_cur;
+
+		newlist_prev = newlist_cur;
+		oldlist_cur = oldlist_cur->next;
+	}
+
+	newlist_prev->next = NULL;
+	newlist->tail = newlist_prev;
+
+	return newlist;
+}
+#elif PG_VERSION_NUM >= 130000
 List *
 list_copy_tail(const List *oldlist, int nskip)
 {
@@ -1352,7 +1741,9 @@ list_copy_tail(const List *oldlist, int nskip)
 	check_list_invariants(newlist);
 	return newlist;
 }
+#endif
 
+#if PG_VERSION_NUM >= 130000
 /*
  * Sort a list according to the specified comparator function.
  *
@@ -1395,3 +1786,62 @@ list_oid_cmp(const ListCell *p1, const ListCell *p2)
 		return 1;
 	return 0;
 }
+#else /* PG_VERSION under 13 */
+/* list_walk - apply walker for each item */
+void
+list_walk(List *list, void (*walker)())
+{
+	ListCell *cell;
+
+	Assert(walker != NULL);
+
+	foreach(cell, list)
+		walker(lfirst(cell));
+}
+
+/*
+ * Free all storage in a list, and optionally the pointed-to elements
+ */
+void
+list_destroy(List *list, void (*walker)())
+{
+	ListCell   *cell;
+
+	cell = list_head(list);
+	while (cell != NULL)
+	{
+		ListCell   *tmp = cell;
+
+		cell = lnext(cell);
+		if (walker)
+			walker(lfirst(tmp));
+		free(tmp);
+	}
+
+	free(list);
+}
+#endif
+
+#if !defined(USE_INLINE) && PG_VERSION_NUM < 90000 && !defined(__GNUC__)
+
+ListCell *
+list_head(List *l)
+{
+	return l ? l->head : NULL;
+}
+
+ListCell *
+list_tail(List *l)
+{
+	return l ? l->tail : NULL;
+}
+
+int
+list_length(List *l)
+{
+	return l ? l->length : 0;
+}
+
+#endif   /* ! USE_INLINE */
+
+
