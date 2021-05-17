@@ -138,5 +138,5 @@ jobs:
       if: failure()
       shell: bash -xe {0}
       run: |
-        cat regression.diffs   \
+        cat bin/regression.diffs   \
          && exit 1     # notify fail
