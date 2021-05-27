@@ -29,7 +29,7 @@ all install installdirs uninstall distprep clean distclean maintainer-clean:
 	done
 
 # We'd like check operations to run all the subtests before failing.
-check installcheck:
+installcheck:
 	@CHECKERR=0; for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir $@ || CHECKERR=$$?; \
 	done; \
