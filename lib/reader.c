@@ -411,9 +411,14 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 	if (checker->has_constraints)
 	{
 		checker->estate = CreateExecutorState();
+#if PG_VERSION_NUM >= 140000
+		checker->estate->es_opened_result_relations =
+			lappend(checker->estate->es_opened_result_relations, checker->resultRelInfo);
+#else
 		checker->estate->es_result_relations = checker->resultRelInfo;
 		checker->estate->es_num_result_relations = 1;
 		checker->estate->es_result_relation_info = checker->resultRelInfo;
+#endif
 
         /* Set up RangeTblEntry */
         rte = makeNode(RangeTblEntry);
