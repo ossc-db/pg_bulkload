@@ -8,6 +8,9 @@
  */
 
 #include "postgres_fe.h"
+#if PG_VERSION_NUM >= 140000
+#include "common/string.h"
+#endif
 #include "libpq/pqsignal.h"
 
 #include <limits.h>
@@ -387,7 +390,11 @@ parse_time(const char *value, time_t *time)
 
 static char *
 prompt_for_password(void)
-#if PG_VERSION_NUM >= 100000
+#if PG_VERSION_NUM >= 140000
+{
+	return simple_prompt("Password: ", false);
+}
+#elif PG_VERSION_NUM >= 100000
 {
 	char	buf[100];
 
