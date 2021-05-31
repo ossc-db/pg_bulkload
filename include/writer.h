@@ -41,7 +41,7 @@ typedef struct WriterResult
 } WriterResult;
 
 typedef void (*WriterInitProc)(Writer *self);
-typedef bool (*WriterInsertProc)(Writer *self, HeapTuple tuple);
+typedef void (*WriterInsertProc)(Writer *self, HeapTuple tuple);
 typedef WriterResult (*WriterCloseProc)(Writer *self, bool onError);
 typedef bool (*WriterParamProc)(Writer *self, const char *keyword, char *value);
 typedef void (*WriterDumpParamsProc)(Writer *self);
