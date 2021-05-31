@@ -41,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 150000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 140000
+#include "nbtree/nbtsort-14.c"
 #elif PG_VERSION_NUM >= 130000
 #include "nbtree/nbtsort-13.c"
 #elif PG_VERSION_NUM >= 120000
@@ -71,6 +73,10 @@
 #include "nbtree/nbtsort-8.3.c"
 #else
 #error unsupported PostgreSQL version
+#endif
+
+#if PG_VERSION_NUM >= 140000
+#include "nbtree/nbtsort-common.c"
 #endif
 
 #include "pg_btree.h"
