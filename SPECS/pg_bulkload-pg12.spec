@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 11
+# SPEC file for pg_bulkload on PostgreSQL 12
 # Copyright (C) 2009-2021 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  11
+%define pgmajorversion  12
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql11-devel, postgresql11
-Requires:       postgresql11
+BuildRequires:  postgresql12-devel, postgresql12
+Requires:       postgresql12
 
 
 %description
@@ -30,7 +30,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql11-server, postgresql11-llvmjit
+Requires: postgresql12-server, postgresql12-llvmjit
 Requires: pg_bulkload = 3.1.18
 Summary:  Just-in-time compilation support for pg_bulkload
 
@@ -107,7 +107,3 @@ rm -rf %{_libdir}/pgxs/src/backend/
 - Update to pg_bulkload 3.1.16
 - Warn users of some risks of using parallel/multi-process mode
 - Document restriction that pg_bulkload supports only tables of "heap" access method
-* Mon Jan 21 2019 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.15-1
-- Fixed pg_bulkload to mitigate attacks described in CVE-2018-1058
-- Added llvm.rpm for pg_bulkload to support llvmjit of PostgreSQL
-- Update to pg_bulkload 3.1.15

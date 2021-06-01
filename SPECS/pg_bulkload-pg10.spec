@@ -82,7 +82,7 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Tue June 01 2021 - Yanmei Sun <yanmei.sun.ep@hco.ntt.co.jp> 3.1.18-1
+* Tue Jun 01 2021 - Yanmei Sun <yanmei.sun.ep@hco.ntt.co.jp> 3.1.18-1
 - Update to pg_bulkload 3.1.18
 * Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
 - Update to pg_bulkload 3.1.17
