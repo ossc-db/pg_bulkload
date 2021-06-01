@@ -873,13 +873,29 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <dt>PostgreSQL versions</dt>
 <dd>PostgreSQL 9.3, 9.4, 9.5, 9.6, 10, 11, 12, 13</dd>
 <dt>OS</dt>
-<dd>RHEL 6/7</dd>
+<dd>RHEL 6/7/8</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
 
 <p>
+<h4>3.1.18</h4>
+<ul>
+<li>Add a note to the documentation about using the "-o TYPE=FUNCTION" option, which was a problem left in version 3.1.17.</li>
+<li>Fix build failure on Ubuntu environment</li>
+</ul>
+</p>
+
+<p>
 <h4>3.1.17</h4>
+<ul>
+<li>Added support for PostgreSQL 13</li>
+<li>Fixed a crash when merging B-tree indexes (Sincerely thank you, Haruka Takatsuka-san, for reporting the problem and suggesting a solution.)</li>
+</ul>
+</p>
+
+<p>
+<h4>3.1.16</h4>
 <ul>
 <li>Added support for PostgreSQL 12</li>
 <li>Fixed documentation to warn users of some risks of using parallel/multi-process mode</li>
