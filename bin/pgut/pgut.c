@@ -8,6 +8,9 @@
  */
 
 #include "postgres_fe.h"
+#if PG_VERSION_NUM >= 140000
+#include "common/string.h"
+#endif
 #include "libpq/pqsignal.h"
 
 #include <limits.h>
@@ -387,7 +390,11 @@ parse_time(const char *value, time_t *time)
 
 static char *
 prompt_for_password(void)
-#if PG_VERSION_NUM >= 100000
+#if PG_VERSION_NUM >= 140000
+{
+	return simple_prompt("Password: ", false);
+}
+#elif PG_VERSION_NUM >= 100000
 {
 	char	buf[100];
 
@@ -837,7 +844,7 @@ elog(int elevel, const char *fmt, ...)
 	do
 	{
 		va_start(args, fmt);
-		ok = appendStringInfoVA(&edata->msg, fmt, args);
+		ok = appendStringInfoVA_c(&edata->msg, fmt, args);
 		va_end(args);
 	} while (!ok);
 	len = strlen(fmt);
@@ -1002,7 +1009,7 @@ errmsg(const char *fmt,...)
 	do
 	{
 		va_start(args, fmt);
-		ok = appendStringInfoVA(&edata->msg, fmt, args);
+		ok = appendStringInfoVA_c(&edata->msg, fmt, args);
 		va_end(args);
 	} while (!ok);
 	len = strlen(fmt);
@@ -1023,7 +1030,7 @@ errdetail(const char *fmt,...)
 	do
 	{
 		va_start(args, fmt);
-		ok = appendStringInfoVA(&edata->detail, fmt, args);
+		ok = appendStringInfoVA_c(&edata->detail, fmt, args);
 		va_end(args);
 	} while (!ok);
 	trimStringBuffer(&edata->detail);
@@ -1209,7 +1216,7 @@ exit_or_abort(int exitcode)
  * unlike the server code, this function automatically extend the buffer.
  */
 bool
-appendStringInfoVA(StringInfo str, const char *fmt, va_list args)
+appendStringInfoVA_c(StringInfo str, const char *fmt, va_list args)
 {
 	size_t		avail;
 	int			nprinted;

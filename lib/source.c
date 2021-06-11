@@ -542,6 +542,7 @@ RemoteSourceRead(RemoteSource *self, void *buffer, size_t len)
 		{
 			/* Try to receive another message */
 			int			mtype;
+			int			maxmsglen;
 
 readmessage:
 			mtype = Wrappered_pq_getbyte();
@@ -549,7 +550,32 @@ readmessage:
 				ereport(ERROR,
 						(errcode(ERRCODE_CONNECTION_FAILURE),
 					 errmsg("unexpected EOF on client connection")));
-			if (pq_getmessage(self->buffer, 0))
+
+#if PG_VERSION_NUM >= 140000
+			/* Validate message type and set packet size limit */
+			switch (mtype)
+			{
+				case 'd':	/* CopyData */
+					maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+					break;
+				case 'c':	/* CopyDone */
+				case 'f':	/* CopyFail */
+				case 'H':	/* Flush */
+				case 'S':	/* Sync */
+					maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
+					break;
+				default:
+					ereport(ERROR,
+							(errcode(ERRCODE_PROTOCOL_VIOLATION),
+							 errmsg("unexpected message type 0x%02X during COPY from stdin",
+									mtype)));
+					maxmsglen = 0;	/* keep compiler quiet */
+					break;
+			}
+#else
+			maxmsglen = 0;
+#endif
+			if (pq_getmessage(self->buffer, maxmsglen))
 				ereport(ERROR,
 						(errcode(ERRCODE_CONNECTION_FAILURE),
 					 errmsg("unexpected EOF on client connection")));
@@ -578,11 +604,15 @@ readmessage:
 					 */
 					goto readmessage;
 				default:
+#if PG_VERSION_NUM >= 140000
+					Assert(false);	/* NOT REACHED */
+#else
 					ereport(ERROR,
 							(errcode(ERRCODE_PROTOCOL_VIOLATION),
 							 errmsg("unexpected message type 0x%02X during COPY from stdin",
 									mtype)));
 					break;
+#endif
 			}
 		}
 		avail = self->buffer->len - self->buffer->cursor;

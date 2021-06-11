@@ -27,12 +27,12 @@ typedef struct TupleParser
 	uint32			buflen;
 } TupleParser;
 
-static void	TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process);
+static void	TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation);
 static HeapTuple TupleParserRead(TupleParser *self, Checker *checker);
 static int64 TupleParserTerm(TupleParser *self);
 static bool TupleParserParam(TupleParser *self, const char *keyword, char *value);
 static void TupleParserDumpParams(TupleParser *self);
-static void TupleParserDumpRecord(TupleParser *self, FILE fp, char *filename);
+static void TupleParserDumpRecord(TupleParser *self, FILE *fp, char *filename);
 
 /**
  * @brief Create a new binary parser.
@@ -52,7 +52,7 @@ CreateTupleParser(void)
 }
 
 static void
-TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process)
+TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation)
 {
 	unsigned		key;
 	char			junk[2];
@@ -127,7 +127,7 @@ TupleParserDumpParams(TupleParser *self)
 }
 
 static void
-TupleParserDumpRecord(TupleParser *self, FILE fp, char *filename)
+TupleParserDumpRecord(TupleParser *self, FILE *fp, char *filename)
 {
 	/* parse error does not happen in TupleParser. */
 }
