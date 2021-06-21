@@ -39,6 +39,15 @@
 #define parseTypeString(arg, argtype, typmod) \
 	parseTypeString(arg, argtype, typmod, false)
 
+#endif
+
+#if PG_VERSION_NUM >= 140000
+
+#define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
+	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false, false)
+
+#elif PG_VERSION_NUM >= 90400
+
 #define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
 	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false)
 
