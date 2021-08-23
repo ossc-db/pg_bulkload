@@ -17,12 +17,12 @@ jobs:
     strategy:
       matrix:
         PGVERSION:                # TODO: build with master branch
-          - 14beta2
-          - 13.2
-          - 12.6
-          - 11.11
-          - 10.16
-          - 9.6.21
+          - 14beta3
+          - 13.4
+          - 12.8
+          - 11.13
+          - 10.18
+          - 9.6.23
           - 9.5.25
     env:
       CACHE_VERSION: 20210426  # to identify cache version
