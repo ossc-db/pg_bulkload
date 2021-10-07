@@ -17,12 +17,13 @@ jobs:
     strategy:
       matrix:
         PGVERSION:                # TODO: build with master branch
-          - 13
-          - 12
-          - 11
-          - 10
-          - 9.6
-          - 9.5
+          - "14"
+          - "13"
+          - "12"
+          - "11"
+          - "10"
+          - "9.6"
+          - "9.5"
     env:
       CACHE_VERSION: 20210426  # to identify cache version
 
@@ -66,6 +67,7 @@ jobs:
           libreadline-dev                 \
           libselinux-dev                  \
           libedit-dev                     \
+          liblz4-dev                      \
           zlib1g-dev                      \
           postgresql-${{ env.PGVERSION }} \
           postgresql-server-dev-${{ env.PGVERSION }}
