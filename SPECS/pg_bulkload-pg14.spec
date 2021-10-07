@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 12
+# SPEC file for pg_bulkload on PostgreSQL 14
 # Copyright (C) 2009-2021 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  12
+%define pgmajorversion  14
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql12-devel, postgresql12
-Requires:       postgresql12
+BuildRequires:  postgresql14-devel, postgresql14
+Requires:       postgresql14
 
 
 %description
@@ -30,7 +30,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql12-server, postgresql12-llvmjit
+Requires: postgresql14-server, postgresql14-llvmjit
 Requires: pg_bulkload = 3.1.19
 Summary:  Just-in-time compilation support for pg_bulkload
 
@@ -101,11 +101,3 @@ rm -rf %{_libdir}/pgxs/src/backend/
 %changelog
 * Mon Oct 11 2021 - Masahiro ikeda <masahiro.ikeda.us@hco.ntt.co.jp> 3.1.19-1
 - Update to pg_bulkload 3.1.19
-* Tue Jun 01 2021 - Yanmei Sun <yanmei.sun.ep@hco.ntt.co.jp> 3.1.18-1
-- Update to pg_bulkload 3.1.18
-* Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
-- Update to pg_bulkload 3.1.17
-* Wed Jan 22 2020 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.16-1
-- Update to pg_bulkload 3.1.16
-- Warn users of some risks of using parallel/multi-process mode
-- Document restriction that pg_bulkload supports only tables of "heap" access method
