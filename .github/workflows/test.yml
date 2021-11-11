@@ -16,16 +16,15 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        PGVERSION:                # TODO: build with master branch
-          - "14.0"
-          - "13.4"
-          - "12.8"
-          - "11.13"
-          - "10.18"
-          - "9.6.23"
-          - "9.5.25"
+        PG_MAJOR_VERSIONS:                # TODO: build with master branch
+          - "14"
+          - "13"
+          - "12"
+          - "11"
+          - "10"
+          - "9.6"
     env:
-      CACHE_VERSION: 20210426  # to identify cache version
+      CACHE_VERSION: 20211111  # to identify cache version
 
     steps:
     - name: cat version
@@ -34,19 +33,53 @@ jobs:
          cat /etc/os-release
          uname -a
 
+    - name: install common tools     # TODO: cache
+      shell: bash -xe {0}
+      run: |
+        sudo apt-get -y install libxml2-utils
+
     - name: get current branch name
       shell: bash -xe {0}
       run: |
         if [ ${{ github.event_name }} = "pull_request" ]; then
           echo "BRANCH=${{ github.base_ref }}" >>  $GITHUB_ENV
         else # push
-          echo "BRANCH=${GITHUB_REF##*/}" >>  $GITHUB_ENV
+          echo "BRANCH=${GITHUB_REF##*/}" >> $GITHUB_ENV
         fi
 
-    - name: set build postgresql version
+    - name: get the latest minor versions information
       shell: bash -xe {0}
       run: |
-        echo "PGVERSION=${{ matrix.PGVERSION }}" >> $GITHUB_ENV
+        export URL=https://www.postgresql.org/support/versioning/
+        export FILE=versioning.html
+
+        curl -o $FILE $URL
+
+        num_of_versions=$(xmllint --html --xpath "count(//table[@class='table table-striped']/tbody/tr)" $FILE 2> /dev/null)
+        latest_versions="" # use string type because github action doesn't support array
+        for (( i=1; i <= $num_of_versions; i++ )); do
+            major=$(xmllint --html --xpath "//table[@class='table table-striped']/tbody/tr[$i]/td[1]/text()" $FILE 2> /dev/null)
+            with_minor=$(xmllint --html --xpath "//table[@class='table table-striped']/tbody/tr[$i]/td[2]/text()" $FILE 2> /dev/null)
+            latest_versions+="$major:$with_minor"
+            if [ $i != $num_of_versions ]; then
+              latest_versions+=","
+            fi
+        done
+        echo "LATEST_VERSIONS=$latest_versions" >> $GITHUB_ENV
+
+    - name: set build postgresql version which is the latest minor version
+      shell: bash -xe {0}
+      run: |
+        test_major_version=${{ matrix.PG_MAJOR_VERSIONS }}
+        latest_versions=${{ env.LATEST_VERSIONS }}
+
+        declare -A versions
+        for ver in ${latest_versions//,/ }; do
+          major=$(echo $ver | cut -d: -f1)
+          with_minor=$(echo $ver | cut -d: -f2)
+          versions[${major}]=${with_minor}
+        done
+        echo "PGVERSION=${versions[$test_major_version]}" >> $GITHUB_ENV
 
     - name: cache builded resources
       id: cache-postgresql-core
