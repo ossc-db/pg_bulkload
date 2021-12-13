@@ -840,14 +840,16 @@ BTReaderInit(BTReader *reader, Relation rel)
 		firstid = PageGetItemId(reader->page, P_FIRSTDATAKEY(opaque));
 		itup = (IndexTuple) PageGetItem(reader->page, firstid);
 
+		/* There's not need to exit here, Just change ItemPointerGetBlockNumber
+		 * to ItemPointerGetBlockNumberNoCheck
 		if ((itup->t_tid).ip_posid == 0)
 		{
 			elog(DEBUG1, "pg_bulkload: failded in BTReaderInit for \"%s\"",
 				RelationGetRelationName(rel));
 			return -1;
-		}
+		}*/
 
-		blkno = ItemPointerGetBlockNumber(&(itup->t_tid));
+		blkno = ItemPointerGetBlockNumberNoCheck(&(itup->t_tid));
 
 		/* Go down to children */
 		for (;;)
