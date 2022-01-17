@@ -6,6 +6,10 @@
 
 #include "postgres.h"
 
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #include "libpq-fe.h"
 
 #include "access/heapam.h"

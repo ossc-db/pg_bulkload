@@ -184,4 +184,8 @@ subclean:
 
 installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 
+ifneq ($(PORTNAME), darwin)
 LDFLAGS+=-Wl,--build-id
+else
+LDFLAGS+=-Wl
+endif
