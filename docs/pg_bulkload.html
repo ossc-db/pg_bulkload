@@ -240,7 +240,7 @@ Characters after "#" are ignored as comments in each line.
 <h3>Common</h3>
 <dl>
 
-<dt>TYPE = CSV | BINARY | FIXED | FUNCTION </dt>
+<dt>TYPE = CSV | BINARY | FIXED | FUNCTION | TEXT </dt>
 <dd>
 The type of input data.
 The default is CSV.
@@ -249,6 +249,7 @@ The default is CSV.
   <li>BINARY | FIXED : load from a fixed binary file</li>
   <li>FUNCTION : load from a result set from a function.<br/>
       If you use it, INPUT must be an expression to call a function.</li>
+  <li>TEXT : load from a text file in TEXT format</li>
 </ul>
 </dd>
 
@@ -506,6 +507,8 @@ and cause problems.
 <dl>
 <dt id="DELIMITER">DELIMITER = delimiter_character</dt>
 <dd>
+In Text format, it supports a combination of up to 3 single byte characters.
+In CSV format, it must be a single one-byte character. 
 The single ASCII character that separates columns within each row (line) of the file.
 The default is comma.
 When you load a tab-separated format file (TSV), you can set DELIMITER to a tab character.

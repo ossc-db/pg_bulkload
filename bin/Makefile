@@ -7,7 +7,8 @@ SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
 PROGRAM = pg_bulkload
 SCRIPTS = postgresql
-REGRESS = init load_bin load_csv load_remote load_function load_encoding load_check load_filter load_parallel write_bin
+REGRESS = init load_bin load_csv load_text load_remote load_encoding load_check load_filter load_parallel write_bin
+#REGRESS = load_function
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 PG_LIBS = $(libpq)
@@ -32,7 +33,7 @@ endif
 
 # libs pgport, pgcommon moved somewhere else in some ubuntu version
 # see ticket #97
-PG_LIBS += -L$(shell $(PG_CONFIG) --pkglibdir)
+#PG_LIBS += -L$(shell $(PG_CONFIG) --pkglibdir)
 
 # remove dependency to libxml2 and libxslt
 LIBS := $(filter-out -lxml2, $(LIBS))
@@ -106,6 +107,27 @@ sql/load_csv-13.sql:
 	cp sql/load_csv-v2.sql sql/load_csv-13.sql
 sql/load_csv-14.sql:
 	cp sql/load_csv-v2.sql sql/load_csv-14.sql
+	
+sql/load_text.sql: sql/load_text-$(MAJORVERSION).sql
+	cp sql/load_text-$(MAJORVERSION).sql sql/load_text.sql
+sql/load_text-9.3.sql:
+	cp sql/load_text-v1.sql sql/load_text-9.3.sql
+sql/load_text-9.4.sql:
+	cp sql/load_text-v1.sql sql/load_text-9.4.sql
+sql/load_text-9.5.sql:
+	cp sql/load_text-v1.sql sql/load_text-9.5.sql
+sql/load_text-9.6.sql:
+	cp sql/load_text-v1.sql sql/load_text-9.6.sql
+sql/load_text-10.sql:
+	cp sql/load_text-v1.sql sql/load_text-10.sql
+sql/load_text-11.sql:
+	cp sql/load_text-v1.sql sql/load_text-11.sql
+sql/load_text-12.sql:
+	cp sql/load_text-v2.sql sql/load_text-12.sql
+sql/load_text-13.sql:
+	cp sql/load_text-v2.sql sql/load_text-13.sql
+sql/load_text-14.sql:
+	cp sql/load_text-v2.sql sql/load_text-14.sql
 
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
@@ -178,10 +200,11 @@ subclean:
 	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
+	rm -f sql/load_text.sql sql/load_text-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
 
-installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
+check installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_text.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 
 LDFLAGS+=-Wl,--build-id
