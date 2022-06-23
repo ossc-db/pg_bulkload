@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/writer_buffered.c
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 #include "postgres.h"
@@ -84,7 +84,7 @@ BufferedWriterInit(BufferedWriter *self)
 	self->base.desc = RelationGetDescr(self->base.rel);
 
 	SpoolerOpen(&self->spooler, self->base.rel, true, self->base.on_duplicate,
-				self->base.max_dup_errors, self->base.dup_badfile);
+				self->base.max_dup_errors, self->base.dup_badfile, self->base.idxinfo);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	self->bistate = GetBulkInsertState();

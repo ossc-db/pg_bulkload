@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_strutil.c
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -20,7 +20,6 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "utils/int8.h"
 #include "utils/syscache.h"
 
 #include "pg_strutil.h"
@@ -32,6 +31,12 @@
 
 #if PG_VERSION_NUM >= 100000
 #include "utils/regproc.h"
+#endif
+
+#if PG_VERSION_NUM >= 150000
+#include "utils/numeric.h"
+#else
+#include "utils/int8.h"
 #endif
 
 #if PG_VERSION_NUM >= 90400
@@ -152,7 +157,7 @@ ParseInt32(char *value, int minValue)
 {
 	int32	i;
 	
-	i = pg_atoi(value, sizeof(int32), 0);
+	i = pg_strtoint32(value);
 	if (i < minValue)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -383,7 +388,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
 		/* could be an oversize integer as well as a float ... */
-		if (scanint8(str, true, &val64))
+		if (pg_strtoint64(str))
 		{
 			/*
 			 * It might actually fit in int32. Probably only INT_MIN can
@@ -615,14 +620,32 @@ ParseFunction(const char *value, bool argistype)
 											  ret.argtypes)),
 				 errhint("Could not choose a best candidate function.")));
 
-	foreach (l, names)
-	{
-		Value  *v = lfirst(l);
+	/*
+	 * v15 removed Value node struct
+	 */
 
-		pfree(strVal(v));
-		pfree(v);
-	}
-	list_free(names);
+	#if PG_VERSION_NUM >= 150000
+	
+		foreach (l, names)
+		{
+			String *v = lfirst(l);
+
+			pfree(strVal(v));
+			pfree(v);
+		}
+		list_free(names);
+
+	#else
+		foreach (l, names)
+		{
+			Value *v = lfirst(l);
+
+			pfree(strVal(v));
+			pfree(v);
+		}
+		list_free(names);
+	#endif
+
 
 	ret.oid = find->oid;
 #if PG_VERSION_NUM >= 80400

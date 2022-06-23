@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/pg_btree.h
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -29,6 +29,7 @@ typedef struct Spooler
 	int64			dup_new;	/**< number of not loaded by duplicate error */
 	char		   *dup_badfile;
 	FILE		   *dup_fp;
+	IndexInfo      *idxinfo;    /* check null not NullsNotDistinct*/
 } Spooler;
 
 /* External declarations */
@@ -37,7 +38,8 @@ extern void SpoolerOpen(Spooler *self,
 						bool use_wal,
 						ON_DUPLICATE on_duplicate,
 						int64 max_dup_errors,
-						const char *dup_badfile);
+						const char *dup_badfile,
+						IndexInfo *idxinfo);
 extern void SpoolerClose(Spooler *self);
 extern void SpoolerInsert(Spooler *self, HeapTuple tuple);
 

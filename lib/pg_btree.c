@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_btree.c
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -41,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 150000
+#if PG_VERSION_NUM >= 160000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 150000
+#include "nbtree/nbtsort-15.c"
 #elif PG_VERSION_NUM >= 140000
 #include "nbtree/nbtsort-14.c"
 #elif PG_VERSION_NUM >= 130000
@@ -97,7 +99,7 @@ typedef struct BTReader
 	char			   *page;	/**< Cached page */
 } BTReader;
 
-static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique);
+static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique, bool NullNotDistinct);
 static void IndexSpoolEnd(Spooler *self);
 static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot,
 							 ItemPointer tupleid, EState *estate,
@@ -123,7 +125,8 @@ SpoolerOpen(Spooler *self,
 			bool use_wal,
 			ON_DUPLICATE on_duplicate,
 			int64 max_dup_errors,
-			const char *dup_badfile)
+			const char *dup_badfile,
+			IndexInfo *idxinfo)
 {
 	memset(self, 0, sizeof(Spooler));
 
@@ -140,6 +143,8 @@ SpoolerOpen(Spooler *self,
 	self->relinfo->ri_RelationDesc = rel;
 	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	self->relinfo->ri_TrigInstrument = NULL;
+	
+	self->idxinfo = idxinfo;
 
 #if PG_VERSION_NUM >= 90500
 	ExecOpenIndices(self->relinfo, false);
@@ -164,7 +169,7 @@ SpoolerOpen(Spooler *self,
 #endif
 
 	self->spools = IndexSpoolBegin(self->relinfo,
-								   max_dup_errors == 0);
+								   max_dup_errors == 0, self->relinfo->ri_IndexRelationInfo);
 }
 
 void
@@ -222,11 +227,12 @@ SpoolerInsert(Spooler *self, HeapTuple tuple)
  * IndexSpoolBegin - Initialize spools.
  */
 static BTSpool **
-IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
+IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique, bool idxinfo)
 {
 	int				i;
 	int				numIndices = relinfo->ri_NumIndices;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
+	bool			nullsNotDistinct = idxinfo;
 	BTSpool		  **spools;
 #if PG_VERSION_NUM >= 90300
 	Relation heapRel = relinfo->ri_RelationDesc;
@@ -242,7 +248,12 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 			elog(DEBUG1, "pg_bulkload: spool \"%s\"",
 				RelationGetRelationName(indices[i]));
 
-#if PG_VERSION_NUM >= 90300
+#if PG_VERSION_NUM >= 150000
+			spools[i] = _bt_spoolinit(heapRel,indices[i],
+					enforceUnique ? indices[i]->rd_index->indisunique: false,
+					nullsNotDistinct, false);
+
+#elif PG_VERSION_NUM >= 90300
 			spools[i] = _bt_spoolinit(heapRel,indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
 					false);
@@ -715,7 +726,18 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * fsync those pages here, they might still not be on disk when the crash
 	 * occurs.
 	 */
-#if PG_VERSION_NUM >= 90100
+
+	/* 
+	 * v15 change RelationOpenSmgr name to RelationGetSmgr
+	 */
+
+#if PG_VERSION_NUM >= 15000
+	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
+	{
+		RelationGetSmgr(wstate->index);
+		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
+	}
+#elif PG_VERSION_NUM >= 90100
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
 		RelationOpenSmgr(wstate->index);

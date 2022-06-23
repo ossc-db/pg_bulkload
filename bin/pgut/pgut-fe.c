@@ -2,7 +2,7 @@
  *
  * pgut-fe.c
  *
- * Copyright (c) 2009-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  *
  *-------------------------------------------------------------------------
  */
@@ -14,6 +14,11 @@
 #include <getopt.h>
 #else
 #include <getopt_long.h>
+#endif
+
+
+#if PG_VERSION_NUM >= 150000
+#include <pwd.h>
 #endif
 
 char	   *dbname = NULL;

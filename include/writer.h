@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/writer.h
  *
- *	  Copyright (c) 2009-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -72,6 +72,7 @@ struct Writer
 	Relation		rel;			/**< target relation */
 	TupleDesc		desc;			/**< tuple descriptor */
 	TupleChecker   *tchecker;		/**< tuple format checker */
+	IndexInfo      *idxinfo;
 };
 
 typedef Writer *(*CreateWriter)(void *opt);
