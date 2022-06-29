@@ -353,6 +353,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		const char *startptr;
 		char	   *str;
 		int64		val64;
+		char       *tmpendptr;
 
 		/* parse plus operator and minus operator */
 		minus = false;
@@ -387,13 +388,17 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
-		/* could be an oversize integer as well as a float ... */
-		if (pg_strtoint64(str))
+
+		errno = 0;
+		val64 = strtoi64(str, &tmpendptr, 10);
+
+		if (errno == 0 && *tmpendptr == '\0')
 		{
 			/*
 			 * It might actually fit in int32. Probably only INT_MIN can
 			 * occur, but we'll code the test generally just to be sure.
 			 */
+
 			int32		val32 = (int32) val64;
 
 			if (val64 == (int64) val32)
