@@ -731,7 +731,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * v15 change RelationOpenSmgr name to RelationGetSmgr
 	 */
 
-#if PG_VERSION_NUM >= 15000
+#if PG_VERSION_NUM >= 150000
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
 		RelationGetSmgr(wstate->index);
