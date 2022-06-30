@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)

@@ -388,36 +388,70 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
+		/*
+		 * v15 deleted int8.h and scanint8(),
+		 * so, used strtoi64() to instead of it
+		 */
 
-		errno = 0;
-		val64 = strtoi64(str, &tmpendptr, 10);
+		#if PG_VERSION_NUM >= 150000
+			errno = 0;
+			val64 = strtoi64(str, &tmpendptr, 10);
 
-		if (errno == 0 && *tmpendptr == '\0')
-		{
-			/*
-			 * It might actually fit in int32. Probably only INT_MIN can
-			 * occur, but we'll code the test generally just to be sure.
-			 */
+			if (errno == 0 && *tmpendptr == '\0')
+			{
+				/*
+				* It might actually fit in int32. Probably only INT_MIN can
+				* occur, but we'll code the test generally just to be sure.
+				*/
 
-			int32		val32 = (int32) val64;
+				int32		val32 = (int32) val64;
 
-			if (val64 == (int64) val32)
-				*argtype = INT4OID;
+				if (val64 == (int64) val32)
+					*argtype = INT4OID;
+				else
+					*argtype = INT8OID;
+			}
 			else
-				*argtype = INT8OID;
-		}
-		else
-		{
-			/* arrange to report location if numeric_in() fails */
-			DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
-								ObjectIdGetDatum(InvalidOid),
-								Int32GetDatum(-1));
+			{
+				/* arrange to report location if numeric_in() fails */
+				DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
+									ObjectIdGetDatum(InvalidOid),
+									Int32GetDatum(-1));
 
-			*argtype = NUMERICOID;
-		}
+				*argtype = NUMERICOID;
+			}
 
-		/* Check for numeric constants. */
-		*arg = str;
+			/* Check for numeric constants. */
+			*arg = str;
+		#else
+			/* could be an oversize integer as well as a float ... */
+			if (scanint8(str, true, &val64))
+			{
+				/*
+				* It might actually fit in int32. Probably only INT_MIN can
+				* occur, but we'll code the test generally just to be sure.
+				*/
+
+				int32		val32 = (int32) val64;
+
+				if (val64 == (int64) val32)
+					*argtype = INT4OID;
+				else
+					*argtype = INT8OID;
+			}
+			else
+			{
+				/* arrange to report location if numeric_in() fails */
+				DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
+									ObjectIdGetDatum(InvalidOid),
+									Int32GetDatum(-1));
+
+				*argtype = NUMERICOID;
+			}
+
+			/* Check for numeric constants. */
+			*arg = str;
+		#endif
 	}
 
 	*endptr = p;
