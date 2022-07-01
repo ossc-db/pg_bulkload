@@ -44,6 +44,7 @@
 #if PG_VERSION_NUM >= 160000
 #error unsupported PostgreSQL version
 #elif PG_VERSION_NUM >= 150000
+#include "nodes/execnodes.h"
 #include "nbtree/nbtsort-15.c"
 #elif PG_VERSION_NUM >= 140000
 #include "nbtree/nbtsort-14.c"
@@ -99,7 +100,7 @@ typedef struct BTReader
 	char			   *page;	/**< Cached page */
 } BTReader;
 
-static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique, bool NullNotDistinct);
+static BTSpool **IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique);
 static void IndexSpoolEnd(Spooler *self);
 static void IndexSpoolInsert(BTSpool **spools, TupleTableSlot *slot,
 							 ItemPointer tupleid, EState *estate,
@@ -125,8 +126,7 @@ SpoolerOpen(Spooler *self,
 			bool use_wal,
 			ON_DUPLICATE on_duplicate,
 			int64 max_dup_errors,
-			const char *dup_badfile,
-			IndexInfo *idxinfo)
+			const char *dup_badfile)
 {
 	memset(self, 0, sizeof(Spooler));
 
@@ -144,7 +144,10 @@ SpoolerOpen(Spooler *self,
 	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	self->relinfo->ri_TrigInstrument = NULL;
 	
-	self->idxinfo = idxinfo;
+// #if PG_VERSION_NUM >= 150000
+// 	IndexInfo *idxinfo;
+// 	bool nullsnotdistinct = idxinfo->ii_NullsNotDistinct;
+// #endif
 
 #if PG_VERSION_NUM >= 90500
 	ExecOpenIndices(self->relinfo, false);
@@ -169,7 +172,7 @@ SpoolerOpen(Spooler *self,
 #endif
 
 	self->spools = IndexSpoolBegin(self->relinfo,
-								   max_dup_errors == 0, self->relinfo->ri_IndexRelationInfo);
+								   max_dup_errors == 0);
 }
 
 void
@@ -227,13 +230,18 @@ SpoolerInsert(Spooler *self, HeapTuple tuple)
  * IndexSpoolBegin - Initialize spools.
  */
 static BTSpool **
-IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique, bool idxinfo)
+IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 {
 	int				i;
 	int				numIndices = relinfo->ri_NumIndices;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
-	bool			nullsNotDistinct = idxinfo;
 	BTSpool		  **spools;
+
+#if PG_VERSION_NUM >= 150000
+	IndexInfo *idxinfo;
+	bool nullsnotdistinct = idxinfo->ii_NullsNotDistinct;
+#endif
+
 #if PG_VERSION_NUM >= 90300
 	Relation heapRel = relinfo->ri_RelationDesc;
 #endif
@@ -251,7 +259,7 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique, bool idxinfo)
 #if PG_VERSION_NUM >= 150000
 			spools[i] = _bt_spoolinit(heapRel,indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
-					nullsNotDistinct, false);
+					nullsnotdistinct, false);
 
 #elif PG_VERSION_NUM >= 90300
 			spools[i] = _bt_spoolinit(heapRel,indices[i],

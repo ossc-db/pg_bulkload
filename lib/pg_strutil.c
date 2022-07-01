@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_strutil.c
  *
- *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -156,8 +156,13 @@ int
 ParseInt32(char *value, int minValue)
 {
 	int32	i;
-	
-	i = pg_strtoint32(value);
+
+	#if PG_VERSION_NUM  >= 150000
+		i = pg_strtoint32(value);
+	#else
+		i = pg_atoi(value, sizeof(int32), 0);
+	#endif
+
 	if (i < minValue)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),

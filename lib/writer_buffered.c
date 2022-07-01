@@ -84,7 +84,7 @@ BufferedWriterInit(BufferedWriter *self)
 	self->base.desc = RelationGetDescr(self->base.rel);
 
 	SpoolerOpen(&self->spooler, self->base.rel, true, self->base.on_duplicate,
-				self->base.max_dup_errors, self->base.dup_badfile, self->base.idxinfo);
+				self->base.max_dup_errors, self->base.dup_badfile);
 	self->base.context = GetPerTupleMemoryContext(self->spooler.estate);
 
 	self->bistate = GetBulkInsertState();

@@ -29,7 +29,6 @@ typedef struct Spooler
 	int64			dup_new;	/**< number of not loaded by duplicate error */
 	char		   *dup_badfile;
 	FILE		   *dup_fp;
-	IndexInfo      *idxinfo;    /* check null not NullsNotDistinct*/
 } Spooler;
 
 /* External declarations */
@@ -38,8 +37,7 @@ extern void SpoolerOpen(Spooler *self,
 						bool use_wal,
 						ON_DUPLICATE on_duplicate,
 						int64 max_dup_errors,
-						const char *dup_badfile,
-						IndexInfo *idxinfo);
+						const char *dup_badfile);
 extern void SpoolerClose(Spooler *self);
 extern void SpoolerInsert(Spooler *self, HeapTuple tuple);
 
