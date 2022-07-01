@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         PGVERSION:                # TODO: build with master branch
-          - "15beta2"
+          - "15beta1"
           - "14.0"
           - "13.4"
           - "12.8"

@@ -358,8 +358,9 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		const char *startptr;
 		char	   *str;
 		int64		val64;
-		char       *tmpendptr;
-
+		#if PG_VERSION_NUM >= 150000
+			char       *tmpendptr;
+		#endif
 		/* parse plus operator and minus operator */
 		minus = false;
 		while (*p == '+' || *p == '-')
