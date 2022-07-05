@@ -144,10 +144,6 @@ SpoolerOpen(Spooler *self,
 	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	self->relinfo->ri_TrigInstrument = NULL;
 	
-// #if PG_VERSION_NUM >= 150000
-// 	IndexInfo *idxinfo;
-// 	bool nullsnotdistinct = idxinfo->ii_NullsNotDistinct;
-// #endif
 
 #if PG_VERSION_NUM >= 90500
 	ExecOpenIndices(self->relinfo, false);
@@ -237,11 +233,6 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
 	BTSpool		  **spools;
 
-#if PG_VERSION_NUM >= 150000
-	IndexInfo *idxinfo;
-	bool nullsnotdistinct = idxinfo->ii_NullsNotDistinct;
-#endif
-
 #if PG_VERSION_NUM >= 90300
 	Relation heapRel = relinfo->ri_RelationDesc;
 #endif
@@ -259,7 +250,7 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 #if PG_VERSION_NUM >= 150000
 			spools[i] = _bt_spoolinit(heapRel,indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
-					nullsnotdistinct, false);
+					indices[i]->rd_index->indnullsnotdistinct, false);
 
 #elif PG_VERSION_NUM >= 90300
 			spools[i] = _bt_spoolinit(heapRel,indices[i],

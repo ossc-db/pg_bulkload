@@ -65,7 +65,7 @@ sql/init-13.sql:
 sql/init-14.sql:
 	cp sql/init-extension-v2.sql sql/init-14.sql
 sql/init-15.sql:
-	cp sql/init-extension-v2.sql sql/init-15.sql
+	cp sql/init-extension-v3.sql sql/init-15.sql
 
 sql/load_bin.sql: sql/load_bin-$(MAJORVERSION).sql
 	cp sql/load_bin-$(MAJORVERSION).sql sql/load_bin.sql
@@ -111,7 +111,7 @@ sql/load_csv-13.sql:
 sql/load_csv-14.sql:
 	cp sql/load_csv-v2.sql sql/load_csv-14.sql
 sql/load_csv-15.sql:
-	cp sql/load_csv-v2.sql sql/load_csv-15.sql
+	cp sql/load_csv-v3.sql sql/load_csv-15.sql
 
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
