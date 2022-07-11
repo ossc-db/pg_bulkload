@@ -38,10 +38,10 @@ CREATE INDEX idx_hash_fn ON customer USING hash ((abs(c_w_id) + c_d_id));
 
 ---------------------------------------------------------------------------
 -- load_csv test csv9 
-CREATE TABLE UNIQUE_TBL1 (i int, t text);
-CREATE UNIQUE INDEX unique_idx1 ON UNIQUE_TBL1 (i) NULLS DISTINCT;
-CREATE TABLE UNIQUE_TBL2 (i int, t text);
-CREATE UNIQUE INDEX unique_idx2 ON UNIQUE_TBL2 (i) NULLS NOT DISTINCT;
+CREATE TABLE unique_tbl1 (i int, t text);
+CREATE UNIQUE INDEX unique_idx1 ON unique_tbl1 (i) NULLS DISTINCT;
+CREATE TABLE unique_tbl2 (i int, t text);
+CREATE UNIQUE INDEX unique_idx2 ON unique_tbl2 (i) NULLS NOT DISTINCT;
 ---------------------------------------------------------------------------
 -- load_check test
 CREATE TABLE master (

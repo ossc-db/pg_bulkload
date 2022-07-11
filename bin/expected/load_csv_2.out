@@ -653,7 +653,7 @@ SELECT * FROM customer ORDER BY c_id;
 (10 rows)
 
 -- test whether when defined the NULL NOT DISTINCT column can be loaded. 
--- set unique nulls not distinct
+-- set unique nulls distinct
 \! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
@@ -662,44 +662,32 @@ NOTICE: BULK LOAD END
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
-SELECT * FROM UNIQUE_TBL1;
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl1 ORDER BY i;
  i |   t   
 ---+-------
  1 | one
  2 | two
  3 | three
- 4 | four
+ 4 | one
  5 | five
    | six
    | seven
 (7 rows)
 
-\d UNIQUE_TBL1 
-            Table "public.unique_tbl1"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- i      | integer |           |          | 
- t      | text    |           |          | 
-Indexes:
-    "unique_idx1" UNIQUE, btree (i)
-
--- set unique nulls distinct
+-- set unique nulls not distinct
 \! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "unique_idx2"
 DETAIL:  Key (i)=(null) is duplicated.
 DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
-SELECT * FROM UNIQUE_TBL2;
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
  i | t 
 ---+---
 (0 rows)
-
-\d UNIQUE_TBL2 
-            Table "public.unique_tbl2"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- i      | integer |           |          | 
- t      | text    |           |          | 
-Indexes:
-    "unique_idx2" UNIQUE, btree (i) NULLS NOT DISTINCT
 

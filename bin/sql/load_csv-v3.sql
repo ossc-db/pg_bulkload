@@ -101,12 +101,16 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 -- test whether when defined the NULL NOT DISTINCT column can be loaded. 
--- set unique nulls not distinct
-\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
-SELECT * FROM UNIQUE_TBL1;
-\d UNIQUE_TBL1 
-
 -- set unique nulls distinct
+\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl1 ORDER BY i;
+
+-- set unique nulls not distinct
 \! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
-SELECT * FROM UNIQUE_TBL2;
-\d UNIQUE_TBL2 
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
