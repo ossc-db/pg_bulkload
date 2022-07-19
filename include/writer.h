@@ -72,7 +72,6 @@ struct Writer
 	Relation		rel;			/**< target relation */
 	TupleDesc		desc;			/**< tuple descriptor */
 	TupleChecker   *tchecker;		/**< tuple format checker */
-	IndexInfo      *idxinfo;
 };
 
 typedef Writer *(*CreateWriter)(void *opt);

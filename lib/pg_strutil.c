@@ -33,6 +33,11 @@
 #include "utils/regproc.h"
 #endif
 
+/*
+ * v15 move scanint8() to numutils.c and rename to pg_strtoint64().
+ * and remove the int8.h file.
+ */ 
+
 #if PG_VERSION_NUM >= 150000
 #include "utils/numeric.h"
 #else

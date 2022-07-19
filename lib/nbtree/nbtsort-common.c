@@ -26,15 +26,9 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool nulls_not_disti
 	btspool->nulls_not_distinct = nulls_not_distinct;
 
 	/*
-	 * We size the sort area as maintenance_work_mem rather than work_mem to
-	 * speed index creation.  This should be OK since a single backend can't
-	 * run multiple index creations in parallel.  Note that creation of a
-	 * unique index actually requires two BTSpool objects.  We expect that the
-	 * second one (for dead tuples) won't get very full, so we give it only
-	 * work_mem.
+	 * Another nulls_not_distinct argument has been added 
+	 * to the tuplesort_begin_index_btree function in PostgreSQL v15.
 	 */
-
-
 	btKbytes = isdead ? work_mem : maintenance_work_mem;
 	btspool->sortstate = tuplesort_begin_index_btree(heap, index, isunique,
 													nulls_not_distinct,

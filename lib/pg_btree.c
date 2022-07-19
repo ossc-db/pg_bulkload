@@ -44,7 +44,6 @@
 #if PG_VERSION_NUM >= 160000
 #error unsupported PostgreSQL version
 #elif PG_VERSION_NUM >= 150000
-#include "nodes/execnodes.h"
 #include "nbtree/nbtsort-15.c"
 #elif PG_VERSION_NUM >= 140000
 #include "nbtree/nbtsort-14.c"
