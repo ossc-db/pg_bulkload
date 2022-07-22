@@ -142,7 +142,6 @@ SpoolerOpen(Spooler *self,
 	self->relinfo->ri_RelationDesc = rel;
 	self->relinfo->ri_TrigDesc = NULL;	/* TRIGGER is not supported */
 	self->relinfo->ri_TrigInstrument = NULL;
-	
 
 #if PG_VERSION_NUM >= 90500
 	ExecOpenIndices(self->relinfo, false);
@@ -231,7 +230,6 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 	int				numIndices = relinfo->ri_NumIndices;
 	RelationPtr		indices = relinfo->ri_IndexRelationDescs;
 	BTSpool		  **spools;
-
 #if PG_VERSION_NUM >= 90300
 	Relation heapRel = relinfo->ri_RelationDesc;
 #endif
@@ -725,20 +723,14 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * occurs.
 	 */
 
-	/* 
-	 * v15 change RelationOpenSmgr name to RelationGetSmgr
-	 */
-
-#if PG_VERSION_NUM >= 150000
+#if PG_VERSION_NUM >= 90100
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
+	#if PG_VERSION_NUM >= 150000
 		RelationGetSmgr(wstate->index);
-		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
-	}
-#elif PG_VERSION_NUM >= 90100
-	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
-	{
+	#else
 		RelationOpenSmgr(wstate->index);
+	#endif
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
 #else

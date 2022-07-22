@@ -9,40 +9,15 @@
  *	  Copyright (c) 2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
-
+/*
+ * create and initialize a spool structure
+ */
+static BTSpool *
 #if PG_VERSION_NUM >= 150000
-/*
- * create and initialize a spool structure
- */
-static BTSpool *
 _bt_spoolinit(Relation heap, Relation index, bool isunique, bool nulls_not_distinct, bool isdead)
-{
-	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
-	int			btKbytes;
-
-	btspool->heap = heap;
-	btspool->index = index;
-	btspool->isunique = isunique;
-	btspool->nulls_not_distinct = nulls_not_distinct;
-
-	/*
-	 * Another nulls_not_distinct argument has been added 
-	 * to the tuplesort_begin_index_btree function in PostgreSQL v15.
-	 */
-	btKbytes = isdead ? work_mem : maintenance_work_mem;
-	btspool->sortstate = tuplesort_begin_index_btree(heap, index, isunique,
-													nulls_not_distinct,
-													btKbytes, NULL, false);
-
-	return btspool;
-}
-
 #elif PG_VERSION_NUM >= 140000
-/*
- * create and initialize a spool structure
- */
-static BTSpool *
 _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
+#endif
 {
 	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
 	int			btKbytes;
@@ -50,6 +25,9 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
 	btspool->heap = heap;
 	btspool->index = index;
 	btspool->isunique = isunique;
+#if PG_VERSION_NUM >= 150000
+	btspool->nulls_not_distinct = nulls_not_distinct;
+#endif
 
 	/*
 	 * We size the sort area as maintenance_work_mem rather than work_mem to
@@ -61,8 +39,10 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
 	 */
 	btKbytes = isdead ? work_mem : maintenance_work_mem;
 	btspool->sortstate = tuplesort_begin_index_btree(heap, index, isunique,
-													 btKbytes, NULL, false);
+#if PG_VERSION_NUM >= 150000
+													nulls_not_distinct,
+#endif
+													btKbytes, NULL, false);
 
 	return btspool;
 }
-#endif
