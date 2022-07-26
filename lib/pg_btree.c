@@ -244,14 +244,12 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 			elog(DEBUG1, "pg_bulkload: spool \"%s\"",
 				RelationGetRelationName(indices[i]));
 
-#if PG_VERSION_NUM >= 150000
+#if PG_VERSION_NUM >= 90300
 			spools[i] = _bt_spoolinit(heapRel,indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
-					indices[i]->rd_index->indnullsnotdistinct, false);
-
-#elif PG_VERSION_NUM >= 90300
-			spools[i] = _bt_spoolinit(heapRel,indices[i],
-					enforceUnique ? indices[i]->rd_index->indisunique: false,
+	#if PG_VERSION_NUM >= 150000
+					indices[i]->rd_index->indnullsnotdistinct, 
+	#endif
 					false);
 #else
 			spools[i] = _bt_spoolinit(indices[i],
@@ -722,7 +720,6 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * fsync those pages here, they might still not be on disk when the crash
 	 * occurs.
 	 */
-
 #if PG_VERSION_NUM >= 90100
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{

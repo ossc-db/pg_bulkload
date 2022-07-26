@@ -157,7 +157,7 @@ ParseInt32(char *value, int minValue)
 {
 	int32	i;
 
-#if PG_VERSION_NUM  >= 150000
+#if PG_VERSION_NUM >= 150000
 		i = pg_strtoint32(value);
 #else
 		i = pg_atoi(value, sizeof(int32), 0);
@@ -394,40 +394,40 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
+/* could be an oversize integer as well as a float ... */
 #if PG_VERSION_NUM >= 150000
-			errno = 0;
-			val64 = strtoi64(str, &tmpendptr, 10);
+		errno = 0;
+		val64 = strtoi64(str, &tmpendptr, 10);
 
-			if (errno == 0 && *tmpendptr == '\0')
+		if (errno == 0 && *tmpendptr == '\0')
 #else
-			/* could be an oversize integer as well as a float ... */
-			if (scanint8(str, true, &val64))
+		if (scanint8(str, true, &val64))
 #endif
-			{
-				/*
-				* It might actually fit in int32. Probably only INT_MIN can
-				* occur, but we'll code the test generally just to be sure.
-				*/
+		{
+			/*
+			* It might actually fit in int32. Probably only INT_MIN can
+			* occur, but we'll code the test generally just to be sure.
+			*/
 
-				int32		val32 = (int32) val64;
+			int32		val32 = (int32) val64;
 
-				if (val64 == (int64) val32)
-					*argtype = INT4OID;
-				else
-					*argtype = INT8OID;
-			}
+			if (val64 == (int64) val32)
+				*argtype = INT4OID;
 			else
-			{
-				/* arrange to report location if numeric_in() fails */
-				DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
-									ObjectIdGetDatum(InvalidOid),
-									Int32GetDatum(-1));
+				*argtype = INT8OID;
+		}
+		else
+		{
+			/* arrange to report location if numeric_in() fails */
+			DirectFunctionCall3(numeric_in, CStringGetDatum(str + 1),
+								ObjectIdGetDatum(InvalidOid),
+								Int32GetDatum(-1));
 
-				*argtype = NUMERICOID;
-			}
+			*argtype = NUMERICOID;
+		}
 
-			/* Check for numeric constants. */
-			*arg = str;
+		/* Check for numeric constants. */
+		*arg = str;
 	}
 
 	*endptr = p;
@@ -635,22 +635,17 @@ ParseFunction(const char *value, bool argistype)
 											  ret.argtypes)),
 				 errhint("Could not choose a best candidate function.")));
 
-	/*
-	 * v15 removed Value node struct
-	 */
-
-	
-		foreach (l, names)
-		{
+	foreach (l, names)
+	{
 #if PG_VERSION_NUM >= 150000
-			String *v = lfirst_node(String, l);
+		String *v = lfirst_node(String, l);
 #else
-			Value *v = lfirst(l);
+		Value *v = lfirst(l);
 #endif
-			pfree(strVal(v));
-			pfree(v);
-		}
-		list_free(names);
+		pfree(strVal(v));
+		pfree(v);
+	}
+	list_free(names);
 
 	ret.oid = find->oid;
 #if PG_VERSION_NUM >= 80400

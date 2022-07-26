@@ -12,12 +12,13 @@
 /*
  * create and initialize a spool structure
  */
+#if PG_VERSION_NUM >= 140000
 static BTSpool *
+_bt_spoolinit(Relation heap, Relation index, bool isunique, 
 #if PG_VERSION_NUM >= 150000
-_bt_spoolinit(Relation heap, Relation index, bool isunique, bool nulls_not_distinct, bool isdead)
-#elif PG_VERSION_NUM >= 140000
-_bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
+			bool nulls_not_distinct, 
 #endif
+			bool isdead)
 {
 	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
 	int			btKbytes;
@@ -46,3 +47,4 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
 
 	return btspool;
 }
+#endif
