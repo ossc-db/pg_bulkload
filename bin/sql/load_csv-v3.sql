@@ -101,15 +101,59 @@ SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
 
 -- test whether when defined the NULL NOT DISTINCT column can be loaded. 
--- set unique nulls distinct
-\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
+-- csv8.ctl uses unique_tbl1 table.
+-- csv9.ctl uses unique_tbl2 table.
+-- test unique nulls distinct. (Allow multiple nulls)
+\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES"  -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
 SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM unique_tbl1 ORDER BY i;
 
--- set unique nulls not distinct
-\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+-- test unique nulls not distinct. (Do not allow multiple nulls)
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
 SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;

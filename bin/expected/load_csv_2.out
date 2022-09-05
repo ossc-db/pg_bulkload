@@ -653,12 +653,14 @@ SELECT * FROM customer ORDER BY c_id;
 (10 rows)
 
 -- test whether when defined the NULL NOT DISTINCT column can be loaded. 
--- set unique nulls distinct
-\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
+-- csv8.ctl uses unique_tbl1 table.
+-- csv9.ctl uses unique_tbl2 table.
+-- test unique nulls distinct. (Allow multiple nulls)
+\! pg_bulkload -d contrib_regression data/csv8.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES"  -l results/csv9.log -P results/csv9.prs -u results/csv9.dup
 NOTICE: BULK LOAD START
 NOTICE: BULK LOAD END
 	0 Rows skipped.
-	7 Rows successfully loaded.
+	4 Rows successfully loaded.
 	0 Rows not loaded due to parse errors.
 	0 Rows not loaded due to duplicate errors.
 	0 Rows replaced with new rows.
@@ -670,15 +672,12 @@ SELECT * FROM unique_tbl1 ORDER BY i;
 ---+-------
  1 | one
  2 | two
- 3 | three
- 4 | one
- 5 | five
-   | six
-   | seven
-(7 rows)
+   | three
+   | four
+(4 rows)
 
--- set unique nulls not distinct
-\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+-- test unique nulls not distinct. (Do not allow multiple nulls)
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
 NOTICE: BULK LOAD START
 ERROR: query failed: ERROR:  could not create unique index "unique_idx2"
 DETAIL:  Key (i)=(null) is duplicated.
@@ -690,4 +689,133 @@ SELECT * FROM unique_tbl2 ORDER BY i;
  i | t 
 ---+---
 (0 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not create unique index "unique_idx2"
+DETAIL:  Key (i)=(null) is duplicated.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i | t 
+---+---
+(0 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not create unique index "unique_idx2"
+DETAIL:  Key (i)=(null) is duplicated.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i | t 
+---+---
+(0 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+ERROR: query failed: ERROR:  could not create unique index "unique_idx2"
+DETAIL:  Key (i)=(null) is duplicated.
+DETAIL: query was: SELECT * FROM pgbulkload.pg_bulkload($1)
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i | t 
+---+---
+(0 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "unique_idx2"
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	3 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	1 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i |   t   
+---+-------
+ 1 | one
+ 2 | two
+   | three
+(3 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "unique_idx2"
+WARNING:  Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "unique_idx2"
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	3 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	1 Rows not loaded due to duplicate errors.
+	1 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i |   t    
+---+--------
+ 1 | one
+ 2 | two
+ 5 | five_
+ 6 | six_
+   | seven_
+(5 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "unique_idx2"
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	3 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	1 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i |   t   
+---+-------
+ 1 | one
+ 2 | two
+   | three
+(3 rows)
+
+\! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data10.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=OLD" -o "DUPLICATE_ERRORS=50" -o "TRUNCATE=NO" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+NOTICE: BULK LOAD START
+WARNING:  Duplicate error Record 1: Rejected - duplicate key value violates unique constraint "unique_idx2"
+WARNING:  Duplicate error Record 2: Rejected - duplicate key value violates unique constraint "unique_idx2"
+NOTICE: BULK LOAD END
+	0 Rows skipped.
+	2 Rows successfully loaded.
+	0 Rows not loaded due to parse errors.
+	2 Rows not loaded due to duplicate errors.
+	0 Rows replaced with new rows.
+WARNING: some rows were not loaded due to errors.
+SET enable_seqscan = off;
+SET enable_indexscan = on;
+SET enable_bitmapscan = off;
+SELECT * FROM unique_tbl2 ORDER BY i;
+ i |   t   
+---+-------
+ 1 | one
+ 2 | two
+ 5 | five_
+ 6 | six_
+   | three
+(5 rows)
 

@@ -158,9 +158,9 @@ ParseInt32(char *value, int minValue)
 	int32	i;
 
 #if PG_VERSION_NUM >= 150000
-		i = pg_strtoint32(value);
+	i = pg_strtoint32(value);
 #else
-		i = pg_atoi(value, sizeof(int32), 0);
+	i = pg_atoi(value, sizeof(int32), 0);
 #endif
 
 	if (i < minValue)
@@ -358,8 +358,9 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		const char *startptr;
 		char	   *str;
 		int64		val64;
+		
 #if PG_VERSION_NUM >= 150000
-			char       *tmpendptr;
+		char       *tmpendptr;
 #endif
 		/* parse plus operator and minus operator */
 		minus = false;
@@ -394,7 +395,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		str = palloc(len + 2);
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
-/* could be an oversize integer as well as a float ... */
+		/* could be an oversize integer as well as a float ... */
 #if PG_VERSION_NUM >= 150000
 		errno = 0;
 		val64 = strtoi64(str, &tmpendptr, 10);
@@ -404,11 +405,10 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		if (scanint8(str, true, &val64))
 #endif
 		{
-			/*
+		   /*
 			* It might actually fit in int32. Probably only INT_MIN can
 			* occur, but we'll code the test generally just to be sure.
 			*/
-
 			int32		val32 = (int32) val64;
 
 			if (val64 == (int64) val32)

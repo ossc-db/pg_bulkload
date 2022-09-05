@@ -9,10 +9,11 @@
  *	  Copyright (c) 2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
+
+#if PG_VERSION_NUM >= 140000
 /*
  * create and initialize a spool structure
  */
-#if PG_VERSION_NUM >= 140000
 static BTSpool *
 _bt_spoolinit(Relation heap, Relation index, bool isunique, 
 #if PG_VERSION_NUM >= 150000
