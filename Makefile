@@ -7,7 +7,7 @@ ifndef USE_PGXS
 top_builddir = ../..
 makefile_global = $(top_builddir)/src/Makefile.global
 ifeq "$(wildcard $(makefile_global))" ""
-USE_PGXS = 1	# use pgxs if not in contrviib directory
+USE_PGXS = 1	# use pgxs if not in contrib directory
 endif
 endif
 
@@ -16,7 +16,7 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = contrib/pg_bulkload
+subdir = pg_bulkload
 include $(makefile_global)
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
