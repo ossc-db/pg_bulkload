@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 14
+# SPEC file for pg_bulkload on PostgreSQL 15
 # Copyright (C) 2009-2022 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  14
+%define pgmajorversion  15
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql14-devel, postgresql14
-Requires:       postgresql14
+BuildRequires:  postgresql15-devel, postgresql15
+Requires:       postgresql15
 
 
 %description
@@ -102,6 +102,3 @@ rm -rf %{_libdir}/pgxs/src/backend/
 * Thu Dec 22 2022 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.20-1
 - Support PostgreSQL 15
 - Update to pg_bulkload 3.1.20
-* Mon Oct 11 2021 - Masahiro ikeda <masahiro.ikeda.us@hco.ntt.co.jp> 3.1.19-1
-- Support PostgreSQL 14
-- Update to pg_bulkload 3.1.19
