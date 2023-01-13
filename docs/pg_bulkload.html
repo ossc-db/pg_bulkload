@@ -240,7 +240,7 @@ Characters after "#" are ignored as comments in each line.
 <h3>Common</h3>
 <dl>
 
-<dt>TYPE = CSV | BINARY | FIXED | FUNCTION </dt>
+<dt>TYPE = CSV | BINARY | FIXED | FUNCTION | TEXT </dt>
 <dd>
 The type of input data.
 The default is CSV.
@@ -249,6 +249,7 @@ The default is CSV.
   <li>BINARY | FIXED : load from a fixed binary file</li>
   <li>FUNCTION : load from a result set from a function.<br/>
       If you use it, INPUT must be an expression to call a function.</li>
+  <li>TEXT : load from a text file in TEXT format</li>
 </ul>
 </dd>
 
@@ -506,6 +507,7 @@ and cause problems.
 <dl>
 <dt id="DELIMITER">DELIMITER = delimiter_character</dt>
 <dd>
+In CSV format, it must be a single one-byte character. 
 The single ASCII character that separates columns within each row (line) of the file.
 The default is comma.
 When you load a tab-separated format file (TSV), you can set DELIMITER to a tab character.
@@ -513,6 +515,45 @@ Then, you need to double quote the tab:
 <pre>DELIMITER="	" # a double-quoted tab</pre>
 You can also specify DELIMITER as a command-line -o option with <code>$'\t'</code> syntax.
 <pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
+</dd>
+<dt>QUOTE = quote_character</dt>
+<dd>
+Specifies the ASCII quotation character.
+The default is double-quotation.
+</dd>
+<dt>ESCAPE = escape_character</dt>
+<dd>
+Specifies the ASCII character that should appear before a QUOTE data character value.
+The default is double-quotation.
+</dd>
+<dt>NULL = null_string</dt>
+<dd>
+The string that represents a null value.
+The default is a empty value with no quotes.
+</dd>
+<dt>FORCE_NOT_NULL = column</dt>
+<dd>
+Process each specified column as though it were not a NULL value.
+Multiple columns are available as needed.
+FILTER cannot be used together with this option.
+</dd>
+
+</dl>
+
+<h3>TEXT input format</h3>
+<dl>
+<dt id="DELIMITER">DELIMITER = delimiter_character</dt>
+<dd>
+In TEXT format, it supports up to 3 single byte character combination separators.
+The ASCII characters that separates columns within each row (line) of the file.
+The default is comma.
+When you load a tab-separated format file (TSV), you can set DELIMITER to a tab character.
+Then, you need to double quote the tab:
+<pre>DELIMITER="	" # a double-quoted tab</pre>
+You can also specify DELIMITER as a command-line -o option with <code>$'\t'</code> syntax.
+<pre>$ pg_bulkload tsv.ctl -o $'DELIMITER=\t'</pre>
+You can use three character combinations as separators:
+<pre>pg_bulkload tsv.ctl -o "DELIMITER=+-|"</pre>
 </dd>
 <dt>QUOTE = quote_character</dt>
 <dd>

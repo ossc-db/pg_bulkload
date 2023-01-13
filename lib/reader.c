@@ -53,6 +53,7 @@ ReaderCreate(char *type)
 		"CSV",
 		"TUPLE",
 		"FUNCTION",
+		"TEXT"
 	};
 	const ParserCreate values[] =
 	{
@@ -61,6 +62,7 @@ ReaderCreate(char *type)
 		CreateCSVParser,
 		CreateTupleParser,
 		CreateFunctionParser,
+		CreateTextParser,
 	};
 
 	Reader	   *self;

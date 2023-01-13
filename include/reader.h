@@ -75,6 +75,7 @@ extern Parser *CreateBinaryParser(void);
 extern Parser *CreateCSVParser(void);
 extern Parser *CreateTupleParser(void);
 extern Parser *CreateFunctionParser(void);
+extern Parser *CreateTextParser(void);
 
 #define ParserInit(self, checker, infile, relid, multi_process, collation)		((self)->init((self), (checker), (infile), (relid), (multi_process), (collation)))
 #define ParserRead(self, checker)					((self)->read((self), (checker)))

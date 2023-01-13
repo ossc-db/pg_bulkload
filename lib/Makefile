@@ -10,6 +10,7 @@ SRCS = \
 	parser_csv.c \
 	parser_function.c \
 	parser_tuple.c \
+	parser_text.c \
 	pg_btree.c \
 	pg_bulkload.c \
 	pg_strutil.c \
