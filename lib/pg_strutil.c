@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_strutil.c
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -20,7 +20,6 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "utils/int8.h"
 #include "utils/syscache.h"
 
 #include "pg_strutil.h"
@@ -32,6 +31,12 @@
 
 #if PG_VERSION_NUM >= 100000
 #include "utils/regproc.h"
+#endif
+
+#if PG_VERSION_NUM >= 150000
+#include "utils/numeric.h"
+#else
+#include "utils/int8.h"
 #endif
 
 #if PG_VERSION_NUM >= 90400
@@ -151,8 +156,13 @@ int
 ParseInt32(char *value, int minValue)
 {
 	int32	i;
-	
+
+#if PG_VERSION_NUM >= 150000
+	i = pg_strtoint32(value);
+#else
 	i = pg_atoi(value, sizeof(int32), 0);
+#endif
+
 	if (i < minValue)
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -348,7 +358,10 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		const char *startptr;
 		char	   *str;
 		int64		val64;
-
+		
+#if PG_VERSION_NUM >= 150000
+		char       *tmpendptr;
+#endif
 		/* parse plus operator and minus operator */
 		minus = false;
 		while (*p == '+' || *p == '-')
@@ -383,7 +396,14 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		snprintf(str, len + 2, "%c%s", minus ? '-' : '+', startptr);
 
 		/* could be an oversize integer as well as a float ... */
+#if PG_VERSION_NUM >= 150000
+		errno = 0;
+		val64 = strtoi64(str, &tmpendptr, 10);
+
+		if (errno == 0 && *tmpendptr == '\0')
+#else
 		if (scanint8(str, true, &val64))
+#endif
 		{
 			/*
 			 * It might actually fit in int32. Probably only INT_MIN can
@@ -617,8 +637,11 @@ ParseFunction(const char *value, bool argistype)
 
 	foreach (l, names)
 	{
-		Value  *v = lfirst(l);
-
+#if PG_VERSION_NUM >= 150000
+		String *v = lfirst_node(String, l);
+#else
+		Value *v = lfirst(l);
+#endif
 		pfree(strVal(v));
 		pfree(v);
 	}

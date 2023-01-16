@@ -1,7 +1,7 @@
 #
 # pg_bulkload: bin/Makefile
 #
-#    Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 #
 SRCS = pg_bulkload.c recovery.c pgut/pgut.c pgut/pgut-fe.c pgut/pgut-list.c
 OBJS = $(SRCS:.c=.o)
@@ -64,6 +64,8 @@ sql/init-13.sql:
 	cp sql/init-extension-v2.sql sql/init-13.sql
 sql/init-14.sql:
 	cp sql/init-extension-v2.sql sql/init-14.sql
+sql/init-15.sql:
+	cp sql/init-extension-v3.sql sql/init-15.sql
 
 sql/load_bin.sql: sql/load_bin-$(MAJORVERSION).sql
 	cp sql/load_bin-$(MAJORVERSION).sql sql/load_bin.sql
@@ -85,6 +87,8 @@ sql/load_bin-13.sql:
 	cp sql/load_bin-v2.sql sql/load_bin-13.sql
 sql/load_bin-14.sql:
 	cp sql/load_bin-v2.sql sql/load_bin-14.sql
+sql/load_bin-15.sql:
+	cp sql/load_bin-v2.sql sql/load_bin-15.sql
 
 sql/load_csv.sql: sql/load_csv-$(MAJORVERSION).sql
 	cp sql/load_csv-$(MAJORVERSION).sql sql/load_csv.sql
@@ -106,6 +110,8 @@ sql/load_csv-13.sql:
 	cp sql/load_csv-v2.sql sql/load_csv-13.sql
 sql/load_csv-14.sql:
 	cp sql/load_csv-v2.sql sql/load_csv-14.sql
+sql/load_csv-15.sql:
+	cp sql/load_csv-v3.sql sql/load_csv-15.sql
 
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
@@ -127,6 +133,8 @@ sql/load_filter-13.sql:
 	cp sql/load_filter-v3.sql sql/load_filter-13.sql
 sql/load_filter-14.sql:
 	cp sql/load_filter-v3.sql sql/load_filter-14.sql
+sql/load_filter-15.sql:
+	cp sql/load_filter-v3.sql sql/load_filter-15.sql
 
 sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
 	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
@@ -148,6 +156,8 @@ sql/load_function-13.sql:
 	cp sql/load_function-v3.sql sql/load_function-13.sql
 sql/load_function-14.sql:
 	cp sql/load_function-v3.sql sql/load_function-14.sql
+sql/load_function-15.sql:
+	cp sql/load_function-v3.sql sql/load_function-15.sql
 
 sql/write_bin.sql: sql/write_bin-$(MAJORVERSION).sql
 	cp sql/write_bin-$(MAJORVERSION).sql sql/write_bin.sql
@@ -169,18 +179,19 @@ sql/write_bin-13.sql:
 	cp sql/write_bin-v2.sql sql/write_bin-13.sql
 sql/write_bin-14.sql:
 	cp sql/write_bin-v2.sql sql/write_bin-14.sql
-
+sql/write_bin-15.sql:
+	cp sql/write_bin-v2.sql sql/write_bin-15.sql
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
-	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
-	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
-	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
-	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
-	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14}.sql
+	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
+	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
+	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
+	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
+	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
+	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15}.sql
 
 installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 

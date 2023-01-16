@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_btree.c
  *
- *	  Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -41,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 150000
+#if PG_VERSION_NUM >= 160000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 150000
+#include "nbtree/nbtsort-15.c"
 #elif PG_VERSION_NUM >= 140000
 #include "nbtree/nbtsort-14.c"
 #elif PG_VERSION_NUM >= 130000
@@ -245,6 +247,9 @@ IndexSpoolBegin(ResultRelInfo *relinfo, bool enforceUnique)
 #if PG_VERSION_NUM >= 90300
 			spools[i] = _bt_spoolinit(heapRel,indices[i],
 					enforceUnique ? indices[i]->rd_index->indisunique: false,
+#if PG_VERSION_NUM >= 150000
+					indices[i]->rd_index->indnullsnotdistinct, 
+#endif
 					false);
 #else
 			spools[i] = _bt_spoolinit(indices[i],
@@ -552,7 +557,13 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 			compare = compare_indextuple(itup, itup2, indexScanKey,
 										 keysz, tupdes, &hasnull);
 
-			if (compare == 0 && !hasnull && btspool->isunique)
+			if (compare == 0 && 
+#if PG_VERSION_NUM >= 150000
+			(!hasnull || btspool->nulls_not_distinct)
+#else
+			!hasnull 
+#endif		
+			&& btspool->isunique)
 			{
 				ItemPointerData t_tid2;
 
@@ -628,7 +639,13 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 
 				compare = compare_indextuple(itup, next_itup, indexScanKey,
 											 keysz, tupdes, &hasnull);
-				if (compare < 0 || hasnull)
+				if (compare < 0 || 
+#if PG_VERSION_NUM >= 150000
+				(hasnull && !btspool->nulls_not_distinct)
+#else
+				hasnull
+#endif		
+				)
 					break;
 
 				if (compare > 0)
@@ -718,7 +735,11 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 #if PG_VERSION_NUM >= 90100
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
+#if PG_VERSION_NUM >= 150000
+		RelationGetSmgr(wstate->index);
+#else
 		RelationOpenSmgr(wstate->index);
+#endif
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
 #else

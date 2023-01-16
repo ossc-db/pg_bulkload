@@ -6,7 +6,7 @@
  * Although nbtsort-XX.c is the copy of postgresql core's src/backend/access/nbtree/nbtsort.c,
  * this file has functions which related to nbtsort, but is not implemented core's code.
  *
- *	  Copyright (c) 2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2021-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 
@@ -15,7 +15,11 @@
  * create and initialize a spool structure
  */
 static BTSpool *
-_bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
+_bt_spoolinit(Relation heap, Relation index, bool isunique, 
+#if PG_VERSION_NUM >= 150000
+			bool nulls_not_distinct, 
+#endif
+			bool isdead)
 {
 	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
 	int			btKbytes;
@@ -23,6 +27,9 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
 	btspool->heap = heap;
 	btspool->index = index;
 	btspool->isunique = isunique;
+#if PG_VERSION_NUM >= 150000
+	btspool->nulls_not_distinct = nulls_not_distinct;
+#endif
 
 	/*
 	 * We size the sort area as maintenance_work_mem rather than work_mem to
@@ -34,7 +41,10 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
 	 */
 	btKbytes = isdead ? work_mem : maintenance_work_mem;
 	btspool->sortstate = tuplesort_begin_index_btree(heap, index, isunique,
-													 btKbytes, NULL, false);
+#if PG_VERSION_NUM >= 150000
+													nulls_not_distinct,
+#endif
+													btKbytes, NULL, false);
 
 	return btspool;
 }

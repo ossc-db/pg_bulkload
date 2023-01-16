@@ -69,7 +69,7 @@ Also in version 3.1, parallel loading works more effectively than before.
 </p>
 
 <p>
-There are some bugs in old version of 3.1. Please check <a href="#releasenote">Release notes</a>, and use newer versions. 
+There are some bugs in old version of 3.1. Please check <a href="#releasenote">Release notes</a>, and use newer versions.
 </p>
 
 <h2 id="examples">Examples</h2>
@@ -80,11 +80,11 @@ pg_bulkload provides two programs.
 
 <h3>postgresql script</h3>
 <p>
-This is a wrapper command for <code>pg_ctl</code>, which starts and stops PostgreSQL 
-server.  postgresql script invokes <code>pg_ctl</code> internally.   postgresql script 
+This is a wrapper command for <code>pg_ctl</code>, which starts and stops PostgreSQL
+server.  postgresql script invokes <code>pg_ctl</code> internally.   postgresql script
 provides very important pg_bulkload functionality i.e. recovery.   To improve
 performance, pg_bulkload bypasses some of PostgreSQL's internal functionality
-such as WAL.   Therefore, pg_bulkload needs to provide separate recovery 
+such as WAL.   Therefore, pg_bulkload needs to provide separate recovery
 procedure before usual PostgreSQL's recovery is performed.   postgresql script
 provides this feature.
 </p>
@@ -98,7 +98,7 @@ Notice that DIRECT mode is <b>the default settings</b>.
 <h3>pg_bulkload</h3>
 <p>
 This program is used to load the data.
-Internally, it invokes PostgreSQL's user-defined function called pg_bulkload() and perform the loading.   
+Internally, it invokes PostgreSQL's user-defined function called pg_bulkload() and perform the loading.
 pg_bulkload() function will be installed during pg_bulkload installation.
 </p>
 
@@ -309,7 +309,7 @@ The method to load data. The default is DIRECT.
   <li>PARALLEL : Same as "WRITER=DIRECT" and "MULTI_PROCESS=YES".
                  If PARALLEL is specified, <a href="#MULTI_PROCESS">MULTI_PROCESS</a> is ignored.
                  If password authentication is configured to the database to load,
-                 you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+                 you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details.
 </ul>
 </dd>
 
@@ -492,7 +492,7 @@ If NO, we use only single thread for them instead of doing parallel processing.
 The default is NO.
 If WRITER is PARALLEL, MULTI_PROCESS is ignored.
 If password authentication is configured to the database to load,
-you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details. 
+you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details.
 Please make sure when enabling MULTI_PROCESS that no other PostgreSQL backend
 process is trying to modify the schema of the table, because it may cause the
 schema of the table as seen by the reader and the writer processes to differ
@@ -707,24 +707,24 @@ If you use pg_bulkload in Windows operating system, postgresql script is not inc
 <p>
 Because of bypassing WAL, archive recovery by PITR is not available.
 This does not mean that it can be done PITR without loaded tables data.
-If you would like to use PITR, take a full backup of the 
+If you would like to use PITR, take a full backup of the
 database after load via pg_bulkload.
 If you are using streaming replication, you need to re-create your standby based on the backup set which is taken after pg_bulkload.
 </p>
 
 <h4>Load status file in $PGDATA/pg_bulkload</h4>
-<p>  
-You must not remove the load status file (*.loadstatus) found in 
+<p>
+You must not remove the load status file (*.loadstatus) found in
 <code>$PGDATA/pg_bulkload</code> directory.
 This file is needed in pg_bulkload crash recovery.
 </p>
 
 <h4>Do not use <code>kill -9</code></h4>
 <p>
-Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as possible.   If you did this, you 
-must invoke postgresql script to perform pg_bulkload recovery and restart 
+Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as possible.   If you did this, you
+must invoke postgresql script to perform pg_bulkload recovery and restart
 PostgreSQL to continue.
-<p>  
+<p>
 
 <h4>Authentication can fail when MULTI_PROCESS=YES</h4>
 <p> When MULTI_PROCESS=YES and password is required to connect from localhost
@@ -871,12 +871,19 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 9.6, 10, 11, 12, 13, 14</dd>
+<dd>PostgreSQL 9.6, 10, 11, 12, 13, 14, 15</dd>
 <dt>OS</dt>
 <dd>RHEL 7/8</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.20</h4>
+<ul>
+<li>Added support for PostgreSQL 15</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.19</h4>
@@ -1019,7 +1026,7 @@ From pg_bulkload-VERSIONX_X_X-X.pgXX.rhelX.rpm to pg_bulkload-X.X.XX-X.pgXX.rhel
   <a href="index.html">Top</a> &gt;
   <a href="pg_bulkload.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

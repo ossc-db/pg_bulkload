@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/common.h
  *
- *	  Copyright (c) 2010-2021, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2010-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -12,7 +12,7 @@
 #ifndef COMMON_H_INCLUDED
 #define COMMON_H_INCLUDED
 
-#define PG_BULKLOAD_VERSION "3.1.19"
+#define PG_BULKLOAD_VERSION "3.1.20"
 
 
 #ifndef PG_BULKLOAD_PRINTF_ATTRIBUTE

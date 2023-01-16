@@ -1,0 +1,4 @@
+TABLE=unique_tbl1
+WRITER=DIRECT
+TYPE=CSV
+

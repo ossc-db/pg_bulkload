@@ -1,5 +1,5 @@
 # SPEC file for pg_bulkload on PostgreSQL 12
-# Copyright (C) 2009-2021 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (C) 2009-2023 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
 %define pgmajorversion  12
@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.19
+Version:        3.1.20
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -31,7 +31,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 %package llvmjit
 Requires: postgresql12-server, postgresql12-llvmjit
-Requires: pg_bulkload = 3.1.19
+Requires: pg_bulkload = 3.1.20
 Summary:  Just-in-time compilation support for pg_bulkload
 
 %description llvmjit
@@ -99,6 +99,9 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Thu Jan 13 2023 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.20-1
+- Support PostgreSQL 15
+- Update to pg_bulkload 3.1.20
 * Mon Oct 11 2021 - Masahiro ikeda <masahiro.ikeda.us@hco.ntt.co.jp> 3.1.19-1
 - Support PostgreSQL 14
 - Update to pg_bulkload 3.1.19
