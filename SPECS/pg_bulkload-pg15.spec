@@ -30,7 +30,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql14-server, postgresql14-llvmjit
+Requires: postgresql15-server, postgresql15-llvmjit
 Requires: pg_bulkload = 3.1.20
 Summary:  Just-in-time compilation support for pg_bulkload
 
