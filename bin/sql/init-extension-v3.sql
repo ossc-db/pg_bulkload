@@ -39,6 +39,7 @@ CREATE INDEX idx_hash_fn ON customer USING hash ((abs(c_w_id) + c_d_id));
 ---------------------------------------------------------------------------
 -- load_csv test csv9 
 CREATE TABLE unique_tbl1 (i int, t text);
+-- default is NULLS DISTINCT
 CREATE UNIQUE INDEX unique_idx1 ON unique_tbl1 (i) NULLS DISTINCT;
 CREATE TABLE unique_tbl2 (i int, t text);
 CREATE UNIQUE INDEX unique_idx2 ON unique_tbl2 (i) NULLS NOT DISTINCT;

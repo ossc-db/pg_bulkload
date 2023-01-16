@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/common.h
  *
- *	  Copyright (c) 2010-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2010-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**

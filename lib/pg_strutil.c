@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/pg_strutil.c
  *
- *	  Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 /**
@@ -405,7 +405,7 @@ GetNextArgument(const char *ptr, char **arg, Oid *argtype, const char **endptr, 
 		if (scanint8(str, true, &val64))
 #endif
 		{
-		    /*
+			/*
 			 * It might actually fit in int32. Probably only INT_MIN can
 			 * occur, but we'll code the test generally just to be sure.
 			 */

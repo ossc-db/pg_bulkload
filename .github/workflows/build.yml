@@ -24,7 +24,6 @@ jobs:
           - "11"
           - "10"
           - "9.6"
-          - "9.5"
     env:
       CACHE_VERSION: 20221222  # to identify cache version
 

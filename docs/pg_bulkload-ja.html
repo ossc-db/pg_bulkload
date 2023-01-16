@@ -391,7 +391,7 @@ FILTER オプションは、「TYPE=FUNCTION」と FILTER の両方を指定し�
 <dd>
 ロード時に CHECK 制約を検査するかどうかを指定します。
 デフォルトは NO です。
-CHECK_CONSTRAINTS を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
+CHECK_CONSTRAINTS を「WRITER=BINARY」と同時に指定した場合はエラーになります。
 </dd>
 
 <dt>PARSE_ERRORS = n </dt>
@@ -408,7 +408,7 @@ CHECK_CONSTRAINTS を「WRITER=BINARY」と同時に指定した場合はエラ�
 デフォルトは 0 です。
 一意制約に違反するレコードの数がこの値を超えた場合は、<strong>その時点でロールバックしてロード処理全体を取り消します</strong>。
 エラーを1件も許容しない場合は 0 を、全てのエラーを許容する場合は -1 または INFINITE を指定します。
-DUPLICATE_ERRORS を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
+DUPLICATE_ERRORS を「WRITER=BINARY」と同時に指定した場合はエラーになります。
 </dd>
 
 <dt>ON_DUPLICATE_KEEP = NEW | OLD</dt>
@@ -416,7 +416,7 @@ DUPLICATE_ERRORS を「WRITER=BINARY」と同時に指定した場合はエラ�
 削除されたレコードの内容は DUPLICATE_BADFILE に書き出されます。
 デフォルトは NEW です。
 このオプションを利用する場合、DUPLICATE_ERRORS も 0 より大きな数に設定する必要があります。
-ON_DUPLICATE_KEEP を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
+ON_DUPLICATE_KEEP を「WRITER=BINARY」と同時に指定した場合はエラーになります。
 <ul>
   <li>NEW : 入力データに存在するレコードを残し、既にテーブルに存在していたレコードを削除します。
             入力データ内に一意制約違反となるレコードが存在していた場合は、ファイルの末尾側のレコードを残します。</li>
@@ -445,7 +445,7 @@ ON_DUPLICATE_KEEP を「WRITER=BINARY」と同時に指定した場合はエラ�
 このファイルには、入力ファイルの形式によらず CSV 形式で記録されます。
 相対パスで指定した場合の扱いは <a href="#INPUT">INPUT</a> と同じです。
 デフォルトは $PGDATA/pg_bulkload/&lt;タイムスタンプ&gt;_&lt;DB名&gt;_&lt;スキーマ名&gt;_&lt;テーブル名&gt;.dup.csv です。
-DUPLICATE_BADFILE を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
+DUPLICATE_BADFILE を「WRITER=BINARY」と同時に指定した場合はエラーになります。
 </dd>
 
 <dt>TRUNCATE = YES | NO</dt>
@@ -453,7 +453,7 @@ DUPLICATE_BADFILE を「WRITER=BINARY」と同時に指定した場合はエラ�
 YES の場合は、データロードの前にテーブルから全ての行を削除します。
 内部的には SQL の TRUNCATE 相当の処理を行っています。
 NO の場合は削除しません。デフォルトは NO です。
-TRUNCATE を「WRITER=BINARY」と同時に指定した場合はエラーになります。 
+TRUNCATE を「WRITER=BINARY」と同時に指定した場合はエラーになります。
 </dd>
 
 <dt>VERBOSE = YES | NO</dt>
@@ -949,7 +949,7 @@ pg_bulkload-VERSIONX_X_X-X.pgXX.rhelX.rpmからpg_bulkload-X.X.XX-X.pgXX.rhelX.r
   <a href="index_ja.html">Top</a> &gt;
   <a href="pg_bulkload-ja.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

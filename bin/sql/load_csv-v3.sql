@@ -111,6 +111,10 @@ SET enable_bitmapscan = off;
 SELECT * FROM unique_tbl1 ORDER BY i;
 
 -- test unique nulls not distinct. (Do not allow multiple nulls)
+-- 8 test pattern:
+-- initial or append load (TRUNCATE=YES or NO)
+-- keep new or old if records are duplicated (ON_DUPLICATE_KEEP=NEW or NO)
+-- ignore duplication error or not (DUPLICATE_ERRORS=50 or 0)
 \! pg_bulkload -d contrib_regression data/csv9.ctl -i data/data9.csv -o "VERBOSE=YES" -o "ON_DUPLICATE_KEEP=NEW" -o "DUPLICATE_ERRORS=0" -o "TRUNCATE=YES" -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
 SET enable_seqscan = off;
 SET enable_indexscan = on;

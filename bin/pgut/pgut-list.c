@@ -2,8 +2,8 @@
  *
  * pgut-list.c : copied from postgres/nodes/list.c
  *
- * Copyright (c) 2009-2022, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Copyright (c) 2009-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *-------------------------------------------------------------------------
