@@ -70,4 +70,8 @@ clean: subclean
 subclean:
 	rm -f nbtsort.c
 
+ifneq ($(PORTNAME), darwin)
 LDFLAGS+=-Wl,--build-id
+else
+LDFLAGS+=-Wl
+endif
