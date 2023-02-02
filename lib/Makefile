@@ -29,7 +29,7 @@ EXTENSION = pg_bulkload
 
 #supports both EXTENSION (for >=9.1) and without_EXTENSION (for <PG 9.1)
 DATA_built = pg_bulkload.sql
-DATA = pg_bulkload--1.0.sql pg_bulkload--unpackaged--1.0.sql uninstall_pg_bulkload.sql 
+DATA = pg_bulkload--3.1.20.sql pg_bulkload--unpackaged--3.1.2.sql uninstall_pg_bulkload.sql 
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq) -lpthread
