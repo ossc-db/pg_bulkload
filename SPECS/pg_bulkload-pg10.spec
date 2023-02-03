@@ -54,7 +54,7 @@ install -m 755 lib/pg_bulkload.so              %{buildroot}%{_libdir}/pg_bulkloa
 install -m 644 lib/pg_bulkload.sql             %{buildroot}%{pg_contribdir}/pg_bulkload.sql
 install -m 644 lib/uninstall_pg_bulkload.sql   %{buildroot}%{pg_contribdir}/uninstall_pg_bulkload.sql
 install -m 644 lib/pg_bulkload.control         %{buildroot}%{pg_extensiondir}/pg_bulkload.control
-install -m 644 lib/pg_bulkload--3.1.20sql        %{buildroot}%{pg_extensiondir}/pg_bulkload--3.1.20.sql
+install -m 644 lib/pg_bulkload--3.1.20.sql        %{buildroot}%{pg_extensiondir}/pg_bulkload--3.1.20.sql
 install -m 644 lib/pg_bulkload--unpackaged--3.1.20.sql         %{buildroot}%{pg_extensiondir}/pg_bulkload--unpackaged--3.1.20.sql
 
 # sample_*.ctl files are needed for rpm users.

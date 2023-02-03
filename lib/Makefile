@@ -27,9 +27,16 @@ MODULE_big = pg_bulkload
 
 EXTENSION = pg_bulkload
 
+# set pg_bulkload version
+BULKLOAD_VERSION = 3.1.20
+
 #supports both EXTENSION (for >=9.1) and without_EXTENSION (for <PG 9.1)
-DATA_built = pg_bulkload.sql
-DATA = pg_bulkload--3.1.20.sql pg_bulkload--unpackaged--3.1.2.sql uninstall_pg_bulkload.sql 
+DATA_built = pg_bulkload.sql \
+	pg_bulkload--$(BULKLOAD_VERSION).sql \
+	pg_bulkload--unpackaged--$(BULKLOAD_VERSION).sql \
+	uninstall_pg_bulkload.sql \
+	pg_bulkload.control
+
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq) -lpthread
@@ -71,3 +78,17 @@ subclean:
 	rm -f nbtsort.c
 
 LDFLAGS+=-Wl,--build-id
+
+pg_bulkload--$(BULKLOAD_VERSION).sql: pg_bulkload.sql.in
+	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
+
+pg_bulkload.sql: pg_bulkload--$(BULKLOAD_VERSION).sql
+	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
+
+pg_bulkload--unpackaged--$(BULKLOAD_VERSION).sql: pg_bulkload--unpackaged.sql.in
+	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
+
+uninstall_pg_bulkload.sql: uninstall_pg_bulkload.sql.in
+
+pg_bulkload.control: pg_bulkload.control.in
+	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
