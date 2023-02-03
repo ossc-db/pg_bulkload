@@ -31,7 +31,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 %package llvmjit
 Requires: postgresql15-server, postgresql15-llvmjit
-Requires: pg_bulkload = 3.1.20
+Requires: pg_bulkload = %{version}
 Summary:  Just-in-time compilation support for pg_bulkload
 
 %description llvmjit
@@ -65,8 +65,8 @@ install -m 644 lib/pg_bulkload.bc %{buildroot}%{_bcdir}/pg_bulkload.bc
 install -m 644 lib/pg_bulkload.sql             %{buildroot}%{pg_contribdir}/pg_bulkload.sql
 install -m 644 lib/uninstall_pg_bulkload.sql   %{buildroot}%{pg_contribdir}/uninstall_pg_bulkload.sql
 install -m 644 lib/pg_bulkload.control         %{buildroot}%{pg_extensiondir}/pg_bulkload.control
-install -m 644 lib/pg_bulkload--3.1.20.sql        %{buildroot}%{pg_extensiondir}/pg_bulkload--3.1.20.sql
-install -m 644 lib/pg_bulkload--unpackaged--3.1.20.sql         %{buildroot}%{pg_extensiondir}/pg_bulkload--unpackaged--3.1.20.sql
+install -m 644 lib/pg_bulkload--%{version}.sql        %{buildroot}%{pg_extensiondir}/pg_bulkload--%{version}.sql
+install -m 644 lib/pg_bulkload--unpackaged--%{version}.sql         %{buildroot}%{pg_extensiondir}/pg_bulkload--unpackaged--%{version}.sql
 
 # sample_*.ctl files are needed for rpm users.
 # %{sname}-%{version} is the same path with "%setup -n"'s argument.
@@ -85,8 +85,8 @@ install -m 644 docs/sample_csv.ctl              %{buildroot}%{pg_contribdir}/sam
 %{pg_contribdir}/sample_bin.ctl
 %{pg_contribdir}/sample_csv.ctl
 %{pg_extensiondir}/pg_bulkload.control
-%{pg_extensiondir}/pg_bulkload--3.1.20.sql
-%{pg_extensiondir}/pg_bulkload--unpackaged--3.1.20.sql
+%{pg_extensiondir}/pg_bulkload--%{version}.sql
+%{pg_extensiondir}/pg_bulkload--unpackaged--%{version}.sql
 
 %files llvmjit
 %defattr(0755,root,root)
