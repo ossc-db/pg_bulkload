@@ -858,6 +858,21 @@ The following command will install pg_bulkload:
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
+<h2 id="upgrade">Upgrade</h2>
+<p>If you are upgrading from a previous version of pg_bulkload, just drop the old version from the database and install the new version.</p>
+<p>The following three steps can be used to upgrade pg_bulkload.</p>
+<ol>
+<li>Execute a DROP EXTENSION statement to drop the old version of pg_bulkload from the database.</li>
+<pre>database_name# drop extension pg_bulkload;
+DROP EXTENSION</pre>
+<li>Remove the old version of pg_bulkload.</li>
+<p>If installed from source code:</p>
+<pre># make USE_PGXS=1 uninstall</pre>
+<p>If installed from  RPM package:</p> 
+<pre># rpm -e pg_bulkload-&lt;version&gt;.rpm</pre>
+<li>Follow the <a href="#install">Installation</a> instructions to install a new version of pg_bulkload.</li>
+</ol>
+
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>

@@ -30,6 +30,6 @@ bin/results
 
 # Some more
 lib/exports.list
-lib/*.sql
+lib/pg_bulkload--*.sql
 lib/pg_bulkload.control
 util/pg_timestamp.sql

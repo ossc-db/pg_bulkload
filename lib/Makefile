@@ -32,7 +32,6 @@ BULKLOAD_VERSION = $(shell grep "PG_BULKLOAD_VERSION" ../include/common.h | cut 
 
 #supports EXTENSION (for >=9.1)
 DATA_built = pg_bulkload--$(BULKLOAD_VERSION).sql \
-	pg_bulkload--unpackaged--$(BULKLOAD_VERSION).sql \
 	pg_bulkload.control
 
 
@@ -80,9 +79,6 @@ LDFLAGS+=-Wl,--build-id
 pg_bulkload--$(BULKLOAD_VERSION).sql: pg_bulkload.sql.in
 	sed 's,MODULE_PATHNAME,$$libdir/$(MODULE_big),g' $< \
 	| sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' > $@
-
-pg_bulkload--unpackaged--$(BULKLOAD_VERSION).sql: pg_bulkload--unpackaged.sql.in
-	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
 
 pg_bulkload.control: pg_bulkload.control.in
 	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@

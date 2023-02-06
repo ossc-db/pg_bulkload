@@ -756,7 +756,7 @@ CHECK 制約を適用する場合は "CHECK_CONSTRAINTS=YES" を指定してく�
 <pre>$ cd pg_bulkload
 $ make USE_PGXS=1
 $ su
-$ make USE_PGXS=1 install</pre>
+# make USE_PGXS=1 install</pre>
 
 <p>CREATE EXTENSION文を用いて pg_bulkload 用の関数を登録します。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
 <pre>$ psql database_name
@@ -767,10 +767,10 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 pg_bulkload インストール前に postgresql パッケージがインストールされていることを確認してください。
 </p>
 <p> 次のコマンドで pg_bulkload をインストールします。</p>
-<pre> # rpm -ivh pg_bulkload-&lt;version&gt;.rpm</pre>
+<pre># rpm -ivh pg_bulkload-&lt;version&gt;.rpm</pre>
 
 <p>以下のコマンドでインストールされたかどうかを確認できます。</p>
-<pre> # rpm -qa | grep pg_bulkload</pre>
+<pre># rpm -qa | grep pg_bulkload</pre>
 
 <p>また、以下のコマンドで、各ファイルがどこにインストールされたかを確認できます。</p>
 <pre># rpm -qs pg_bulkload </pre>
@@ -781,6 +781,21 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
 <p>なお、regression testを行うにはPostgreSQLサーバを起動させた状態で、以下のコマンドを実行してください。</p>
 <pre>$ make installcheck</pre>
+
+<h2 id="upgrade">アップグレード方法</h2>
+<p>pg_bulkload を新しいバージョンにアップグレードする場合、前のバージョンを削除する必要があります。</p>
+<p>次の3ステップにより、pg_bulkloadをアップグレードすることが可能です。</p>
+<ol>
+<li>DROP EXTENSION文を実行し、古いバージョンの pg_bulkload を database からドロップします。</li>
+<pre>database_name# drop extension pg_bulkload;
+DROP EXTENSION</pre>
+<li>古いバージョンの pg_bulkload を削除します。</li>
+<p>ソースコードからインストールした場合:</p>
+<pre># make USE_PGXS=1 uninstall</pre>
+<p>RPM パッケージからインストールした場合:</p>
+<pre># rpm -e pg_bulkload-&lt;version&gt;.rpm</pre>
+<li><a href="#install">インストール方法</a>の手順に沿って、新しいバージョンの pg_bulkload をインストールします。</li>
+</ol>
 
 <h2 id="requirement">動作環境</h2>
 <dl>
