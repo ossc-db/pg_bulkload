@@ -1,4 +1,8 @@
-/* pg_bulkload/pg_bulkload--BULKLOAD_VERSION.sql */
+/*
+ * pg_bulkload--BULKLOAD_VERSION.sql
+ * 
+ *    Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_bulkload" to load this file. \quit
@@ -17,4 +21,4 @@ CREATE FUNCTION pgbulkload.pg_bulkload(
 	OUT user_time float8,
 	OUT duration float8
 )
-AS '$libdir/pg_bulkload', 'pg_bulkload' LANGUAGE C VOLATILE STRICT;
+AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C VOLATILE STRICT;

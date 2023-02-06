@@ -28,7 +28,7 @@ MODULE_big = pg_bulkload
 EXTENSION = pg_bulkload
 
 # set pg_bulkload version
-BULKLOAD_VERSION = 3.1.20
+BULKLOAD_VERSION = $(shell grep "PG_BULKLOAD_VERSION" ../include/common.h | cut -d " " -f 3 | tr -d '"')
 
 #supports both EXTENSION (for >=9.1) and without_EXTENSION (for <PG 9.1)
 DATA_built = pg_bulkload.sql \
@@ -80,10 +80,13 @@ subclean:
 LDFLAGS+=-Wl,--build-id
 
 pg_bulkload--$(BULKLOAD_VERSION).sql: pg_bulkload.sql.in
-	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
+	sed 's,MODULE_PATHNAME,$$libdir/$(MODULE_big),g' $< \
+	| sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' > $@
 
-pg_bulkload.sql: pg_bulkload--$(BULKLOAD_VERSION).sql
-	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
+pg_bulkload.sql: pg_bulkload.sql.in
+	sed 's,MODULE_PATHNAME,$$libdir/$(MODULE_big),g' $< \
+	| sed 's,--BULKLOAD_VERSION,,g' \
+	| sed  -e '7,9d' -e '10i BEGIN;\n' -e '24a \\nCOMMIT;'> $@;
 
 pg_bulkload--unpackaged--$(BULKLOAD_VERSION).sql: pg_bulkload--unpackaged.sql.in
 	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
