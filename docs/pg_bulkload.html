@@ -834,11 +834,7 @@ $ make USE_PGXS=1
 $ su
 $ make USE_PGXS=1 install</pre>
 
-<p>Then, register functions to the database.</p>
-<pre>$ postgresql start
-$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
-
-<p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
+<p>You can use CREATE EXTENSION to register functions (Must be database superuser).</p>
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
@@ -858,20 +854,14 @@ The following command will install pg_bulkload:
 <p>You can find where files are installed:</p>
 <pre># rpm -qs pg_bulkload </pre>
 
-<p>Finally, register functions to the database.
-The script pg_bulkload.sql is in the path diplayed by rpm -qs.
-$PGSHARE is used instead in the following example:</p>
-<pre>$ postgresql start
-$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
-
-<p>You can also use CREATE EXTENSION to register functions (Must be database superuser).</p>
+<p>As similar to installing from source code, You can use CREATE EXTENSION to register functions (Must be database superuser).</p>
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 9.6, 10, 11, 12, 13, 14, 15</dd>
+<dd>PostgreSQL 10, 11, 12, 13, 14, 15</dd>
 <dt>OS</dt>
 <dd>RHEL 7/8</dd>
 </dl>

@@ -758,11 +758,7 @@ $ make USE_PGXS=1
 $ su
 $ make USE_PGXS=1 install</pre>
 
-<p>pg_bulkload 用の関数を登録します。</p>
-<pre>$ postgresql start
-$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
-
-<p>PostgreSQL9.2以降では、sqlファイルによる登録の他に、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
+<p>CREATE EXTENSION文を用いて pg_bulkload 用の関数を登録します。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
@@ -779,11 +775,7 @@ pg_bulkload インストール前に postgresql パッケージがインスト�
 <p>また、以下のコマンドで、各ファイルがどこにインストールされたかを確認できます。</p>
 <pre># rpm -qs pg_bulkload </pre>
 
-<p>pg_bulkload 用の関数を登録します。上記 rpm -qs の実行結果で表示される pg_bulkload.sql のパスを確認してください。以下の例では環境変数 $PGSHARE を利用しています。</p>
-<pre>$ postgresql start
-$ psql -f $PGSHARE/extension/pg_bulkload.sql database_name</pre>
-
-<p>ソースコードからのインストール同様、CREATE EXTENSION文を用いた登録も可能です。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
+<p>ソースコードからのインストール同様、CREATE EXTENSION文を用いて pg_bulkload 用の関数を登録します。ただし、CREATE EXTENSION文はDBスーパーユーザにて実行してください。</p>
 <pre>$ psql database_name
 database_name=# CREATE EXTENSION pg_bulkload;</pre>
 
@@ -793,7 +785,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 9.6, 10, 11, 12, 13, 14, 15</dd>
+<dd>PostgreSQL 10, 11, 12, 13, 14, 15</dd>
 <dt>OS</dt>
 <dd>RHEL 7/8</dd>
 </dl>
