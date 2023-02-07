@@ -34,7 +34,6 @@ BULKLOAD_VERSION = $(shell grep "PG_BULKLOAD_VERSION" ../include/common.h | cut 
 DATA_built = pg_bulkload--$(BULKLOAD_VERSION).sql \
 	pg_bulkload.control
 
-
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq) -lpthread
 

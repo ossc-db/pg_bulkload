@@ -185,7 +185,7 @@ NOTICE: BULK LOAD END
 
 <dt>-U USERNAME<br />
 --username=USERNAME</dt>
-<dd>接続するユーザ名を指定します。pg_bulkloadの実行ユーザは、スーパユーザ権限が必要です。</dd>
+<dd>接続するユーザ名を指定します。pg_bulkloadの実行ユーザは、スーパーユーザ権限が必要です。</dd>
 
 <dt>-W<br />
 --password</dt>
@@ -787,7 +787,7 @@ database_name=# CREATE EXTENSION pg_bulkload;</pre>
 <p>次の3ステップにより、pg_bulkloadをアップグレードすることが可能です。</p>
 <ol>
 <li>DROP EXTENSION文を実行し、古いバージョンの pg_bulkload を database からドロップします。</li>
-<pre>database_name# drop extension pg_bulkload;
+<pre>database_name# DROP EXTENSION pg_bulkload;
 DROP EXTENSION</pre>
 <li>古いバージョンの pg_bulkload を削除します。</li>
 <p>ソースコードからインストールした場合:</p>
