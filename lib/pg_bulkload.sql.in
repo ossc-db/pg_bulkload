@@ -1,14 +1,15 @@
 /*
- * pg_bulkload.sql
+ * pg_bulkload--BULKLOAD_VERSION.sql
  * 
  *    Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
--- Adjust this setting to control where the objects get created.
-BEGIN;
+-- complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION pg_bulkload" to load this file. \quit
 
 CREATE SCHEMA pgbulkload;
 
+-- Adjust this setting to control where the objects get created.
 CREATE FUNCTION pgbulkload.pg_bulkload(
 	IN options text[],
 	OUT skip bigint,
@@ -21,5 +22,3 @@ CREATE FUNCTION pgbulkload.pg_bulkload(
 	OUT duration float8
 )
 AS 'MODULE_PATHNAME', 'pg_bulkload' LANGUAGE C VOLATILE STRICT;
-
-COMMIT;

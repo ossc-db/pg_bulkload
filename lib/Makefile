@@ -27,9 +27,12 @@ MODULE_big = pg_bulkload
 
 EXTENSION = pg_bulkload
 
-#supports both EXTENSION (for >=9.1) and without_EXTENSION (for <PG 9.1)
-DATA_built = pg_bulkload.sql
-DATA = pg_bulkload--1.0.sql pg_bulkload--unpackaged--1.0.sql uninstall_pg_bulkload.sql 
+# set pg_bulkload version
+BULKLOAD_VERSION = $(shell grep "PG_BULKLOAD_VERSION" ../include/common.h | cut -d " " -f 3 | tr -d '"')
+
+#supports EXTENSION (for >=9.1)
+DATA_built = pg_bulkload--$(BULKLOAD_VERSION).sql \
+	pg_bulkload.control
 
 PG_CPPFLAGS = -I../include -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq) -lpthread
@@ -71,3 +74,10 @@ subclean:
 	rm -f nbtsort.c
 
 LDFLAGS+=-Wl,--build-id
+
+pg_bulkload--$(BULKLOAD_VERSION).sql: pg_bulkload.sql.in
+	sed 's,MODULE_PATHNAME,$$libdir/$(MODULE_big),g' $< \
+	| sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' > $@
+
+pg_bulkload.control: pg_bulkload.control.in
+	sed 's,BULKLOAD_VERSION,$(BULKLOAD_VERSION),g' $< > $@
