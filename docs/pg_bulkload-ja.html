@@ -667,14 +667,10 @@ CHAR と VARCHAR の場合、入力データがテキストであることを表
 <ul>
 <li>
 localhost からのアクセスの認証方式に trust を指定する<br/>
-localhost からの接続には、UNIX 環境では UNIX ドメインソケット接続を使用し、Windows 環境では TCP/IP ループバック接続を使用します。UNIX 環境では以下の行を pg_hba.conf ファイルに追加します。<br/>
+localhost からの接続には、UNIX 環境では UNIX ドメインソケット接続を使用します。以下の行を pg_hba.conf ファイルに追加します。<br/>
 <pre>
-# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for UNIX]
+# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD
 local   all             foo                                     trust<br/></pre>
-Windows 環境では以下の行を pg_hba.conf ファイルに追加します。<br/>
-<pre>
-# TYPE  DATABASE        USER            CIDR-ADDRESS            METHOD [for Windows]
-host    all             foo             127.0.0.1/32            trust</pre>
 </li>
 <li>
 パスワードを.pgpassファイルに指定する<br/>
