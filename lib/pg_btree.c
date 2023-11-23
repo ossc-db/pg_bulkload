@@ -605,6 +605,14 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 			}
 			else if (compare > 0)
 				load1 = false;
+
+			if (compare == 0)
+			{
+				compare = ItemPointerCompare(&itup->t_tid, &itup2->t_tid);
+					Assert(compare != 0);
+					if (compare > 0)
+						load1 = false;
+			}
 		}
 		else
 			load1 = false;
