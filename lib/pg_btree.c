@@ -861,14 +861,13 @@ BTReaderInit(BTReader *reader, Relation rel)
 		firstid = PageGetItemId(reader->page, P_FIRSTDATAKEY(opaque));
 		itup = (IndexTuple) PageGetItem(reader->page, firstid);
 
-		if ((itup->t_tid).ip_posid == 0)
-		{
-			elog(DEBUG1, "pg_bulkload: failded in BTReaderInit for \"%s\"",
-				RelationGetRelationName(rel));
-			return -1;
-		}
-
+#if PG_VERSION_NUM >= 130000
+		blkno = BTreeTupleGetDownLink(itup);
+#elif PG_VERSION_NUM >= 110000
+		blkno = BTreeInnerTupleGetDownLink(itup);
+#else
 		blkno = ItemPointerGetBlockNumber(&(itup->t_tid));
+#endif
 
 		/* Go down to children */
 		for (;;)
