@@ -204,7 +204,11 @@ pg_timestamp_in(PG_FUNCTION_ARGS)
 	/*
 	 * Adjust the value
 	 */
+#if PG_VERSION_NUM >= 160000
+	AdjustTimestampForTypmod(&result, typmod, NULL);
+#else
 	AdjustTimestampForTypmod(&result, typmod);
+#endif
 
 	/*
 	 * Return the result value

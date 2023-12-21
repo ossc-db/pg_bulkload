@@ -121,7 +121,13 @@ static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueNa
 #define LS_TOTAL_CNT(ls)	((ls)->ls.exist_cnt + (ls)->ls.create_cnt)
 
 /* Signature of static functions */
-static int	open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum);
+static int	open_data_file(
+#if PG_VERSION_NUM >= 160000
+			RelFileLocator relNumber, 
+#else
+			RelFileNode rnode, 
+#endif
+			bool istemp, BlockNumber blknum);
 static void	flush_pages(DirectWriter *loader);
 static void	close_data_file(DirectWriter *loader);
 static void	UpdateLSF(DirectWriter *loader, BlockNumber num);
@@ -197,7 +203,11 @@ DirectWriterInit(DirectWriter *self)
 	 */
 	ls = &self->ls;
 	ls->ls.relid = self->base.relid;
+#if PG_VERSION_NUM >= 160000
+	ls->ls.relNumber = self->base.rel->rd_locator;
+#else
 	ls->ls.rnode = self->base.rel->rd_node;
+#endif
 	ls->ls.exist_cnt = RelationGetNumberOfBlocks(self->base.rel);
 	ls->ls.create_cnt = 0;
 
@@ -364,7 +374,11 @@ DirectWriterParam(DirectWriter *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->base.output == NULL);
 
 		self->base.relid = RangeVarGetRelid(makeRangeVarFromNameList(
-						stringToQualifiedNameList(value)), NoLock, false);
+#if PG_VERSION_NUM >= 160000
+						stringToQualifiedNameList(value, NULL)), NoLock, false);
+#else
+						stringToQualifiedNameList(value), NoLock, false);
+#endif
 		self->base.output = get_relation_name(self->base.relid);
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))
@@ -527,7 +541,13 @@ flush_pages(DirectWriter *loader)
 	{
 		XLogRecPtr	recptr;
 
-		recptr = log_newpage(&ls->ls.rnode, MAIN_FORKNUM,
+		recptr = log_newpage(
+#if PG_VERSION_NUM >= 160000
+				&ls->ls.relNumber, 
+#else
+				&ls->ls.rnode, 
+#endif
+				MAIN_FORKNUM,
 			ls->ls.exist_cnt, loader->blocks);
 		XLogFlush(recptr);
 	}
@@ -557,7 +577,12 @@ flush_pages(DirectWriter *loader)
 		if (relblks % RELSEG_SIZE == 0)
 			close_data_file(loader);
 		if (loader->datafd == -1)
-			loader->datafd = open_data_file(ls->ls.rnode,
+			loader->datafd = open_data_file(
+#if PG_VERSION_NUM >= 160000
+											ls->ls.relNumber,
+#else
+											ls->ls.rnode,
+#endif
 											RELATION_IS_LOCAL(loader->base.rel),
 											relblks);
 
@@ -627,7 +652,13 @@ flush_pages(DirectWriter *loader)
  * @return File descriptor of the last data file.
  */
 static int
-open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum)
+open_data_file(
+#if PG_VERSION_NUM >= 160000
+				RelFileLocator relNumber, 
+#else
+				RelFileNode rnode, 
+#endif
+				bool istemp, BlockNumber blknum)
 {
 	int			fd = -1;
 	int			ret;
@@ -635,8 +666,13 @@ open_data_file(RelFileNode rnode, bool istemp, BlockNumber blknum)
 	char	   *fname = NULL;
 
 #if PG_VERSION_NUM >= 90100
+#if PG_VERSION_NUM >= 160000
+	RelFileLocatorBackend	bknode;
+	bknode.locator = relNumber;
+#else
 	RelFileNodeBackend	bknode;
 	bknode.node = rnode;
+#endif
 	bknode.backend = istemp ? MyBackendId : InvalidBackendId;
 	fname = relpath(bknode, MAIN_FORKNUM);
 #else

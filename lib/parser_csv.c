@@ -371,25 +371,24 @@ CSVParserRead(CSVParser *self, Checker *checker)
 	{
 		int		len;
 		int		skipped = 0;
-		bool	inCR = false;
 
 		while ((len = SourceRead(self->source, self->rec_buf, self->buf_len - 1)) > 0)
 		{
-			int		i;
+			int		n;
 
-			for (i = 0; i < len; i++)
+			for (n = 0; n < len; n++)
 			{
-				if (self->rec_buf[i] == '\r')
+				if (self->rec_buf[n] == '\r')
 				{
-					if (i == len - 1)
+					if (n == len - 1)
 					{
 						inCR = true;
 						continue;
 					}
-					else if (self->rec_buf[i + 1] == '\n')
-						i++;
+					else if (self->rec_buf[n + 1] == '\n')
+						n++;
 				}
-				else if (!inCR && self->rec_buf[i] != '\n')
+				else if (!inCR && self->rec_buf[n] != '\n')
 					continue;
 
 				/* Skip the line */
@@ -398,7 +397,7 @@ CSVParserRead(CSVParser *self, Checker *checker)
 				if (skipped >= self->need_offset)
 				{
 					/* Seek to head of the next line. */
-					self->next = self->rec_buf + i + 1;
+					self->next = self->rec_buf + n + 1;
 					self->used_len = len;
 					self->rec_buf[self->used_len] = '\0';
 					goto skip_done;

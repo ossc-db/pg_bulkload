@@ -58,6 +58,10 @@
 
 #endif
 
+#if PG_VERSION_NUM >= 160000
+#include "catalog/pg_namespace_d.h"
+#endif
+
 char *
 QuoteString(char *str)
 {
@@ -542,7 +546,11 @@ ParseFunction(const char *value, bool argistype)
 	strncpy(buf, value, nextp - value);
 	buf[nextp - value] = '\0';
 
+#if PG_VERSION_NUM >= 160000
+	names = stringToQualifiedNameList(buf, NULL);
+#else
 	names = stringToQualifiedNameList(buf);
+#endif
 	pfree(buf);
 
 	if (*nextp == '\0')
@@ -672,12 +680,20 @@ ParseFunction(const char *value, bool argistype)
 	pp = (Form_pg_proc) GETSTRUCT(ftup);
 
 	/* Check permission to access and call function. */
-	aclresult = pg_namespace_aclcheck(pp->pronamespace, GetUserId(), ACL_USAGE);
+#if PG_VERSION_NUM >= 160000
+		aclresult = object_aclcheck(NamespaceRelationId, pp->pronamespace, GetUserId(), ACL_USAGE);
+#else
+		aclresult = pg_namespace_aclcheck(pp->pronamespace, GetUserId(), ACL_USAGE);
+#endif
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   get_namespace_name(pp->pronamespace));
 
+#if PG_VERSION_NUM >= 160000
+	aclresult = object_aclcheck(NamespaceRelationId, ret.oid, GetUserId(), ACL_EXECUTE);
+#else
 	aclresult = pg_proc_aclcheck(ret.oid, GetUserId(), ACL_EXECUTE);
+#endif
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_FUNCTION,
 					   get_func_name(ret.oid));

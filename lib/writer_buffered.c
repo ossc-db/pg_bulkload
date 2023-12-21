@@ -141,7 +141,12 @@ BufferedWriterParam(BufferedWriter *self, const char *keyword, char *value)
 		ASSERT_ONCE(self->base.output == NULL);
 
 		self->base.relid = RangeVarGetRelid(makeRangeVarFromNameList(
-						stringToQualifiedNameList(value)), NoLock, false);
+#if PG_VERSION_NUM >= 160000
+				stringToQualifiedNameList(value, NULL)), NoLock, false);
+#else
+				stringToQualifiedNameList(value)), NoLock, false);
+#endif
+
 		self->base.output = get_relation_name(self->base.relid);
 	}
 	else if (CompareKeyword(keyword, "DUPLICATE_BADFILE"))

@@ -47,7 +47,14 @@ extern char  *DataDir;
 /* Entry point for the recovery. */
 extern int	LoaderRecoveryMain(void);
 
-static void GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno);
+
+static void GetSegmentPath(char path[MAXPGPATH], 
+#if PG_VERSION_NUM >= 160000
+												RelFileLocator relNumber, 
+#else
+												RelFileNode rnode, 
+#endif
+												int segno);
 
 /* Determins if the recovery is necessary, and then overwrites data file pages with the vacant one if needed. */
 static void StartLoaderRecovery(void);
@@ -62,7 +69,13 @@ static DBState GetDBClusterState(const char *fname);
 static void GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls);
 
 /* Overwrite data pages with a vacant page. */
-static void ClearLoadedPage(RelFileNode rnode,
+static void ClearLoadedPage(
+#if PG_VERSION_NUM >= 160000
+							RelFileLocator relNumber,
+#else
+							RelFileNode rnode,
+#endif
+
 							BlockNumber blkbeg,
 							BlockNumber blkend);
 
@@ -78,7 +91,11 @@ static void LoaderCreateLockFile(const char *filename,
 								 bool isDDLock, const char *refName);
 
 /* Check that the header fields of a page appear valid. */
+#if PG_VERSION_NUM >= 160000
+bool PageHeaderIsValid(Page page);
+#else
 bool PageHeaderIsValid(PageHeader page);
+#endif
 
 
 /**
@@ -189,7 +206,12 @@ StartLoaderRecovery(void)
 			/*
 			 * overwrite pages created by the loader by blank pages
 			 */
-			ClearLoadedPage(ls.ls.rnode,
+			ClearLoadedPage(
+#if PG_VERSION_NUM >= 160000
+							ls.ls.relNumber,
+#else
+							ls.ls.rnode,
+#endif
 							ls.ls.exist_cnt,
 							ls.ls.exist_cnt + ls.ls.create_cnt);
 
@@ -392,7 +414,13 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
  * @return void
  */
 static void
-ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
+ClearLoadedPage(
+#if PG_VERSION_NUM >= 160000
+			RelFileLocator relNumber,
+#else
+			RelFileNode rnode,
+#endif
+			BlockNumber blkbeg, BlockNumber blkend)
 {
 	BlockNumber segno;				/* data file segment no */
 	char		segpath[MAXPGPATH];	/* data file name to open */
@@ -423,7 +451,13 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 	 *	   set	proper extension.
 	 */
 	segno = blkbeg / RELSEG_SIZE;
-	GetSegmentPath(segpath, rnode, segno);
+	GetSegmentPath(segpath, 
+#if PG_VERSION_NUM >= 160000
+					relNumber, 
+#else
+					rnode,
+#endif
+					segno);
 
 	/*
 	 * TODO: consider to use truncate instead of zero-fill to end of file.
@@ -516,7 +550,13 @@ ClearLoadedPage(RelFileNode rnode, BlockNumber blkbeg, BlockNumber blkend)
 					 segpath, strerror(errno));
 
 			++segno;
-			GetSegmentPath(segpath, rnode, segno);
+			GetSegmentPath(segpath, 
+#if PG_VERSION_NUM >= 160000
+					relNumber,
+#else
+					rnode,
+#endif
+					segno);
 
 			fd = open(segpath, O_RDWR | PG_BINARY, S_IRUSR | S_IWUSR);
 			if (fd == -1)
@@ -557,7 +597,13 @@ IsPageCreatedByLoader(Page page)
 {
 	PageHeader	targetBlock = (PageHeader) page;
 
-	if (!PageHeaderIsValid(targetBlock))
+	if (!PageHeaderIsValid(
+#if PG_VERSION_NUM >= 160000
+		page
+#else
+		targetBlock
+#endif
+		))
 		return true;
 
 	if (targetBlock->pd_lsn.xlogid == 0 && targetBlock->pd_lsn.xrecoff == 0)
@@ -910,21 +956,42 @@ PageInit(Page page, Size pageSize, Size specialSize)
  * will clean up such a page and make it usable.
  */
 bool
-PageHeaderIsValid(PageHeader page)
+PageHeaderIsValid(
+#if PG_VERSION_NUM >= 160000
+	Page page
+#else
+	PageHeader phdr
+#endif
+					)
 {
 	char	   *pagebytes;
 	int			i;
+#if PG_VERSION_NUM >= 160000
+	PageHeader phdr = (PageHeader) page;
+#endif
 
 	/*
 	 * Check normal case
 	 */
-	if (PageGetPageSize(page) == BLCKSZ &&
-		PageGetPageLayoutVersion(page) == PG_PAGE_LAYOUT_VERSION &&
-		page->pd_lower >= SizeOfPageHeaderData &&
-		page->pd_lower <= page->pd_upper &&
-		page->pd_upper <= page->pd_special &&
-		page->pd_special <= BLCKSZ &&
-		page->pd_special == MAXALIGN(page->pd_special))
+	if (PageGetPageSize(
+#if PG_VERSION_NUM >= 160000
+		page
+#else
+		phdr
+#endif
+		) == BLCKSZ &&
+		PageGetPageLayoutVersion(
+#if PG_VERSION_NUM >= 160000
+		page
+#else
+		phdr
+#endif
+		) == PG_PAGE_LAYOUT_VERSION &&
+		phdr->pd_lower >= SizeOfPageHeaderData &&
+		phdr->pd_lower <= phdr->pd_upper &&
+		phdr->pd_upper <= phdr->pd_special &&
+		phdr->pd_special <= BLCKSZ &&
+		phdr->pd_special == MAXALIGN(phdr->pd_special))
 		return true;
 
 	/*
@@ -940,24 +1007,49 @@ PageHeaderIsValid(PageHeader page)
 }
 
 static void
-GetSegmentPath(char path[MAXPGPATH], RelFileNode rnode, int segno)
+GetSegmentPath(char path[MAXPGPATH], 
+#if PG_VERSION_NUM >= 160000
+		RelFileLocator relNumber, 
+#else
+		RelFileNode rnode, 
+#endif
+		int segno)
 {
+#if PG_VERSION_NUM >= 160000
+	if (relNumber.spcOid == GLOBALTABLESPACE_OID)
+#else
 	if (rnode.spcNode == GLOBALTABLESPACE_OID)
+#endif
 	{
 		/* Shared system relations live in {datadir}/global */
+#if PG_VERSION_NUM >= 160000
+		snprintf(path, MAXPGPATH, "global/%u", relNumber.relNumber);
+#else
 		snprintf(path, MAXPGPATH, "global/%u", rnode.relNode);
+#endif
 	}
+#if PG_VERSION_NUM >= 160000
+	else if (relNumber.spcOid == DEFAULTTABLESPACE_OID)
+#else
 	else if (rnode.spcNode == DEFAULTTABLESPACE_OID)
+#endif		
+
 	{
 		/* The default tablespace is {datadir}/base */
-		snprintf(path, MAXPGPATH, "base/%u/%u",
-					 rnode.dbNode, rnode.relNode);
+#if PG_VERSION_NUM >= 160000
+		snprintf(path, MAXPGPATH, "base/%u/%u", relNumber.dbOid, relNumber.relNumber);
+#else
+		snprintf(path, MAXPGPATH, "base/%u/%u", rnode.dbNode, rnode.relNode);
+#endif				
 	}
 	else
 	{
 		/* All other tablespaces are accessed via symlinks */
-		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u",
-					 rnode.spcNode, rnode.dbNode, rnode.relNode);
+#if PG_VERSION_NUM >= 160000
+		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u", relNumber.spcOid, relNumber.dbOid, relNumber.relNumber);
+#else
+		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u", rnode.spcNode, rnode.dbNode, rnode.relNode);
+#endif			
 	}
 
 	if (segno > 0)
