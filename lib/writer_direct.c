@@ -377,7 +377,7 @@ DirectWriterParam(DirectWriter *self, const char *keyword, char *value)
 #if PG_VERSION_NUM >= 160000
 						stringToQualifiedNameList(value, NULL)), NoLock, false);
 #else
-						stringToQualifiedNameList(value), NoLock, false);
+						stringToQualifiedNameList(value)), NoLock, false);
 #endif
 		self->base.output = get_relation_name(self->base.relid);
 	}

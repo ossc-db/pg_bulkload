@@ -955,14 +955,14 @@ PageInit(Page page, Size pageSize, Size specialSize)
  * treat such a page as empty and without free space.  Eventually, VACUUM
  * will clean up such a page and make it usable.
  */
-bool
-PageHeaderIsValid(
+
 #if PG_VERSION_NUM >= 160000
-	Page page
+bool
+PageHeaderIsValid(Page page)
 #else
-	PageHeader phdr
+bool
+PageHeaderIsValid(PageHeader phdr)
 #endif
-					)
 {
 	char	   *pagebytes;
 	int			i;
@@ -975,18 +975,11 @@ PageHeaderIsValid(
 	 */
 	if (PageGetPageSize(
 #if PG_VERSION_NUM >= 160000
-		page
+		page) == BLCKSZ && PageGetPageLayoutVersion(page
 #else
-		phdr
+		phdr) == BLCKSZ && PageGetPageLayoutVersion(phdr
 #endif
-		) == BLCKSZ &&
-		PageGetPageLayoutVersion(
-#if PG_VERSION_NUM >= 160000
-		page
-#else
-		phdr
-#endif
-		) == PG_PAGE_LAYOUT_VERSION &&
+	 	) == PG_PAGE_LAYOUT_VERSION &&
 		phdr->pd_lower >= SizeOfPageHeaderData &&
 		phdr->pd_lower <= phdr->pd_upper &&
 		phdr->pd_upper <= phdr->pd_special &&
@@ -997,7 +990,11 @@ PageHeaderIsValid(
 	/*
 	 * Check all-zeroes case
 	 */
+#if PG_VERSION_NUM >= 160000
 	pagebytes = (char *) page;
+#else
+	pagebytes = (char *) phdr;
+#endif
 	for (i = 0; i < BLCKSZ; i++)
 	{
 		if (pagebytes[i] != 0)

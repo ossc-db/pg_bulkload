@@ -23,8 +23,8 @@ jobs:
           - "13.13"
           - "12.17"
           - "11.22"
-          # - "10.23"
-          # - "9.6.24"
+          - "10.23"
+          - "9.6.24"
     env:
       CACHE_VERSION: 20221222  # to identify cache version
 
