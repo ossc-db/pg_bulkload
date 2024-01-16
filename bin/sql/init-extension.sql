@@ -38,6 +38,13 @@ CREATE INDEX idx_hash ON customer USING hash (c_d_id);
 CREATE INDEX idx_hash_fn ON customer USING hash ((abs(c_w_id) + c_d_id));
 
 ---------------------------------------------------------------------------
+-- load_check Import duplicate data
+CREATE TABLE import_duplicate_data_test (
+    id1 int, 
+    id2 int, 
+    id3 int, UNIQUE(id1, id2, id3)
+);
+---------------------------------------------------------------------------
 -- load_check test
 CREATE TABLE master (
     id int PRIMARY KEY,

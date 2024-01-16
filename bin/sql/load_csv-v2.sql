@@ -99,3 +99,8 @@ SET enable_seqscan = off;
 SET enable_indexscan = on;
 SET enable_bitmapscan = off;
 SELECT * FROM customer ORDER BY c_id;
+
+-- test import duplicate data
+\! pg_bulkload -d contrib_regression data/csv10.ctl -i data/data11.csv -o "VERBOSE=YES" -o "DELIMITER=," -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+\! pg_bulkload -d contrib_regression data/csv10.ctl -i data/data11.csv -o "VERBOSE=YES" -o "DELIMITER=," -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
+\! pg_bulkload -d contrib_regression data/csv10.ctl -i data/data11.csv -o "VERBOSE=YES" -o "DELIMITER=," -l results/csv10.log -P results/csv10.prs -u results/csv10.dup
