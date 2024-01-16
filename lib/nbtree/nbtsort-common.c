@@ -6,7 +6,7 @@
  * Although nbtsort-XX.c is the copy of postgresql core's src/backend/access/nbtree/nbtsort.c,
  * this file has functions which related to nbtsort, but is not implemented core's code.
  *
- *	  Copyright (c) 2021-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2021-2024, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 
 

@@ -876,12 +876,21 @@ DROP EXTENSION</pre>
 <h2 id="requirement">Requirements</h2>
 <dl>
 <dt>PostgreSQL versions</dt>
-<dd>PostgreSQL 10, 11, 12, 13, 14, 15</dd>
+<dd>PostgreSQL 11, 12, 13, 14, 15, 16</dd>
 <dt>OS</dt>
 <dd>RHEL 7, 8, 9</dd>
 </dl>
 
 <h2 id="releasenote">Release Notes</h2>
+
+<p>
+<h4>3.1.21</h4>
+<ul>
+<li>Added support for PostgreSQL 16</li>
+<li>Fixed incorrect version display of pg_bulkload</li>
+<li>Fix duplication handling for large data set</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.20</h4>
@@ -1031,7 +1040,7 @@ From pg_bulkload-VERSIONX_X_X-X.pgXX.rhelX.rpm to pg_bulkload-X.X.XX-X.pgXX.rhel
   <a href="index.html">Top</a> &gt;
   <a href="pg_bulkload.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2024, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");

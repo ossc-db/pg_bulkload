@@ -800,12 +800,21 @@ DROP EXTENSION</pre>
 <h2 id="requirement">動作環境</h2>
 <dl>
 <dt>PostgreSQLバージョン</dt>
-<dd>PostgreSQL 10, 11, 12, 13, 14, 15</dd>
+<dd>PostgreSQL 11, 12, 13, 14, 15, 16</dd>
 <dt>OS</dt>
 <dd>RHEL 7, 8, 9</dd>
 </dl>
 
 <h2 id="releasenote">リリースノート</h2>
+
+<p>
+<h4>3.1.21</h4>
+<ul>
+<li>PostgreSQL 16に対応</li>
+<li>pg_bulkloadのバージョン表示問題を修正しました。</li>
+<li>データセットを複数回loadする際に失敗する問題を修正しました。</li>
+</ul>
+</p>
 
 <p>
 <h4>3.1.20</h4>
@@ -956,7 +965,7 @@ pg_bulkload-VERSIONX_X_X-X.pgXX.rhelX.rpmからpg_bulkload-X.X.XX-X.pgXX.rhelX.r
   <a href="index_ja.html">Top</a> &gt;
   <a href="pg_bulkload-ja.html">pg_bulkload</a>
 <div>
-<p class="footer">Copyright (c) 2007-2023, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
+<p class="footer">Copyright (c) 2007-2024, NIPPON TELEGRAPH AND TELEPHONE CORPORATION</p>
 
 <script type="text/javascript">
 var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
