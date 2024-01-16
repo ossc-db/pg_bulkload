@@ -41,8 +41,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 160000
+#if PG_VERSION_NUM >= 170000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 160000
+#include "nbtree/nbtsort-16.c"
 #elif PG_VERSION_NUM >= 150000
 #include "nbtree/nbtsort-15.c"
 #elif PG_VERSION_NUM >= 140000
@@ -529,6 +531,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	/* the preparation of merge */
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
+
 #if PG_VERSION_NUM >= 120000
 	btIndexScanKey = _bt_mkscankey(wstate->index, NULL);
 	indexScanKey = btIndexScanKey->scankeys;
@@ -800,7 +803,10 @@ BTReaderInit(BTReader *reader, Relation rel)
 	 * smgropen *after* RelationSetNewRelfilenode.
 	 */
 	memset(&reader->smgr, 0, sizeof(reader->smgr));
-#if PG_VERSION_NUM >= 90100
+#if PG_VERSION_NUM >= 160000
+	reader->smgr.smgr_rlocator.locator = rel->rd_locator;
+	reader->smgr.smgr_rlocator.backend = rel->rd_backend == MyBackendId ? MyBackendId : InvalidBackendId;
+#elif PG_VERSION_NUM >= 90100
 	reader->smgr.smgr_rnode.node = rel->rd_node;
 	reader->smgr.smgr_rnode.backend =
 		rel->rd_backend == MyBackendId ? MyBackendId : InvalidBackendId;
@@ -811,7 +817,12 @@ BTReaderInit(BTReader *reader, Relation rel)
 
 	reader->blkno = InvalidBlockNumber;
 	reader->offnum = InvalidOffsetNumber;
+
+#if PG_VERSION_NUM >= 160000
+	reader->page = (Page) palloc_aligned(BLCKSZ, PG_IO_ALIGN_SIZE, 0);
+#else
 	reader->page = palloc(BLCKSZ);
+#endif
 
 	/*
 	 * Read meta page and check sanity of it.

@@ -217,9 +217,9 @@ BinaryParserRead(BinaryParser *self, Checker *checker)
 	/* Skip first offset lines in the input file */
 	if (unlikely(self->need_offset > 0))
 	{
-		int		i;
+		int		n;
 
-		for (i = 0; i < self->need_offset; i++)
+		for (n = 0; n < self->need_offset; n++)
 		{
 			int		len;
 			len = SourceRead(self->source, self->buffer, self->rec_len);

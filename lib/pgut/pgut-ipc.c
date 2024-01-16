@@ -11,11 +11,16 @@
 
 #include <unistd.h>
 
+#if PG_VERSION_NUM >= 160000
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#else
 #ifdef HAVE_SYS_IPC_H
 #include <sys/ipc.h>
 #endif
 #ifdef HAVE_SYS_SHM_H
 #include <sys/shm.h>
+#endif
 #endif
 #ifdef HAVE_KERNEL_OS_H
 #include <kernel/OS.h>

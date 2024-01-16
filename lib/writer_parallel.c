@@ -11,7 +11,11 @@
 #include "access/heapam.h"
 #include "access/xact.h"
 #include "commands/dbcommands.h"
+#if PG_VERSION_NUM >= 160000
+#include "utils/guc_hooks.h"
+#else
 #include "commands/variable.h"
+#endif
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
@@ -345,9 +349,15 @@ write_queue(ParallelWriter *self, const void *buffer, uint32 len)
 {
 	struct iovec	iov[2];
 
+#if PG_VERSION_NUM >= 160000
+	Assert(self->conn != NULL);
+	Assert(self->queue != NULL);
+	Assert(len == 0 || buffer != NULL);
+#else
 	AssertArg(self->conn != NULL);
 	AssertArg(self->queue != NULL);
 	AssertArg(len == 0 || buffer != NULL);
+#endif
 
 	iov[0].iov_base = &len;
 	iov[0].iov_len = sizeof(len);
