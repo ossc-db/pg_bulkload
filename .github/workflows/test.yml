@@ -23,8 +23,12 @@ jobs:
           - "13.13"
           - "12.17"
           - "11.22"
+<<<<<<< HEAD
           - "10.23"
           - "9.6.24"
+=======
+
+>>>>>>> 838f250 (Update github workflows files)
     env:
       CACHE_VERSION: 20221222  # to identify cache version
 
