@@ -531,9 +531,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	/* the preparation of merge */
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
 	itup2 = BTReaderGetNextItem(btspool2);
-// #if PG_VERSION_NUM >= 160000
-// 	btIndexScanKey = _bt_mkscankey(wstate->index, NULL);
-// 	indexScanKey = btIndexScanKey->scankeys;
+
 #if PG_VERSION_NUM >= 120000
 	btIndexScanKey = _bt_mkscankey(wstate->index, NULL);
 	indexScanKey = btIndexScanKey->scankeys;

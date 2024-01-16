@@ -123,7 +123,7 @@ static int	DirectWriterSendQuery(DirectWriter *self, PGconn *conn, char *queueNa
 /* Signature of static functions */
 static int	open_data_file(
 #if PG_VERSION_NUM >= 160000
-			RelFileLocator relNumber, 
+			RelFileLocator rLocator, 
 #else
 			RelFileNode rnode, 
 #endif
@@ -204,7 +204,7 @@ DirectWriterInit(DirectWriter *self)
 	ls = &self->ls;
 	ls->ls.relid = self->base.relid;
 #if PG_VERSION_NUM >= 160000
-	ls->ls.relNumber = self->base.rel->rd_locator;
+	ls->ls.rLocator = self->base.rel->rd_locator;
 #else
 	ls->ls.rnode = self->base.rel->rd_node;
 #endif
@@ -543,7 +543,7 @@ flush_pages(DirectWriter *loader)
 
 		recptr = log_newpage(
 #if PG_VERSION_NUM >= 160000
-				&ls->ls.relNumber, 
+				&ls->ls.rLocator, 
 #else
 				&ls->ls.rnode, 
 #endif
@@ -579,7 +579,7 @@ flush_pages(DirectWriter *loader)
 		if (loader->datafd == -1)
 			loader->datafd = open_data_file(
 #if PG_VERSION_NUM >= 160000
-											ls->ls.relNumber,
+											ls->ls.rLocator,
 #else
 											ls->ls.rnode,
 #endif
@@ -654,7 +654,7 @@ flush_pages(DirectWriter *loader)
 static int
 open_data_file(
 #if PG_VERSION_NUM >= 160000
-				RelFileLocator relNumber, 
+				RelFileLocator rLocator, 
 #else
 				RelFileNode rnode, 
 #endif
@@ -668,7 +668,7 @@ open_data_file(
 #if PG_VERSION_NUM >= 90100
 #if PG_VERSION_NUM >= 160000
 	RelFileLocatorBackend	bknode;
-	bknode.locator = relNumber;
+	bknode.locator = rLocator;
 #else
 	RelFileNodeBackend	bknode;
 	bknode.node = rnode;

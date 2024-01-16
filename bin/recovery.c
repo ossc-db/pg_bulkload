@@ -50,7 +50,7 @@ extern int	LoaderRecoveryMain(void);
 
 static void GetSegmentPath(char path[MAXPGPATH], 
 #if PG_VERSION_NUM >= 160000
-												RelFileLocator relNumber, 
+												RelFileLocator rLocator, 
 #else
 												RelFileNode rnode, 
 #endif
@@ -71,7 +71,7 @@ static void GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls);
 /* Overwrite data pages with a vacant page. */
 static void ClearLoadedPage(
 #if PG_VERSION_NUM >= 160000
-							RelFileLocator relNumber,
+							RelFileLocator rLocator,
 #else
 							RelFileNode rnode,
 #endif
@@ -91,11 +91,7 @@ static void LoaderCreateLockFile(const char *filename,
 								 bool isDDLock, const char *refName);
 
 /* Check that the header fields of a page appear valid. */
-#if PG_VERSION_NUM >= 160000
 bool PageHeaderIsValid(Page page);
-#else
-bool PageHeaderIsValid(PageHeader page);
-#endif
 
 
 /**
@@ -208,7 +204,7 @@ StartLoaderRecovery(void)
 			 */
 			ClearLoadedPage(
 #if PG_VERSION_NUM >= 160000
-							ls.ls.relNumber,
+							ls.ls.rLocator,
 #else
 							ls.ls.rnode,
 #endif
@@ -416,7 +412,7 @@ GetLoadStatusInfo(const char *lsfpath, LoadStatus * ls)
 static void
 ClearLoadedPage(
 #if PG_VERSION_NUM >= 160000
-			RelFileLocator relNumber,
+			RelFileLocator rLocator,
 #else
 			RelFileNode rnode,
 #endif
@@ -453,7 +449,7 @@ ClearLoadedPage(
 	segno = blkbeg / RELSEG_SIZE;
 	GetSegmentPath(segpath, 
 #if PG_VERSION_NUM >= 160000
-					relNumber, 
+					rLocator, 
 #else
 					rnode,
 #endif
@@ -552,7 +548,7 @@ ClearLoadedPage(
 			++segno;
 			GetSegmentPath(segpath, 
 #if PG_VERSION_NUM >= 160000
-					relNumber,
+					rLocator,
 #else
 					rnode,
 #endif
@@ -597,13 +593,7 @@ IsPageCreatedByLoader(Page page)
 {
 	PageHeader	targetBlock = (PageHeader) page;
 
-	if (!PageHeaderIsValid(
-#if PG_VERSION_NUM >= 160000
-		page
-#else
-		targetBlock
-#endif
-		))
+	if (!PageHeaderIsValid(page))
 		return true;
 
 	if (targetBlock->pd_lsn.xlogid == 0 && targetBlock->pd_lsn.xrecoff == 0)
@@ -956,20 +946,12 @@ PageInit(Page page, Size pageSize, Size specialSize)
  * will clean up such a page and make it usable.
  */
 
-#if PG_VERSION_NUM >= 160000
 bool
 PageHeaderIsValid(Page page)
-#else
-bool
-PageHeaderIsValid(PageHeader phdr)
-#endif
 {
 	char	   *pagebytes;
 	int			i;
-#if PG_VERSION_NUM >= 160000
 	PageHeader phdr = (PageHeader) page;
-#endif
-
 	/*
 	 * Check normal case
 	 */
@@ -990,11 +972,7 @@ PageHeaderIsValid(PageHeader phdr)
 	/*
 	 * Check all-zeroes case
 	 */
-#if PG_VERSION_NUM >= 160000
-	pagebytes = (char *) page;
-#else
 	pagebytes = (char *) phdr;
-#endif
 	for (i = 0; i < BLCKSZ; i++)
 	{
 		if (pagebytes[i] != 0)
@@ -1006,27 +984,27 @@ PageHeaderIsValid(PageHeader phdr)
 static void
 GetSegmentPath(char path[MAXPGPATH], 
 #if PG_VERSION_NUM >= 160000
-		RelFileLocator relNumber, 
+		RelFileLocator rLocator, 
 #else
 		RelFileNode rnode, 
 #endif
 		int segno)
 {
 #if PG_VERSION_NUM >= 160000
-	if (relNumber.spcOid == GLOBALTABLESPACE_OID)
+	if (rLocator.spcOid == GLOBALTABLESPACE_OID)
 #else
 	if (rnode.spcNode == GLOBALTABLESPACE_OID)
 #endif
 	{
 		/* Shared system relations live in {datadir}/global */
 #if PG_VERSION_NUM >= 160000
-		snprintf(path, MAXPGPATH, "global/%u", relNumber.relNumber);
+		snprintf(path, MAXPGPATH, "global/%u", rLocator.relNumber);
 #else
 		snprintf(path, MAXPGPATH, "global/%u", rnode.relNode);
 #endif
 	}
 #if PG_VERSION_NUM >= 160000
-	else if (relNumber.spcOid == DEFAULTTABLESPACE_OID)
+	else if (rLocator.spcOid == DEFAULTTABLESPACE_OID)
 #else
 	else if (rnode.spcNode == DEFAULTTABLESPACE_OID)
 #endif		
@@ -1034,7 +1012,7 @@ GetSegmentPath(char path[MAXPGPATH],
 	{
 		/* The default tablespace is {datadir}/base */
 #if PG_VERSION_NUM >= 160000
-		snprintf(path, MAXPGPATH, "base/%u/%u", relNumber.dbOid, relNumber.relNumber);
+		snprintf(path, MAXPGPATH, "base/%u/%u", rLocator.dbOid, rLocator.relNumber);
 #else
 		snprintf(path, MAXPGPATH, "base/%u/%u", rnode.dbNode, rnode.relNode);
 #endif				
@@ -1043,7 +1021,7 @@ GetSegmentPath(char path[MAXPGPATH],
 	{
 		/* All other tablespaces are accessed via symlinks */
 #if PG_VERSION_NUM >= 160000
-		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u", relNumber.spcOid, relNumber.dbOid, relNumber.relNumber);
+		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u", rLocator.spcOid, rLocator.dbOid, rLocator.relNumber);
 #else
 		snprintf(path, MAXPGPATH, "pg_tblspc/%u/%u/%u", rnode.spcNode, rnode.dbNode, rnode.relNode);
 #endif			

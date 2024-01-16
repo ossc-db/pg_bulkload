@@ -32,7 +32,7 @@
 #define BULKLOAD_LSF_PATH(buffer, ls) \
 	snprintf((buffer), MAXPGPATH, \
 			 BULKLOAD_LSF_DIR "/%d.%d.loadstatus", \
-			 (ls)->ls.relNumber.dbOid, (ls)->ls.relid)
+			 (ls)->ls.rLocator.dbOid, (ls)->ls.relid)
 #else
 #define BULKLOAD_LSF_PATH(buffer, ls) \
 	snprintf((buffer), MAXPGPATH, \
@@ -48,7 +48,7 @@ typedef union LoadStatus
 	{
 		Oid			relid;		/**< target relation oid */
 #if PG_VERSION_NUM >= 160000
-		RelFileLocator relNumber;
+		RelFileLocator rLocator;
 #else
 		RelFileNode	rnode;		/**< target relation node */
 #endif

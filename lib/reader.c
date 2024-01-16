@@ -425,15 +425,15 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 #endif
 
         /* Set up RangeTblEntry */
-		rte = makeNode(RangeTblEntry);
+        rte = makeNode(RangeTblEntry);
         rte->rtekind = RTE_RELATION;
         rte->relid = RelationGetRelid(rel);
 #if PG_VERSION_NUM >= 160000
-		rtep = makeNode(RTEPermissionInfo);
-		rtep->relid = rte->relid;
-		rtep->inh = rte->inh;
-		perminfos = lappend(perminfos, rtep);
-		rte->perminfoindex = list_length(perminfos);
+        rtep = makeNode(RTEPermissionInfo);
+        rtep->relid = rte->relid;
+        rtep->inh = rte->inh;
+        perminfos = lappend(perminfos, rtep);
+        rte->perminfoindex = list_length(perminfos);
 #endif
 
 #if PG_VERSION_NUM >= 90100
@@ -470,16 +470,19 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
          * is not essential. */
         ExecCheckRTPerms(range_table, true);
 #endif
-
+	
 #if PG_VERSION_NUM >= 160000
 		ExecInitRangeTable(checker->estate, range_table, perminfos);
-		checker->slot = MakeSingleTupleTableSlot(desc, &TTSOpsHeapTuple);
-		/* Some APIs have changed significantly as of v12. */
 #elif PG_VERSION_NUM >= 120000
+		/* Some APIs have changed significantly as of v12. */
 		ExecInitRangeTable(checker->estate, range_table);
-		checker->slot = MakeSingleTupleTableSlot(desc, &TTSOpsHeapTuple);
 #else
 		checker->estate->es_range_table = range_table;
+#endif
+
+#if PG_VERSION_NUM >= 120000
+		checker->slot = MakeSingleTupleTableSlot(desc, &TTSOpsHeapTuple);
+#else
 		checker->slot = MakeSingleTupleTableSlot(desc);
 #endif
 	}

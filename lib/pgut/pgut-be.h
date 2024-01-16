@@ -73,13 +73,8 @@ extern int no_such_variable
 #define heap_sync(rel)				((void)0)
 #define ItemIdIsDead(itemId)		ItemIdDeleted(itemId)
 #define GetCurrentCommandId(used)	GetCurrentCommandId()
-#if PG_VERSION_NUM > 160000
-#define stringToQualifiedNameList(str) \
-	stringToQualifiedNameList((str, NULL), "pg_bulkload")
-#else
 #define stringToQualifiedNameList(str) \
 	stringToQualifiedNameList((str), "pg_bulkload")
-#endif
 #define PageAddItem(page, item, size, offnum, overwrite, is_heap) \
 	PageAddItem((page), (item), (size), (offnum), LP_USED)
 
