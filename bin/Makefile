@@ -20,8 +20,10 @@ USE_PGXS = 1	# use pgxs if not in contrib directory
 endif
 endif
 
-ifdef USE_PGXS
+# see ticket #157
 PG_CONFIG = pg_config
+
+ifdef USE_PGXS
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
