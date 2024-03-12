@@ -33,7 +33,7 @@ http://ossc-db.github.io/pg_bulkload/index.html
 
 How to build and install from source code
 -----------------------------------------
-Change directory into top directory of pg_bulkload sorce codes and
+Change directory into top directory of pg_bulkload source codes and
 run the below commands.
 
 ````
