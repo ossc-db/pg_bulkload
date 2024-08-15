@@ -79,7 +79,7 @@
 #error unsupported PostgreSQL version
 #endif
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 110000
 #include "nbtree/nbtsort-common.c"
 #endif
 
