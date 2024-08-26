@@ -60,7 +60,7 @@ RUN rpmbuild rpmbuild/SPECS/pg_bulkload-pg${PG_VERSION}.spec \
         -bb --define="dist .pg${PG_VERSION}.rhel${RHEL_VERSION}"
 
 
-###############################################################q#################
+################################################################################
 #
 # Run regression tests
 #
