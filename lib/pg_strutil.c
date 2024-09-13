@@ -602,6 +602,8 @@ ParseFunction(const char *value, bool argistype)
 		{
 			find = func_select_candidate(nargs, ret.argtypes,
 										 current_candidates);
+			if (find)
+				ncandidates = 1;
 		}
 	}
 	else if (nargs > 0)
