@@ -673,7 +673,11 @@ open_data_file(
 	RelFileNodeBackend	bknode;
 	bknode.node = rnode;
 #endif
+#if PG_VERSION_NUM >= 170000
+	bknode.backend = istemp ? MyBackendType : InvalidCommandId;
+#else
 	bknode.backend = istemp ? MyBackendId : InvalidBackendId;
+#endif
 	fname = relpath(bknode, MAIN_FORKNUM);
 #else
 	fname = relpath(rnode, MAIN_FORKNUM);

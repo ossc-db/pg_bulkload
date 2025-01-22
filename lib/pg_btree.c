@@ -20,7 +20,11 @@
 #include "executor/executor.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
+#if PG_VERSION_NUM >= 170000
+#include "storage/bulk_write.h"
+#else
 #include "storage/smgr.h"
+#endif
 #if PG_VERSION_NUM >= 120000
 #include "storage/md.h"
 #endif
@@ -41,8 +45,10 @@
 
 #include "logger.h"
 
-#if PG_VERSION_NUM >= 170000
+#if PG_VERSION_NUM >= 180000
 #error unsupported PostgreSQL version
+#elif PG_VERSION_NUM >= 170000
+#include "nbtree/nbtsort-17.c"
 #elif PG_VERSION_NUM >= 160000
 #include "nbtree/nbtsort-16.c"
 #elif PG_VERSION_NUM >= 150000
@@ -305,7 +311,9 @@ IndexSpoolEnd(Spooler *self)
 #endif
 			indices[i] = NULL;
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 170000
+			reindex_index(NULL, indexOid, false, persistence, &params);
+#elif PG_VERSION_NUM >= 140000
 			reindex_index(indexOid, false, persistence, &params);
 #elif PG_VERSION_NUM >= 90500
 			reindex_index(indexOid, false, persistence, 0);
@@ -429,6 +437,9 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	BTWriteState	wstate;
 	BTReader		reader;
 	int				merge;
+#if PG_VERSION_NUM >= 170000
+	bool use_wal;
+#endif
 
 	Assert(btspool->index->rd_index->indisvalid);
 
@@ -453,8 +464,10 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	 * We need to log index creation in WAL iff WAL archiving is enabled AND
 	 * it's not a temp index.
 	 */
-#if PG_VERSION_NUM >= 90000
-
+#if PG_VERSION_NUM >= 170000
+	use_wal = self->use_wal &&
+		XLogIsNeeded() && !RELATION_IS_LOCAL(wstate.index);
+#elif PG_VERSION_NUM >= 90000
 	wstate.btws_use_wal = self->use_wal &&
 		XLogIsNeeded() && !RELATION_IS_LOCAL(wstate.index);
 #else
@@ -464,9 +477,10 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 
 	/* reserve the metapage */
 	wstate.btws_pages_alloced = BTREE_METAPAGE + 1;
+#if PG_VERSION_NUM < 170000
 	wstate.btws_pages_written = 0;
 	wstate.btws_zeropage = NULL;	/* until needed */
-
+#endif
 	/*
 	 * Flush dirty buffers so that we will read the index files directly
 	 * in order to get pre-existing data. We must acquire AccessExclusiveLock
@@ -483,7 +497,11 @@ _bt_mergebuild(Spooler *self, BTSpool *btspool)
 	elog(DEBUG1, "pg_bulkload: build \"%s\" %s merge (%s wal)",
 		RelationGetRelationName(wstate.index),
 		merge ? "with" : "without",
+#if PG_VERSION_NUM >= 170000
+		use_wal ? "with" : "without");
+#else
 		wstate.btws_use_wal ? "with" : "without");
+#endif
 
 	/* Assign a new file node. */
 	RelationSetNewRelfilenode(wstate.index, InvalidTransactionId);
@@ -527,6 +545,10 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	ON_DUPLICATE	on_duplicate = self->on_duplicate;
 
 	Assert(btspool != NULL);
+
+#if PG_VERSION_NUM >= 170000
+	wstate->bulkstate = smgr_bulk_start_rel(wstate->index, MAIN_FORKNUM);
+#endif
 
 	/* the preparation of merge */
 	itup = BTSpoolGetNextItem(btspool, NULL, &should_free);
@@ -735,6 +757,9 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 	 * fsync those pages here, they might still not be on disk when the crash
 	 * occurs.
 	 */
+#if PG_VERSION_NUM >= 170000
+		smgr_bulk_finish(wstate->bulkstate);
+#else
 #if PG_VERSION_NUM >= 90100
 	if (!RELATION_IS_LOCAL(wstate->index)&& !(wstate->index->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED))
 	{
@@ -751,6 +776,7 @@ _bt_mergeload(Spooler *self, BTWriteState *wstate, BTSpool *btspool, BTReader *b
 		RelationOpenSmgr(wstate->index);
 		smgrimmedsync(wstate->index->rd_smgr, MAIN_FORKNUM);
 	}
+#endif
 #endif
 	BULKLOAD_PROFILE(&prof_merge_term);
 }
@@ -803,7 +829,10 @@ BTReaderInit(BTReader *reader, Relation rel)
 	 * smgropen *after* RelationSetNewRelfilenode.
 	 */
 	memset(&reader->smgr, 0, sizeof(reader->smgr));
-#if PG_VERSION_NUM >= 160000
+#if PG_VERSION_NUM >= 170000
+	reader->smgr.smgr_rlocator.locator = rel->rd_locator;
+	reader->smgr.smgr_rlocator.backend = rel->rd_backend == MyBackendType ? MyBackendType : InvalidCommandId;
+#elif PG_VERSION_NUM >= 160000
 	reader->smgr.smgr_rlocator.locator = rel->rd_locator;
 	reader->smgr.smgr_rlocator.backend = rel->rd_backend == MyBackendId ? MyBackendId : InvalidBackendId;
 #elif PG_VERSION_NUM >= 90100
@@ -1184,11 +1213,10 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 			bool		typisvarlena;
 
 #if PG_VERSION_NUM >= 110000
-			getTypeOutputInfo(tupdesc->attrs[i].atttypid,
+			getTypeOutputInfo(tupdesc->attrs[i].atttypid, &foutoid, &typisvarlena);
 #else
-			getTypeOutputInfo(tupdesc->attrs[i]->atttypid,
+			getTypeOutputInfo(tupdesc->attrs[i]->atttypid, &foutoid, &typisvarlena);
 #endif
-							  &foutoid, &typisvarlena);
 			value = OidOutputFunctionCall(foutoid, values[i]);
 		}
 
