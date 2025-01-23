@@ -1,5 +1,5 @@
 # SPEC file for pg_bulkload on PostgreSQL 16
-# Copyright (C) 2023-2024 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (C) 2023-2025 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
 %define pgmajorversion  16
@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.21
+Version:        3.1.22
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -93,6 +93,9 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Thu Jan 23 2025 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.22-1
+- Support PostgreSQL 17
+- Update to pg_bulkload 3.1.22
 * Thu Jan 16 2024 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.21-1
 - Support PostgreSQL 16
 - Update to pg_bulkload 3.1.21

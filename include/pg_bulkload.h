@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/pg_bulkload.h
  *
- *	  Copyright (c) 2007-2024, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 #ifndef BULKLOAD_H_INCLUDED
 #define BULKLOAD_H_INCLUDED
