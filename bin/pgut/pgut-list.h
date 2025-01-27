@@ -10,6 +10,9 @@
 #ifndef PGUT_LIST_H
 #define PGUT_LIST_H
 
+#if PG_VERSION_NUM >= 170000
+#include "utils/palloc.h"
+#endif
 #include "nodes/pg_list.h"
 
 /*
