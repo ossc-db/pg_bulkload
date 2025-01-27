@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: util/pg_timestamp.c
  *
- *	  Copyright (c) 2007-2024, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2007-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
  */
 #include "postgres.h"
 

@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 11
-# Copyright (C) 2009-2024 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# SPEC file for pg_bulkload on PostgreSQL 17
+# Copyright (C) 2024-2025 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 
 %define sname                   pg_bulkload
-%define pgmajorversion  11
+%define pgmajorversion  17
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.21
+Version:        3.1.22
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql11-devel, postgresql11
-Requires:       postgresql11
+BuildRequires:  postgresql17-devel, postgresql17
+Requires:       postgresql17
 
 
 %description
@@ -30,7 +30,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql11-server, postgresql11-llvmjit
+Requires: postgresql17-server, postgresql17-llvmjit
 Requires: pg_bulkload = %{version}
 Summary:  Just-in-time compilation support for pg_bulkload
 
@@ -93,21 +93,6 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Thu Jan 16 2024 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.21-1
-- Update to pg_bulkload 3.1.21
-* Thu Jan 13 2023 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.20-1
-- Update to pg_bulkload 3.1.20
-* Mon Oct 11 2021 - Masahiro ikeda <masahiro.ikeda.us@hco.ntt.co.jp> 3.1.19-1
-- Update to pg_bulkload 3.1.19
-* Tue Jun 01 2021 - Yanmei Sun <yanmei.sun.ep@hco.ntt.co.jp> 3.1.18-1
-- Update to pg_bulkload 3.1.18
-* Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
-- Update to pg_bulkload 3.1.17
-* Wed Jan 22 2020 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.16-1
-- Update to pg_bulkload 3.1.16
-- Warn users of some risks of using parallel/multi-process mode
-- Document restriction that pg_bulkload supports only tables of "heap" access method
-* Mon Jan 21 2019 - Moon Insung <moon_insung_i3@lab.ntt.co.jp> 3.1.15-1
-- Fixed pg_bulkload to mitigate attacks described in CVE-2018-1058
-- Added llvm.rpm for pg_bulkload to support llvmjit of PostgreSQL
-- Update to pg_bulkload 3.1.15
+* Thu Jan 23 2025 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.22-1
+- Support PostgreSQL 17
+- Update to pg_bulkload 3.1.22
