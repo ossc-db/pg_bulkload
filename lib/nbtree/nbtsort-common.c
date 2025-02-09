@@ -10,7 +10,7 @@
  */
 
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 110000
 /*
  * create and initialize a spool structure
  */
