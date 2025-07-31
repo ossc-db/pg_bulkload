@@ -548,6 +548,7 @@ _bt_leafbuild(BTSpool *btspool, BTSpool *btspool2)
 	}
 #endif							/* BTREE_BUILD_STATS */
 
+	/* Execute the sort */
 	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
 								 PROGRESS_BTREE_PHASE_PERFORMSORT_1);
 	tuplesort_performsort(btspool->sortstate);
@@ -1465,7 +1466,6 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	WalUsage   *walusage;
 	BufferUsage *bufferusage;
 	bool		leaderparticipates = true;
-	char	   *sharedquery;
 	int			querylen;
 
 #ifdef DISABLE_LEADER_PARTICIPATION
@@ -1532,9 +1532,14 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
 	/* Finally, estimate PARALLEL_KEY_QUERY_TEXT space */
-	querylen = strlen(debug_query_string);
-	shm_toc_estimate_chunk(&pcxt->estimator, querylen + 1);
-	shm_toc_estimate_keys(&pcxt->estimator, 1);
+	if (debug_query_string)
+	{
+		querylen = strlen(debug_query_string);
+		shm_toc_estimate_chunk(&pcxt->estimator, querylen + 1);
+		shm_toc_estimate_keys(&pcxt->estimator, 1);
+	}
+	else
+		querylen = 0;			/* keep compiler quiet */
 
 	/* Everyone's had a chance to ask for space, so now create the DSM */
 	InitializeParallelDSM(pcxt);
@@ -1598,9 +1603,14 @@ _bt_begin_parallel(BTBuildState *buildstate, bool isconcurrent, int request)
 	}
 
 	/* Store query string for workers */
-	sharedquery = (char *) shm_toc_allocate(pcxt->toc, querylen + 1);
-	memcpy(sharedquery, debug_query_string, querylen + 1);
-	shm_toc_insert(pcxt->toc, PARALLEL_KEY_QUERY_TEXT, sharedquery);
+	if (debug_query_string)
+	{
+		char	   *sharedquery;
+
+		sharedquery = (char *) shm_toc_allocate(pcxt->toc, querylen + 1);
+		memcpy(sharedquery, debug_query_string, querylen + 1);
+		shm_toc_insert(pcxt->toc, PARALLEL_KEY_QUERY_TEXT, sharedquery);
+	}
 
 	/*
 	 * Allocate space for each worker's WalUsage and BufferUsage; no need to
@@ -1805,7 +1815,7 @@ _bt_parallel_build_main(dsm_segment *seg, shm_toc *toc)
 #endif							/* BTREE_BUILD_STATS */
 
 	/* Set debug_query_string for individual workers first */
-	sharedquery = shm_toc_lookup(toc, PARALLEL_KEY_QUERY_TEXT, false);
+	sharedquery = shm_toc_lookup(toc, PARALLEL_KEY_QUERY_TEXT, true);
 	debug_query_string = sharedquery;
 
 	/* Report the query string from leader */
@@ -1962,16 +1972,18 @@ _bt_parallel_scan_and_sort(BTSpool *btspool, BTSpool *btspool2,
 									   true, progress, _bt_build_callback,
 									   (void *) &buildstate, scan);
 
-	/*
-	 * Execute this worker's part of the sort.
-	 *
-	 * Unlike leader and serial cases, we cannot avoid calling
-	 * tuplesort_performsort() for spool2 if it ends up containing no dead
-	 * tuples (this is disallowed for workers by tuplesort).
-	 */
+	/* Execute this worker's part of the sort */
+	if (progress)
+		pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+									 PROGRESS_BTREE_PHASE_PERFORMSORT_1);
 	tuplesort_performsort(btspool->sortstate);
 	if (btspool2)
+	{
+		if (progress)
+			pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+										 PROGRESS_BTREE_PHASE_PERFORMSORT_2);
 		tuplesort_performsort(btspool2->sortstate);
+	}
 
 	/*
 	 * Done.  Record ambuild statistics, and whether we encountered a broken
@@ -1994,32 +2006,4 @@ _bt_parallel_scan_and_sort(BTSpool *btspool, BTSpool *btspool2,
 	tuplesort_end(btspool->sortstate);
 	if (btspool2)
 		tuplesort_end(btspool2->sortstate);
-}
-
-/*
- * create and initialize a spool structure
- */
-static BTSpool *
-_bt_spoolinit(Relation heap, Relation index, bool isunique, bool isdead)
-{
-	BTSpool    *btspool = (BTSpool *) palloc0(sizeof(BTSpool));
-	int			btKbytes;
-
-	btspool->heap = heap;
-	btspool->index = index;
-	btspool->isunique = isunique;
-
-	/*
-	 * We size the sort area as maintenance_work_mem rather than work_mem to
-	 * speed index creation.  This should be OK since a single backend can't
-	 * run multiple index creations in parallel.  Note that creation of a
-	 * unique index actually requires two BTSpool objects.  We expect that the
-	 * second one (for dead tuples) won't get very full, so we give it only
-	 * work_mem.
-	 */
-	btKbytes = isdead ? work_mem : maintenance_work_mem;
-	btspool->sortstate = tuplesort_begin_index_btree(heap, index, isunique,
-													 btKbytes, NULL, false);
-
-	return btspool;
 }

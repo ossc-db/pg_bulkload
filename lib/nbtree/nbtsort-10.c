@@ -111,7 +111,7 @@ typedef struct BTPageState
 	OffsetNumber btps_lastoff;	/* last item offset loaded */
 	uint32		btps_level;		/* tree level (0 = leaf) */
 	Size		btps_full;		/* "full" if less than this much free space */
-	struct BTPageState *btps_next;		/* link to parent level, if any */
+	struct BTPageState *btps_next;	/* link to parent level, if any */
 } BTPageState;
 
 /*
@@ -122,8 +122,8 @@ typedef struct BTWriteState
 	Relation	heap;
 	Relation	index;
 	bool		btws_use_wal;	/* dump pages to WAL? */
-	BlockNumber btws_pages_alloced;		/* # pages allocated */
-	BlockNumber btws_pages_written;		/* # pages written out */
+	BlockNumber btws_pages_alloced; /* # pages allocated */
+	BlockNumber btws_pages_written; /* # pages written out */
 	Page		btws_zeropage;	/* workspace for filling zeroes */
 } BTWriteState;
 
@@ -208,7 +208,7 @@ _bt_leafbuild(BTSpool *btspool, BTSpool *btspool2)
 		ShowUsage("BTREE BUILD (Spool) STATISTICS");
 		ResetUsage();
 	}
-#endif   /* BTREE_BUILD_STATS */
+#endif							/* BTREE_BUILD_STATS */
 
 	tuplesort_performsort(btspool->sortstate);
 	if (btspool2)
@@ -345,7 +345,7 @@ _bt_pagestate(BTWriteState *wstate, uint32 level)
 		state->btps_full = (BLCKSZ * (100 - BTREE_NONLEAF_FILLFACTOR) / 100);
 	else
 		state->btps_full = RelationGetTargetPageFreeSpace(wstate->index,
-												   BTREE_DEFAULT_FILLFACTOR);
+														  BTREE_DEFAULT_FILLFACTOR);
 	/* no parent level, yet */
 	state->btps_next = NULL;
 
@@ -485,12 +485,12 @@ _bt_buildadd(BTWriteState *wstate, BTPageState *state, IndexTuple itup)
 	if (itupsz > BTMaxItemSize(npage))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			errmsg("index row size %zu exceeds maximum %zu for index \"%s\"",
-				   itupsz, BTMaxItemSize(npage),
-				   RelationGetRelationName(wstate->index)),
-		errhint("Values larger than 1/3 of a buffer page cannot be indexed.\n"
-				"Consider a function index of an MD5 hash of the value, "
-				"or use full text indexing."),
+				 errmsg("index row size %zu exceeds maximum %zu for index \"%s\"",
+						itupsz, BTMaxItemSize(npage),
+						RelationGetRelationName(wstate->index)),
+				 errhint("Values larger than 1/3 of a buffer page cannot be indexed.\n"
+						 "Consider a function index of an MD5 hash of the value, "
+						 "or use full text indexing."),
 				 errtableconstraint(wstate->heap,
 									RelationGetRelationName(wstate->index))));
 
@@ -566,7 +566,7 @@ _bt_buildadd(BTWriteState *wstate, BTPageState *state, IndexTuple itup)
 
 			oopaque->btpo_next = nblkno;
 			nopaque->btpo_prev = oblkno;
-			nopaque->btpo_next = P_NONE;		/* redundant */
+			nopaque->btpo_next = P_NONE;	/* redundant */
 		}
 
 		/*
@@ -695,7 +695,7 @@ _bt_load(BTWriteState *wstate, BTSpool *btspool, BTSpool *btspool2)
 		 */
 
 		/* the preparation of merge */
-		itup = tuplesort_getindextuple(btspool->sortstate,true);
+		itup = tuplesort_getindextuple(btspool->sortstate, true);
 		itup2 = tuplesort_getindextuple(btspool2->sortstate, true);
 		indexScanKey = _bt_mkscankey_nodata(wstate->index);
 
