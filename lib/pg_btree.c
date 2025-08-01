@@ -1193,7 +1193,9 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 		bool		nq;
 
 		/* Ignore dropped columns in datatype */
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+		if (TupleDescAttr(tupdesc, i)->attisdropped)
+#elif PG_VERSION_NUM >= 110000
 		if (tupdesc->attrs[i].attisdropped)
 #else
 		if (tupdesc->attrs[i]->attisdropped)
@@ -1214,7 +1216,9 @@ tuple_to_cstring(TupleDesc tupdesc, HeapTuple tuple)
 			Oid			foutoid;
 			bool		typisvarlena;
 
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+			getTypeOutputInfo(TupleDescAttr(tupdesc, i)->atttypid, &foutoid, &typisvarlena);
+#elif PG_VERSION_NUM >= 110000
 			getTypeOutputInfo(tupdesc->attrs[i].atttypid, &foutoid, &typisvarlena);
 #else
 			getTypeOutputInfo(tupdesc->attrs[i]->atttypid, &foutoid, &typisvarlena);

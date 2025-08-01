@@ -481,7 +481,9 @@ CreateRemoteSource(const char *path, TupleDesc desc)
 		/* count valid fields */
 		for (nattrs = 0, i = 0; i < desc->natts; i++)
 		{
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+			if (TupleDescAttr(desc, i)->attisdropped)
+#elif PG_VERSION_NUM >= 110000
 			if (desc->attrs[i].attisdropped)
 #else
 			if (desc->attrs[i]->attisdropped)

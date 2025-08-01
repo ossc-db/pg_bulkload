@@ -493,11 +493,16 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
 
 		checker->desc = CreateTupleDescCopy(desc);
 		for (n = 0; n < desc->natts; n++)
-#if PG_VERSION_NUM >= 110000
+		{
+#if PG_VERSION_NUM >= 180000
+			TupleDescAttr(checker->desc, n)->attnotnull = TupleDescAttr(desc, n)->attnotnull;
+			populate_compact_attribute(checker->desc, n);
+#elif PG_VERSION_NUM >= 110000
 			checker->desc->attrs[n].attnotnull = desc->attrs[n].attnotnull;
 #else
 			checker->desc->attrs[n]->attnotnull = desc->attrs[n]->attnotnull;
 #endif
+		}
 	}
 }
 
@@ -595,7 +600,10 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 
 		for (i = 0; i < desc->natts; i++)
 		{
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+			if (TupleDescAttr(desc, i)->attnotnull &&
+				att_isnull(i, tuple->t_data->t_bits))
+#elif PG_VERSION_NUM >= 110000
 			if (desc->attrs[i].attnotnull &&
 				att_isnull(i, tuple->t_data->t_bits))
 #else
@@ -608,7 +616,9 @@ CheckerConstraints(Checker *checker, HeapTuple tuple, int *parsing_field)
 				ereport(ERROR,
 						(errcode(ERRCODE_NOT_NULL_VIOLATION),
 						 errmsg("null value in column \"%s\" violates not-null constraint",
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+						NameStr(TupleDescAttr(desc, i)->attname))));
+#elif PG_VERSION_NUM >= 110000
 						NameStr(desc->attrs[i].attname))));
 #else
 						NameStr(desc->attrs[i]->attname))));
@@ -630,11 +640,16 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 
 	former->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)
-#if PG_VERSION_NUM >= 110000
+	{
+#if PG_VERSION_NUM >= 180000
+		TupleDescAttr(former->desc, i)->attnotnull = TupleDescAttr(desc, i)->attnotnull;
+		populate_compact_attribute(former->desc, i);
+#elif PG_VERSION_NUM >= 110000
 		former->desc->attrs[i].attnotnull = desc->attrs[i].attnotnull;
 #else
 		former->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
 #endif
+	}
 
 	/*
 	 * allocate buffer to store columns or function arguments
@@ -689,7 +704,19 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 		former->maxfields = 0;
 		for (i = 0; i < natts; i++)
 		{
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+			/* ignore dropped columns */
+			if (TupleDescAttr(desc, i)->attisdropped)
+				continue;
+
+			/* get type information and input function */
+			getTypeInputInfo(TupleDescAttr(desc, i)->atttypid,
+							 &in_func_oid, &former->typIOParam[i]);
+			fmgr_info(in_func_oid, &former->typInput[i]);
+
+			former->typMod[i] = TupleDescAttr(desc, i)->atttypmod;
+			former->typId[i] = TupleDescAttr(desc, i)->atttypid;
+#elif PG_VERSION_NUM >= 110000
 			/* ignore dropped columns */
 			if (attrs[i].attisdropped)
 				continue;
@@ -807,7 +834,19 @@ tupledesc_match(TupleDesc dst_tupdesc, TupleDesc src_tupdesc)
 
 	for (i = 0; i < dst_tupdesc->natts; i++)
 	{
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+		FormData_pg_attribute *dattr = TupleDescAttr(dst_tupdesc, i);
+		FormData_pg_attribute *sattr = TupleDescAttr(src_tupdesc, i);
+
+		if (dattr->atttypid == sattr->atttypid)
+			continue;			/* no worries */
+		if (!dattr->attisdropped)
+			return false;
+
+		if (dattr->attlen != sattr->attlen ||
+			dattr->attalign != sattr->attalign)
+			return false;
+#elif PG_VERSION_NUM >= 110000
 		FormData_pg_attribute dattr = dst_tupdesc->attrs[i];
 		FormData_pg_attribute sattr = src_tupdesc->attrs[i];
 
@@ -1262,7 +1301,19 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 
 		for (i = 0; i < natts; i++)
 		{
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+			if (TupleDescAttr(self->sourceDesc, i)->atttypid ==
+				TupleDescAttr(self->targetDesc, i)->atttypid)
+				continue;
+
+			getTypeOutputInfo(TupleDescAttr(self->sourceDesc, i)->atttypid,
+							  &iofunc, &self->typIsVarlena[i]);
+			fmgr_info(iofunc, &self->typOutput[i]);
+
+			getTypeInputInfo(TupleDescAttr(self->targetDesc, i)->atttypid, &iofunc,
+							 &self->typIOParam[i]);
+			fmgr_info(iofunc, &self->typInput[i]);
+#elif PG_VERSION_NUM >= 110000
 			if (self->sourceDesc->attrs[i].atttypid ==
 				self->targetDesc->attrs[i].atttypid)
 				continue;
@@ -1298,7 +1349,33 @@ CoercionDeformTuple(TupleChecker *self, HeapTuple tuple, int *parsing_field)
 	{
 		*parsing_field = i + 1;
 
-#if PG_VERSION_NUM >= 110000
+#if PG_VERSION_NUM >= 180000
+		/* Ignore dropped columns in datatype */
+		if (TupleDescAttr(self->targetDesc, i)->attisdropped)
+			continue;
+
+		if (self->nulls[i])
+		{
+			/* emit nothing... */
+			continue;
+		}
+		else if (TupleDescAttr(self->sourceDesc, i)->atttypid ==
+				 TupleDescAttr(self->targetDesc, i)->atttypid)
+		{
+			continue;
+		}
+		else
+		{
+			char   *value;
+
+			value = OutputFunctionCall(&self->typOutput[i], self->values[i]);
+			self->values[i] = InputFunctionCall(&self->typInput[i], value,
+										self->typIOParam[i],
+										TupleDescAttr(self->targetDesc, i)->atttypmod);
+			pfree(value);
+		}
+	}
+#elif PG_VERSION_NUM >= 110000
 		/* Ignore dropped columns in datatype */
 		if (self->targetDesc->attrs[i].attisdropped)
 			continue;
