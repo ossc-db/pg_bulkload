@@ -470,8 +470,10 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
          * is not essential. */
         ExecCheckRTPerms(range_table, true);
 #endif
-	
-#if PG_VERSION_NUM >= 160000
+
+#if PG_VERSION_NUM >= 180000
+		ExecInitRangeTable(checker->estate, range_table, perminfos, bms_make_singleton(1));
+#elif PG_VERSION_NUM >= 160000
 		ExecInitRangeTable(checker->estate, range_table, perminfos);
 #elif PG_VERSION_NUM >= 120000
 		/* Some APIs have changed significantly as of v12. */
