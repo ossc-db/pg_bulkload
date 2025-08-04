@@ -188,7 +188,40 @@ SpoolerClose(Spooler *self)
 
 	/* Terminate spooler. */
 	ExecDropSingleTupleTableSlot(self->slot);
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 180000
+	/*
+	 * In PostgreSQL 18 and later, ExecCloseIndices() asserts that it is not
+	 * called on a ResultRelInfo with already-closed indexes. However,
+	 * IndexSpoolEnd() may have already closed some indexes (e.g. non-btree
+	 * indexes that get reindexed), which causes the assertion to fail.
+	 *
+	 * To work around this, we replicate the logic of ExecCloseIndices()
+	 * here, but with a check to skip already-closed indexes, similar to how
+	 * older PostgreSQL versions behaved. We don't call
+	 * ExecCloseResultRelations() to avoid the problematic assertion.
+	 */
+	if (self->relinfo)
+	{
+		ResultRelInfo *resultRelInfo = self->relinfo;
+		int			i;
+
+		if (resultRelInfo->ri_NumIndices > 0)
+		{
+			for (i = 0; i < resultRelInfo->ri_NumIndices; i++)
+			{
+				if (resultRelInfo->ri_IndexRelationDescs[i] == NULL)
+					continue;
+
+				/* Give the index a chance to do some post-insert cleanup */
+				index_insert_cleanup(resultRelInfo->ri_IndexRelationDescs[i],
+									 resultRelInfo->ri_IndexRelationInfo[i]);
+
+				/* Drop lock acquired by ExecOpenIndices */
+				index_close(resultRelInfo->ri_IndexRelationDescs[i], RowExclusiveLock);
+			}
+		}
+	}
+#elif PG_VERSION_NUM >= 140000
 	if (self->relinfo)
 		ExecCloseResultRelations(self->estate);
 #else
