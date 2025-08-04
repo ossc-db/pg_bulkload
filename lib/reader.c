@@ -22,6 +22,7 @@
 #include "nodes/parsenodes.h"
 #include "parser/parse_coerce.h"
 #include "pgstat.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -461,7 +462,15 @@ CheckerInit(Checker *checker, Relation rel, TupleChecker *tchecker)
         }
 #endif
 
-#if PG_VERSION_NUM >= 160000
+#if PG_VERSION_NUM >= 180000
+		/*
+		* In PostgreSQL 18, ExecCheckPermissions() requires the relation to be locked.
+		* Acquire an AccessShareLock before calling it and release the lock afterward.
+		*/
+		LockRelationOid(RelationGetRelid(rel), AccessShareLock);
+		ExecCheckPermissions(range_table, perminfos, true);
+		UnlockRelationOid(RelationGetRelid(rel), AccessShareLock);
+#elif PG_VERSION_NUM >= 160000
 		ExecCheckPermissions(range_table, perminfos, true);
 #elif PG_VERSION_NUM >= 90100
         /* This API is published only from 9.1. 
