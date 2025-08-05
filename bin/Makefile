@@ -70,6 +70,8 @@ sql/init-16.sql:
 	cp sql/init-extension-v3.sql sql/init-16.sql
 sql/init-17.sql:
 	cp sql/init-extension-v3.sql sql/init-17.sql
+sql/init-18.sql:
+	cp sql/init-extension-v3.sql sql/init-18.sql
 
 sql/load_bin.sql: sql/load_bin-$(MAJORVERSION).sql
 	cp sql/load_bin-$(MAJORVERSION).sql sql/load_bin.sql
@@ -97,6 +99,8 @@ sql/load_bin-16.sql:
 	cp sql/load_bin-v2.sql sql/load_bin-16.sql
 sql/load_bin-17.sql:
 	cp sql/load_bin-v2.sql sql/load_bin-17.sql
+sql/load_bin-18.sql:
+	cp sql/load_bin-v2.sql sql/load_bin-18.sql
 
 sql/load_csv.sql: sql/load_csv-$(MAJORVERSION).sql
 	cp sql/load_csv-$(MAJORVERSION).sql sql/load_csv.sql
@@ -124,6 +128,8 @@ sql/load_csv-16.sql:
 	cp sql/load_csv-v3.sql sql/load_csv-16.sql
 sql/load_csv-17.sql:
 	cp sql/load_csv-v3.sql sql/load_csv-17.sql
+sql/load_csv-18.sql:
+	cp sql/load_csv-v3.sql sql/load_csv-18.sql
 
 sql/load_filter.sql: sql/load_filter-$(MAJORVERSION).sql
 	cp sql/load_filter-$(MAJORVERSION).sql sql/load_filter.sql
@@ -151,7 +157,8 @@ sql/load_filter-16.sql:
 	cp sql/load_filter-v3.sql sql/load_filter-16.sql
 sql/load_filter-17.sql:
 	cp sql/load_filter-v3.sql sql/load_filter-17.sql
-
+sql/load_filter-18.sql:
+	cp sql/load_filter-v3.sql sql/load_filter-18.sql
 
 sql/load_function.sql: sql/load_function-$(MAJORVERSION).sql
 	cp sql/load_function-$(MAJORVERSION).sql sql/load_function.sql
@@ -179,6 +186,8 @@ sql/load_function-16.sql:
 	cp sql/load_function-v3.sql sql/load_function-16.sql
 sql/load_function-17.sql:
 	cp sql/load_function-v3.sql sql/load_function-17.sql
+sql/load_function-18.sql:
+	cp sql/load_function-v3.sql sql/load_function-18.sql
 
 sql/write_bin.sql: sql/write_bin-$(MAJORVERSION).sql
 	cp sql/write_bin-$(MAJORVERSION).sql sql/write_bin.sql
@@ -206,17 +215,19 @@ sql/write_bin-16.sql:
 	cp sql/write_bin-v2.sql sql/write_bin-16.sql
 sql/write_bin-17.sql:
 	cp sql/write_bin-v2.sql sql/write_bin-17.sql
+sql/write_bin-18.sql:
+	cp sql/write_bin-v2.sql sql/write_bin-18.sql
 
 .PHONY: subclean
 clean: subclean
 
 subclean:
-	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
-	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
-	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
-	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
-	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
-	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17}.sql
+	rm -f sql/init.sql sql/init-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
+	rm -f sql/load_bin.sql sql/load_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
+	rm -f sql/load_csv.sql sql/load_csv-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
+	rm -f sql/load_filter.sql sql/load_filter-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
+	rm -f sql/load_function.sql sql/load_function-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
+	rm -f sql/write_bin.sql sql/write_bin-{9.3,9.4,9.5,9.6,10,11,12,13,14,15,16,17,18}.sql
 
 installcheck: sql/init.sql sql/load_bin.sql sql/load_csv.sql sql/load_function.sql sql/load_filter.sql sql/write_bin.sql
 
