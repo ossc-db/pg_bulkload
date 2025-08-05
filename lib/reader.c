@@ -1097,6 +1097,7 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 	MemoryContextSwitchTo(oldcontext);
 	CurrentResourceOwner = oldowner;
 
+# if PG_VERSION_NUM < 180000
 	/* set fn_extra except the first time call */
 	if ( filter->is_first_time_call == false &&
 		MemoryContextIsValid(filter->fn_extra.fcontext) &&
@@ -1104,11 +1105,10 @@ FilterTuple(Filter *filter, TupleFormer *former, int *parsing_field)
 		flinfo.fn_extra = (SQLFunctionCache *) palloc0(sizeof(SQLFunctionCache));
 		memmove((SQLFunctionCache *)flinfo.fn_extra, &(filter->fn_extra),
 							sizeof(SQLFunctionCache));
-	} else {
-
-		filter->is_first_time_call = true;	
-	}
-#endif
+	} else
+#endif  /* PG_VERSION_NUM < 180000 */
+		filter->is_first_time_call = true;
+#endif  /* PG_VERSION_NUM >= 90204 */
 
 #if PG_VERSION_NUM >= 120000
 	InitFunctionCallInfoData(*fcinfo, &flinfo, filter->nargs,
