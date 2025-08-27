@@ -705,13 +705,15 @@ TupleFormerInit(TupleFormer *former, Filter *filter, TupleDesc desc)
 	}
 	else
 	{
-#if PG_VERSION_NUM >= 110000
-		FormData_pg_attribute  *attrs;
-#else
+#if PG_VERSION_NUM < 110000
 		Form_pg_attribute  *attrs;
+#elif PG_VERSION_NUM < 180000
+		FormData_pg_attribute  *attrs;
 #endif
 
+#if PG_VERSION_NUM < 180000
 		attrs = desc->attrs;
+#endif
 		former->maxfields = 0;
 		for (i = 0; i < natts; i++)
 		{
