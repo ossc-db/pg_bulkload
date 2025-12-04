@@ -65,6 +65,7 @@ jobs:
           libselinux-dev                  \
           libedit-dev                     \
           liblz4-dev                      \
+          libnuma-dev                     \
           zlib1g-dev                      \
           postgresql-${{ env.PGVERSION }} \
           postgresql-server-dev-${{ env.PGVERSION }}
