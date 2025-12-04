@@ -15,11 +15,11 @@ jobs:
     strategy:
       matrix:
         PGVERSION:                # TODO: build with master branch
-          - "18.0"
-          - "17.5"
-          - "16.9"
-          - "15.13"
-          - "14.18"
+          - "18.1"
+          - "17.7"
+          - "16.11"
+          - "15.15"
+          - "14.20"
 
     env:
       CACHE_VERSION: 20221222  # to identify cache version
