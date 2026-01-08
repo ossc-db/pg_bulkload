@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: lib/source.c
  *
- *	  Copyright (c) 2009-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2009-2026, NTT, Inc.
  */
 
 #include "pg_bulkload.h"

@@ -1,5 +1,5 @@
 # SPEC file for pg_bulkload on PostgreSQL 15
-# Copyright (C) 2022-2025 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+# Copyright (C) 2022-2026 NTT, Inc.
 
 %define sname                   pg_bulkload
 %define pgmajorversion  15

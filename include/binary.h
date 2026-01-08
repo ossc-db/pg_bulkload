@@ -1,7 +1,7 @@
 /*
  * pg_bulkload: include/binary.h
  *
- *	  Copyright (c) 2011-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ *	  Copyright (c) 2011-2026, NTT, Inc.
  */
 
 /**

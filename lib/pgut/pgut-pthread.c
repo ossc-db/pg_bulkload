@@ -2,7 +2,7 @@
  *
  * pgut-pthread.c: Portable pthread implementation and support functions.
  *
- * Copyright (c) 2009-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+ * Copyright (c) 2009-2026, NTT, Inc.
  *
  *-------------------------------------------------------------------------
  */
