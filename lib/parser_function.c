@@ -333,11 +333,16 @@ FunctionParserInit(FunctionParser *self, Checker *checker, const char *infile, T
 
 	self->desc = CreateTupleDescCopy(desc);
 	for (i = 0; i < desc->natts; i++)
-#if PG_VERSION_NUM >= 110000
+	{
+#if PG_VERSION_NUM >= 180000
+		TupleDescAttr(self->desc, i)->attnotnull = TupleDescAttr(desc, i)->attnotnull;
+		populate_compact_attribute(self->desc, i);
+#elif PG_VERSION_NUM >= 110000
 		self->desc->attrs[i].attnotnull = desc->attrs[i].attnotnull;
 #else
 		self->desc->attrs[i]->attnotnull = desc->attrs[i]->attnotnull;
 #endif
+	}
 
 	self->estate = CreateExecutorState();
 	self->econtext = GetPerTupleExprContext(self->estate);

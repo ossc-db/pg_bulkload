@@ -672,16 +672,20 @@ open_data_file(
 #else
 	RelFileNodeBackend	bknode;
 	bknode.node = rnode;
-#endif
+#endif  /* PG_VERSION_NUM >= 160000 */
 #if PG_VERSION_NUM >= 170000
 	bknode.backend = istemp ? MyBackendType : InvalidCommandId;
 #else
 	bknode.backend = istemp ? MyBackendId : InvalidBackendId;
-#endif
+#endif  /* PG_VERSION_NUM >= 170000 */
+#if PG_VERSION_NUM >= 180000
+	fname = pstrdup(relpath(bknode, MAIN_FORKNUM).str);
+#else
 	fname = relpath(bknode, MAIN_FORKNUM);
+#endif  /* PG_VERSION_NUM >= 180000 */
 #else
 	fname = relpath(rnode, MAIN_FORKNUM);
-#endif
+#endif  /* PG_VERSION_NUM >= 90100 */
 	segno = blknum / RELSEG_SIZE;
 	if (segno > 0)
 	{

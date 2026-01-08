@@ -74,7 +74,7 @@ typedef Parser *(*ParserCreate)(void);
 #endif
 #endif
 
-#ifdef HAVE_LONG_INT_64
+#if SIZEOF_LONG == 8
 #define int64_FMT		"%ld"
 #else
 #define int64_FMT		"%lld"
