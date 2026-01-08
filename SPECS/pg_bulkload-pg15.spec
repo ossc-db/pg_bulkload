@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.22
+Version:        3.1.23
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -93,6 +93,9 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
+* Tue Jan 13 2026 - NTT OSS Center <shinya11.kato@gmail.com> 3.1.23-1
+- Support PostgreSQL 18
+- Update to pg_bulkload 3.1.23
 * Thu Jan 23 2025 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.22-1
 - Support PostgreSQL 17
 - Update to pg_bulkload 3.1.22
