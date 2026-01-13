@@ -1,8 +1,8 @@
-# SPEC file for pg_bulkload on PostgreSQL 13
+# SPEC file for pg_bulkload on PostgreSQL 18
 # Copyright (C) 2009-2026 NTT, Inc.
 
 %define sname                   pg_bulkload
-%define pgmajorversion  13
+%define pgmajorversion  18
 
 %define _prefix                 /usr/pgsql-%{pgmajorversion}
 %define _libdir                 %{_prefix}/lib
@@ -10,7 +10,7 @@
 
 Summary:        High speed data load utility for PostgreSQL
 Name:           %{sname}
-Version:        3.1.22
+Version:        3.1.23
 Release:        1%{?dist}
 License:        BSD
 Group:          Applications/Databases
@@ -19,8 +19,8 @@ Source0:        %{sname}-%{version}.tar.gz
 URL:            http://ossc-db.github.io/pg_bulkload/index.html
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id_u} -n)
 
-BuildRequires:  postgresql13-devel, postgresql13
-Requires:       postgresql13
+BuildRequires:  postgresql18-devel, postgresql18
+Requires:       postgresql18
 
 
 %description
@@ -30,7 +30,7 @@ When we load huge amount of data to a database, it is common situation that data
 
 
 %package llvmjit
-Requires: postgresql13-server, postgresql13-llvmjit
+Requires: postgresql18-server, postgresql18-llvmjit
 Requires: pg_bulkload = %{version}
 Summary:  Just-in-time compilation support for pg_bulkload
 
@@ -93,16 +93,6 @@ rm -rf %{buildroot}
 rm -rf %{_libdir}/pgxs/src/backend/
 
 %changelog
-* Thu Jan 23 2025 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.22-1
-- Support PostgreSQL 17
-- Update to pg_bulkload 3.1.22
-* Thu Jan 16 2024 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.21-1
-- Update to pg_bulkload 3.1.21
-* Thu Jan 13 2023 - NTT OSS Center <zuowei.yan.tb@hco.ntt.co.jp> 3.1.20-1
-- Update to pg_bulkload 3.1.20
-* Mon Oct 11 2021 - Masahiro ikeda <masahiro.ikeda.us@hco.ntt.co.jp> 3.1.19-1
-- Update to pg_bulkload 3.1.19
-* Tue Jun 01 2021 - Yanmei Sun <yanmei.sun.ep@hco.ntt.co.jp> 3.1.18-1
-- Update to pg_bulkload 3.1.18
-* Fri Feb 05 2021 - Moon Insung <insung.moon.gk@hco.ntt.co.jp> 3.1.17-1
-- Update to pg_bulkload 3.1.17
+* Tue Jan 13 2026 - NTT OSS Center <shinya11.kato@gmail.com> 3.1.23-1
+- Support PostgreSQL 18
+- Update to pg_bulkload 3.1.23
