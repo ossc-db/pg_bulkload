@@ -4,6 +4,7 @@ FROM rockylinux/rockylinux:${RHEL_VERSION:-10}
 ARG RHEL_VERSION
 ARG PG_VERSION
 ARG PG_BULKLOAD_VERSION
+ARG REPO_URL
 
 ENV PATH=/usr/pgsql-${PG_VERSION}/bin:$PATH
 ENV PGDATA=/var/lib/pgsql/${PG_VERSION}/data
@@ -51,7 +52,7 @@ WORKDIR /var/lib/pgsql/
 
 # Deploy the files required for the build
 RUN rpmdev-setuptree
-RUN git clone https://github.com/ossc-db/pg_bulkload.git
+RUN git clone ${REPO_URL}
 RUN cp -a pg_bulkload/SPECS/pg_bulkload-pg${PG_VERSION}.spec rpmbuild/SPECS
 RUN cd pg_bulkload && \
     git archive VERSION${PG_BULKLOAD_VERSION//./_} \
