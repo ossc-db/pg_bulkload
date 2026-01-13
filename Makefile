@@ -1,7 +1,7 @@
 #
 # pg_bulkload: Makefile
 #
-#    Copyright (c) 2007-2025, NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#    Copyright (c) 2007-2026, NTT, Inc.
 #
 ifndef USE_PGXS
 top_builddir = ../..
