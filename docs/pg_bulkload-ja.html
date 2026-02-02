@@ -27,8 +27,10 @@
 <li><a href="#restrictions">使用上の注意と制約</a></li>
 <li><a href="#details">詳細</a></li>
 <li><a href="#install">インストール方法</a></li>
+<li><a href="#upgrade">アップグレード方法</a></li>
+<li><a href="#migration">COPYへの移行</a></li>
 <li><a href="#requirement">動作環境</a></li>
-<li><a href="#releasenote">リリースノート<a></li>
+<li><a href="#releasenote">リリースノート</a></li>
 <li><a href="#seealso">関連項目</a></li>
 </ol>
 </div>
@@ -796,6 +798,254 @@ DROP EXTENSION</pre>
 <pre># rpm -e pg_bulkload-&lt;version&gt;.rpm</pre>
 <li><a href="#install">インストール方法</a>の手順に沿って、新しいバージョンの pg_bulkload をインストールします。</li>
 </ol>
+
+<h2 id="migration">COPYへの移行</h2>
+<p>以下の表は、データロード処理をpg_bulkloadから標準COPYコマンドへ切り替えるための機能比較表です。</p>
+<p>近年のCOPYコマンドの機能・性能向上によりpg_bulkloadの代替が可能となったケースや、pg_bulkloadが利用できないクラウド環境への移行などを想定しています。</p>
+
+<table>
+  <thead>
+  <tr>
+  <th>カテゴリ</th>
+  <th>項目</th>
+  <th>pg_bulkload</th>
+  <th>COPY</th>
+  <th>使用可能なPostgreSQLのバージョン (*1)</th>
+  <th>注意点</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td rowspan="10">入力</td>
+    <td>入力ソースとしてファイルを指定する</td>
+    <td>INPUT | INFILE = /path/to/filename</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>入力ソースとして標準入力を指定する</td>
+    <td>INPUT | INFILE = stdin</td>
+    <td>COPY table_name FROM STDIN;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>入力ソースとして関数が返した行セットを指定する</td>
+    <td>INPUT | INFILE = func()</td>
+    <td>COPY table_name FROM PROGRAM &#39;psql -c &quot;SELECT func()&quot;&#39;;</td>
+    <td></td>
+    <td>COPYの入力ソースとして関数が返した行セットを指定する機能はCOPYにはないため、PROGRAM句から関数を実行</td>
+  </tr>
+  <tr>
+    <td>CSV形式のファイルを指定する</td>
+    <td>TYPE = CSV</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>バイナリ形式のファイルを指定する</td>
+    <td>TYPE = BINARY</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT binary);</td>
+    <td></td>
+    <td>pg_bulkloadのバイナリ形式とCOPYのバイナリ形式に互換性はないため、pg_bulkloadで作成したバイナリファイルをCOPYで読み込むことは不可</td>
+  </tr>
+  <tr>
+    <td>CSV形式のデリミタ（区切り文字）を指定する</td>
+    <td>DELIMITER = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, DELIMITER &#39;/&#39;);</td>
+    <td></td>
+    <td>デリミタ（区切り文字）に/（スラッシュ）を指定</td>
+  </tr>
+  <tr>
+    <td>CSV形式の引用符を指定する</td>
+    <td>QUOTE = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, QUOTE &#39;/&#39;);</td>
+    <td></td>
+    <td>引用符に/（スラッシュ）を指定</td>
+  </tr>
+  <tr>
+    <td>CSV形式のエスケープ文字を指定する</td>
+    <td>ESCAPE = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, ESCAPE &#39;/&#39;);</td>
+    <td></td>
+    <td>エスケープ文字に/（スラッシュ）を指定</td>
+  </tr>
+  <tr>
+    <td>CSV形式のNULL値を表す文字列を指定する</td>
+    <td>NULL = \N</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, NULL &#39;\N&#39;);</td>
+    <td></td>
+    <td>NULL値を表す文字列に\Nを指定</td>
+  </tr>
+  <tr>
+    <td>CSV形式の入力値をNULL文字列と比較しない</td>
+    <td>FORCE_NOT_NULL = column_name</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, FORCE_NOT_NULL column_name);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td rowspan="14">ロード方式</td>
+    <td>ロード時にWAL出力を最低限にする</td>
+    <td>WRITER | LOADER = DIRECT</td>
+    <td>同じトランザクション内でCREATE TABLEまたはTRUNCATEを実行、かつwal_level=&#39;minimal&#39;を設定</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>ロード時に共有バッファをスルーする</td>
+    <td>WRITER | LOADER = DIRECT</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>ロード処理をパラレル化する</td>
+    <td>WRITER | LOADER = PARALLEL<br>または<br>WRITER | LOADER = DIRECT<br>MULTI_PROCESS = YES</td>
+    <td>不可</td>
+    <td></td>
+    <td>入力ファイルを予め分割しておき、複数のクライアントからCOPYコマンドを実行することで、パラレル化は可能</td>
+  </tr>
+  <tr>
+    <td>ロード前に出力テーブルをTRUNCATEする</td>
+    <td>TRUNCATE = YES</td>
+    <td>不可</td>
+    <td></td>
+    <td>COPYの機能としては存在しないが、COPY実行前にTRUNCATEを実行することで代用可能</td>
+  </tr>
+  <tr>
+    <td>ヘッダをロードしない</td>
+    <td>SKIP | OFFSET = n</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (HEADER n);</td>
+    <td>19</td>
+    <td>n行スキップ</td>
+  </tr>
+  <tr>
+    <td>ロードする行数を指定する</td>
+    <td>LIMIT | LOAD = n</td>
+    <td>不可</td>
+    <td></td>
+    <td>n行ロード</td>
+  </tr>
+  <tr>
+    <td>入力データを変換するユーザ定義関数を指定する</td>
+    <td>FILTER = func()</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>入力データのエンコーディングを指定、検証、変換する</td>
+    <td>ENCODING = UTF8</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ENCODING &#39;UTF8&#39;);</td>
+    <td></td>
+    <td>エンコーディングにUTF8を指定</td>
+  </tr>
+  <tr>
+    <td>エラー時にコマンドが失敗する</td>
+    <td>PARSE_ERRORS = 0</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td>COPYはデフォルトでエラー時にコマンドが失敗</td>
+  </tr>
+  <tr>
+    <td>エラー時にエラーを無視する</td>
+    <td>PARSE_ERRORS = n</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore);</td>
+    <td>18</td>
+    <td>COPYはデータ型変換時のエラーのみスキップ可。パースエラー、制約違反エラー、エンコーディング異常はスキップ不可</td>
+  </tr>
+  <tr>
+    <td>エラー許容件数を指定する</td>
+    <td>PARSE_ERRORS = n</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>CHECK制約を検証しない</td>
+    <td>CHECK_CONSTRAINTS = NO</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>一意制約違反の許容件数を指定する</td>
+    <td>DUPLICATE_ERRORS = n</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>一意制約違反時の挙動を指定する</td>
+    <td>ON_DUPLICATE_KEEP = NEW | OLD</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td rowspan="8">出力</td>
+    <td>テーブルへ出力する</td>
+    <td>OUTPUT | TABLE = table_name</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>処理内容のログを記録する</td>
+    <td>LOGFILE = /path/to/file</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>ログファイルのパスを指定する</td>
+    <td>LOGFILE = /path/to/file</td>
+    <td>log_directory = &#39;/path/to/file&#39;</td>
+    <td></td>
+    <td>サーバログに記録されるため、postgresql.confのlog_directoryを設定</td>
+  </tr>
+  <tr>
+    <td>不良レコードを記録する</td>
+    <td>PARSE_BADFILE = /path/to/file</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>BADファイルのパスを指定する</td>
+    <td>PARSE_BADFILE = /path/to/file</td>
+    <td>log_directory = &#39;/path/to/file&#39;</td>
+    <td></td>
+    <td>サーバログに記録されるため、postgresql.confのlog_directoryを設定</td>
+  </tr>
+  <tr>
+    <td>一意制約違反の不良レコードを記録する</td>
+    <td>DUPLICATE_BADFILE = /path/to/file</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>一意制約違反のBADファイルのパスを指定する</td>
+    <td>DUPLICATE_BADFILE = /path/to/file</td>
+    <td>不可</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>ログをPostgreSQLサーバログに出力する</td>
+    <td>VERBOSE = YES</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  </tbody>
+  </table>
+
+<p>(*1) 近年のアップデートにより使用可能となった機能のみ記載しています。</p>
 
 <h2 id="requirement">動作環境</h2>
 <dl>

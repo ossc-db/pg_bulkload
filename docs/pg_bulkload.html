@@ -23,10 +23,12 @@
 <li><a href="#examples">Examples</a></li>
 <li><a href="#options">Options</a></li>
 <li><a href="#controlfile">Control Files</a></li>
-<li><a href="#environment">Envirionment</a></li>
+<li><a href="#environment">Environment</a></li>
 <li><a href="#restrictions">Restrictions</a></li>
 <li><a href="#details">Details</a></li>
 <li><a href="#install">Installation</a></li>
+<li><a href="#upgrade">Upgrade</a></li>
+<li><a href="#migration">Migration to COPY</a></li>
 <li><a href="#requirement">Requirements</a></li>
 <li><a href="#releasenote">Release Notes</a></li>
 <li><a href="#seealso">See Also</a></li>
@@ -872,6 +874,254 @@ DROP EXTENSION</pre>
 <pre># rpm -e pg_bulkload-&lt;version&gt;.rpm</pre>
 <li>Follow the <a href="#install">Installation</a> instructions to install a new version of pg_bulkload.</li>
 </ol>
+
+<h2 id="migration">Migration to COPY</h2>
+<p>The following table provides a feature comparison for migrating data loading processes from pg_bulkload to the standard COPY command.</p>
+<p>This is intended for cases where pg_bulkload can be replaced due to recent improvements in COPY command functionality and performance, or for migration to cloud environments where pg_bulkload is not available.</p>
+
+<table>
+  <thead>
+  <tr>
+  <th>Category</th>
+  <th>Feature</th>
+  <th>pg_bulkload</th>
+  <th>COPY</th>
+  <th>Available PostgreSQL Version (*1)</th>
+  <th>Notes</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td rowspan="10">Input</td>
+    <td>Specify a file as input source</td>
+    <td>INPUT | INFILE = /path/to/filename</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify standard input as input source</td>
+    <td>INPUT | INFILE = stdin</td>
+    <td>COPY table_name FROM STDIN;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify a function result set as input source</td>
+    <td>INPUT | INFILE = func()</td>
+    <td>COPY table_name FROM PROGRAM &#39;psql -c &quot;SELECT func()&quot;&#39;;</td>
+    <td></td>
+    <td>COPY does not have a feature to specify a function result set as input source, so execute the function from PROGRAM clause</td>
+  </tr>
+  <tr>
+    <td>Specify CSV format file</td>
+    <td>TYPE = CSV</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify binary format file</td>
+    <td>TYPE = BINARY</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT binary);</td>
+    <td></td>
+    <td>pg_bulkload binary format and COPY binary format are not compatible, so COPY cannot read binary files created by pg_bulkload</td>
+  </tr>
+  <tr>
+    <td>Specify CSV delimiter</td>
+    <td>DELIMITER = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, DELIMITER &#39;/&#39;);</td>
+    <td></td>
+    <td>Specify / (slash) as delimiter</td>
+  </tr>
+  <tr>
+    <td>Specify CSV quote character</td>
+    <td>QUOTE = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, QUOTE &#39;/&#39;);</td>
+    <td></td>
+    <td>Specify / (slash) as quote character</td>
+  </tr>
+  <tr>
+    <td>Specify CSV escape character</td>
+    <td>ESCAPE = /</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, ESCAPE &#39;/&#39;);</td>
+    <td></td>
+    <td>Specify / (slash) as escape character</td>
+  </tr>
+  <tr>
+    <td>Specify NULL string for CSV</td>
+    <td>NULL = \N</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, NULL &#39;\N&#39;);</td>
+    <td></td>
+    <td>Specify \N as NULL string</td>
+  </tr>
+  <tr>
+    <td>Do not compare input values with NULL string</td>
+    <td>FORCE_NOT_NULL = column_name</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (FORMAT csv, FORCE_NOT_NULL column_name);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td rowspan="14">Load Method</td>
+    <td>Minimize WAL output during load</td>
+    <td>WRITER | LOADER = DIRECT</td>
+    <td>Execute CREATE TABLE or TRUNCATE in the same transaction, and set wal_level=&#39;minimal&#39;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Bypass shared buffer during load</td>
+    <td>WRITER | LOADER = DIRECT</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Parallelize load process</td>
+    <td>WRITER | LOADER = PARALLEL<br>or<br>WRITER | LOADER = DIRECT<br>MULTI_PROCESS = YES</td>
+    <td>Not available</td>
+    <td></td>
+    <td>Parallelization is possible by splitting the input file in advance and executing COPY commands from multiple clients</td>
+  </tr>
+  <tr>
+    <td>TRUNCATE output table before load</td>
+    <td>TRUNCATE = YES</td>
+    <td>Not available</td>
+    <td></td>
+    <td>COPY does not have this feature, but you can execute TRUNCATE before COPY</td>
+  </tr>
+  <tr>
+    <td>Skip header lines</td>
+    <td>SKIP | OFFSET = n</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (HEADER n);</td>
+    <td>19</td>
+    <td>Skip n rows</td>
+  </tr>
+  <tr>
+    <td>Specify number of rows to load</td>
+    <td>LIMIT | LOAD = n</td>
+    <td>Not available</td>
+    <td></td>
+    <td>Load n rows</td>
+  </tr>
+  <tr>
+    <td>Specify user-defined function to transform input data</td>
+    <td>FILTER = func()</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify, validate, and convert input data encoding</td>
+    <td>ENCODING = UTF8</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ENCODING &#39;UTF8&#39;);</td>
+    <td></td>
+    <td>Specify UTF8 as encoding</td>
+  </tr>
+  <tr>
+    <td>Command fails on error</td>
+    <td>PARSE_ERRORS = 0</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td>COPY fails on error by default</td>
+  </tr>
+  <tr>
+    <td>Ignore errors on error</td>
+    <td>PARSE_ERRORS = n</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore);</td>
+    <td>18</td>
+    <td>COPY can only skip data type conversion errors. Parse errors, constraint violations, and encoding errors cannot be skipped</td>
+  </tr>
+  <tr>
+    <td>Specify error tolerance count</td>
+    <td>PARSE_ERRORS = n</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Do not verify CHECK constraints</td>
+    <td>CHECK_CONSTRAINTS = NO</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify unique constraint violation tolerance count</td>
+    <td>DUPLICATE_ERRORS = n</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify behavior on unique constraint violation</td>
+    <td>ON_DUPLICATE_KEEP = NEW | OLD</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td rowspan="8">Output</td>
+    <td>Output to table</td>
+    <td>OUTPUT | TABLE = table_name</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39;;</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Record processing log</td>
+    <td>LOGFILE = /path/to/file</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify log file path</td>
+    <td>LOGFILE = /path/to/file</td>
+    <td>log_directory = &#39;/path/to/file&#39;</td>
+    <td></td>
+    <td>Logged to server log, so set log_directory in postgresql.conf</td>
+  </tr>
+  <tr>
+    <td>Record bad records</td>
+    <td>PARSE_BADFILE = /path/to/file</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify BAD file path</td>
+    <td>PARSE_BADFILE = /path/to/file</td>
+    <td>log_directory = &#39;/path/to/file&#39;</td>
+    <td></td>
+    <td>Logged to server log, so set log_directory in postgresql.conf</td>
+  </tr>
+  <tr>
+    <td>Record unique constraint violation bad records</td>
+    <td>DUPLICATE_BADFILE = /path/to/file</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Specify unique constraint violation BAD file path</td>
+    <td>DUPLICATE_BADFILE = /path/to/file</td>
+    <td>Not available</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Output log to PostgreSQL server log</td>
+    <td>VERBOSE = YES</td>
+    <td>COPY table_name FROM &#39;/path/to/filename&#39; (ON_ERROR ignore, LOG_VERBOSITY verbose);</td>
+    <td></td>
+    <td></td>
+  </tr>
+  </tbody>
+  </table>
+
+<p>(*1) Only features that became available in recent updates are listed.</p>
 
 <h2 id="requirement">Requirements</h2>
 <dl>
