@@ -438,7 +438,7 @@ ON_DUPLICATE_KEEP を「WRITER=BINARY」と同時に指定した場合はエラ�
 パース処理、エンコーディングチェック、エンコーディング変換、FILTER 関数の実行、CHECK 制約適用、非 NULL 制約適用およびデータ型変換時に見つかった不良レコードを記録するBADファイルのパスを指定します。
 このファイルには、入力ファイルと同じ形式(CSVまたは固定長)で記録されます。
 相対パスで指定した場合の扱いは <a href="#INPUT">INPUT</a> と同じです。
-デフォルトは $PGDATA/pg_bulkload/&lt;タイムスタンプ&gt;_&lt;DB名&gt;_&lt;スキーマ名&gt;_&lt;テーブル名&gt;.bad.&lt;入力ファイルの拡張子&gt; です。
+デフォルトは $PGDATA/pg_bulkload/&lt;タイムスタンプ&gt;_&lt;DB名&gt;_&lt;スキーマ名&gt;_&lt;テーブル名&gt;.prs.&lt;入力ファイルの拡張子&gt; です。
 </dd>
 
 <dt id="DUPLICATE_BADFILE">DUPLICATE_BADFILE = path</dt>
