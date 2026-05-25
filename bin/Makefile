@@ -32,7 +32,9 @@ endif
 
 # libs pgport, pgcommon moved somewhere else in some ubuntu version
 # see ticket #97
+ifdef PG_CONFIG
 PG_LIBS += -L$(shell $(PG_CONFIG) --pkglibdir)
+endif
 
 # remove dependency to libxml2 and libxslt
 LIBS := $(filter-out -lxml2, $(LIBS))
