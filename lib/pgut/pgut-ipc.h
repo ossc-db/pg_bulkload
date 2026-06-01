@@ -27,5 +27,9 @@ extern Queue *QueueOpen(unsigned key);
 extern void QueueClose(Queue *self);
 extern uint32 QueueRead(Queue *self, void *buffer, uint32 len, bool need_lock);
 extern bool QueueWrite(Queue *self, const struct iovec iov[], int count, uint32 timeout_msec, bool need_lock);
+#if PG_VERSION_NUM >= 90600
+extern void QueueSetLockGroupInfo(Queue *self, void *leader_pgproc, int leader_pid);
+extern void QueueGetLockGroupInfo(Queue *self, void **leader_pgproc, int *leader_pid);
+#endif
 
 #endif   /* PGUT_IPC_H */
