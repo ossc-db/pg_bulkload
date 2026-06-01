@@ -99,6 +99,10 @@ typedef struct QueueHeader
 	uint32		begin;		/* position that begins to read on data */
 	uint32		end;		/* position that begins to write on data */
 	slock_t		mutex;		/* locks shared variables begin, end and data */
+#if PG_VERSION_NUM >= 90600
+	void		*lock_group_leader;		/* PGPROC* of the lock group leader */
+	int			lock_group_leader_pid;	/* PID of the lock group leader */
+#endif
 	char		data[1];	/* VARIABLE LENGTH ARRAY - MUST BE LAST */
 } QueueHeader;
 
@@ -197,6 +201,10 @@ retry:
 	header->size = size;
 	header->begin = header->end = 0;
 	SpinLockInit(&header->mutex);
+#if PG_VERSION_NUM >= 90600
+	header->lock_group_leader = NULL;
+	header->lock_group_leader_pid = 0;
+#endif
 
 	self = palloc(sizeof(Queue));
 	self->handle = handle;
@@ -527,3 +535,49 @@ retry:
 	sleep_msec += SPIN_SLEEP_MSEC;
 	goto retry;
 }
+
+#if PG_VERSION_NUM >= 90600
+/**
+ * @brief Store lock group leader information in the queue header.
+ *
+ * The reader (lock group leader) calls this after QueueCreate() so
+ * that the writer, upon opening the same queue, can retrieve the
+ * information and join the lock group with BecomeLockGroupMember().
+ *
+ * @param self          [in] Queue handle returned by QueueCreate().
+ * @param leader_pgproc [in] PGPROC pointer of the lock group leader
+ *                           (typically MyProc of the calling backend).
+ * @param leader_pid    [in] PID of the lock group leader
+ *                           (typically MyProcPid of the calling backend).
+ */
+void
+QueueSetLockGroupInfo(Queue *self, void *leader_pgproc, int leader_pid)
+{
+	volatile QueueHeader *header = self->header;
+
+	header->lock_group_leader = leader_pgproc;
+	header->lock_group_leader_pid = leader_pid;
+}
+
+/**
+ * @brief Retrieve lock group leader information from the queue header.
+ *
+ * The writer calls this after QueueOpen() to obtain the PGPROC pointer
+ * and PID of the lock group leader so it can join the group with
+ * BecomeLockGroupMember() before acquiring any heavyweight locks.
+ *
+ * @param self          [in]  Queue handle returned by QueueOpen().
+ * @param leader_pgproc [out] Receives the PGPROC pointer of the leader,
+ *                            or NULL if no lock group info was stored.
+ * @param leader_pid    [out] Receives the PID of the leader,
+ *                            or 0 if no lock group info was stored.
+ */
+void
+QueueGetLockGroupInfo(Queue *self, void **leader_pgproc, int *leader_pid)
+{
+	volatile QueueHeader *header = self->header;
+
+	*leader_pgproc = header->lock_group_leader;
+	*leader_pid = header->lock_group_leader_pid;
+}
+#endif

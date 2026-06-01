@@ -20,6 +20,7 @@
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
 #include "storage/lmgr.h"
+#include "storage/proc.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -90,6 +91,16 @@ ParallelWriterInit(ParallelWriter *self)
 
 	Assert(self->base.truncate == false);
 
+#if PG_VERSION_NUM >= 90600
+	/*
+	 * Become lock group leader before acquiring any relation locks.
+	 * The writer process will join this lock group, which allows its
+	 * AccessExclusiveLock to coexist with our AccessShareLock (and the
+	 * RowExclusiveLock held by COPY FROM, if applicable) without conflict.
+	 */
+	BecomeLockGroupLeader();
+#endif
+
 	/* Initialize information needed to check tuples when reading. */
 	if (self->base.relid != InvalidOid)
 	{
@@ -141,6 +152,17 @@ ParallelWriterInit(ParallelWriter *self)
 	self->queue = QueueCreate(&queryKey, DEFAULT_BUFFER_SIZE);
 	snprintf(queueName, lengthof(queueName), ":%u", queryKey);
 
+#if PG_VERSION_NUM >= 90600
+	/*
+	 * Store our lock group identity in the queue header so the writer can
+	 * join the same group before acquiring AccessExclusiveLock.  Because
+	 * both processes will belong to the same lock group, the writer's
+	 * AccessExclusiveLock will not conflict with our AccessShareLock (or
+	 * RowExclusiveLock held by COPY FROM).  This eliminates the window
+	 * that previously existed between releasing and re-acquiring the lock.
+	 */
+	QueueSetLockGroupInfo(self->queue, MyProc, MyProcPid);
+#else
 	/*
 	 * Connect to a new backend process that will actually perform the writes.
 	 * As the new process will take an AccessExclusiveLock on the target
@@ -158,6 +180,8 @@ ParallelWriterInit(ParallelWriter *self)
 	 */
 	if (rel)
 		UnlockRelation(rel, AccessShareLock);
+#endif
+
 	self->conn = connect_to_localhost();
 
 	/* start transaction */

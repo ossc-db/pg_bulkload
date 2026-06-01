@@ -495,10 +495,9 @@ The default is NO.
 If WRITER is PARALLEL, MULTI_PROCESS is ignored.
 If password authentication is configured to the database to load,
 you have to set up the password file. See <a href="#restrictions">Restrictions</a> for details.
-Please make sure when enabling MULTI_PROCESS that no other PostgreSQL backend
-process is trying to modify the schema of the table, because it may cause the
-schema of the table as seen by the reader and the writer processes to differ
-and cause problems.
+See <a href="#parallel_locks">table locks in parallel mode</a> for how the
+reader and writer backends lock the target table and when other sessions must
+not change its schema.
 </dd>
 
 </dl>
@@ -727,6 +726,42 @@ Do not terminate pg_bulkload command using "<code>kill -9</code>" as much as pos
 must invoke postgresql script to perform pg_bulkload recovery and restart
 PostgreSQL to continue.
 <p>
+
+<h3>On parallel loading</h3>
+<p>
+When using MULTI_PROCESS=YES or WRITER=PARALLEL, pg_bulkload uses two PostgreSQL
+backends: a <em>reader</em> backend that runs the main <code>pg_bulkload()</code>
+call (read and parse input, validate rows) and a <em>writer</em> backend started
+via libpq that runs <code>pg_bulkload()</code> with TYPE=TUPLE and performs the
+direct write to the table.
+</p>
+
+<h4 id="parallel_locks">Table locks in parallel mode</h4>
+<p>
+On PostgreSQL 9.6 and later, the reader backend becomes a PostgreSQL lock group
+leader and keeps <code>AccessShareLock</code> on the target table.  The writer
+backend joins that lock group before it acquires any lock on the table, then
+takes <code>AccessExclusiveLock</code> for the direct write.  Because both
+backends belong to the same lock group, these locks do not block each other and
+the reader does not release its share lock while the writer is running.
+While the load is active, the writer's <code>AccessExclusiveLock</code> also
+blocks other sessions from running DDL on that table, so you do not need an
+extra precaution against concurrent schema changes on the target table for
+the reader and writer to stay consistent.
+</p>
+<p>
+On PostgreSQL releases before 9.6 (when pg_bulkload is built against them), the
+reader backend releases <code>AccessShareLock</code> before the writer backend
+acquires <code>AccessExclusiveLock</code>.  Another session can modify the table
+definition in that interval, and the reader and writer backends may then see
+different table definitions.  Do not run DDL or other schema changes on the
+target table from other sessions for the duration of the load.
+</p>
+<p>
+On any PostgreSQL version, avoid changing the definitions of other objects the
+load depends on (for example types or tables referenced by a
+<a href="#FILTER">FILTER</a> function) while the load is running.
+</p>
 
 <h4>Authentication can fail when MULTI_PROCESS=YES</h4>
 <p> When MULTI_PROCESS=YES and password is required to connect from localhost

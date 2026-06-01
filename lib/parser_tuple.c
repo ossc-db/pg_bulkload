@@ -54,9 +54,6 @@ CreateTupleParser(void)
 static void
 TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDesc desc, bool multi_process, Oid collation)
 {
-	unsigned		key;
-	char			junk[2];
-
 	if (checker->check_constraints)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("does not support parameter \"CHECK_CONSTRAINTS\" in \"TYPE = TUPLE\"")));
@@ -67,10 +64,19 @@ TupleParserInit(TupleParser *self, Checker *checker, const char *infile, TupleDe
 
 	checker->tchecker = NULL;
 
-	if (sscanf(infile, ":%u%1s", &key, junk) != 1)
-		elog(ERROR, "invalid shmem key format: %s", infile);
+#if PG_VERSION_NUM >= 90600
+	Assert(self->queue);
+#else
+	{
+		unsigned		key;
+		char			junk[2];
 
-	self->queue = QueueOpen(key);
+		if (sscanf(infile, ":%u%1s", &key, junk) != 1)
+			elog(ERROR, "invalid shmem key format: %s", infile);
+
+		self->queue = QueueOpen(key);
+	}
+#endif
 	self->buflen = BLCKSZ;
 	self->buffer = palloc(self->buflen);
 }
@@ -131,3 +137,11 @@ TupleParserDumpRecord(TupleParser *self, FILE *fp, char *filename)
 {
 	/* parse error does not happen in TupleParser. */
 }
+
+#if PG_VERSION_NUM >= 90600
+void
+SetTupleParserQueue(Parser *parser, void *queue)
+{
+	((TupleParser *) parser)->queue = queue;
+}
+#endif
