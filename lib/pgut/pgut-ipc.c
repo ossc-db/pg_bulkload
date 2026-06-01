@@ -370,6 +370,24 @@ retry:
 	CHECK_FOR_INTERRUPTS();
 	pg_usleep(SPIN_SLEEP_MSEC * 1000);
 
+#ifndef WIN32
+	/*
+	 * Detect if the writer detached without sending the
+	 * terminator (e.g. due to an error on the writer side).
+	 * When shm_nattch drops to 1, only we are still attached;
+	 * the writer is gone and no more data will ever arrive.
+	 */
+	{
+		struct shmid_ds	ds;
+
+		if (shmctl(self->handle, IPC_STAT, &ds) < 0 ||
+			ds.shm_nattch <= 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_CONNECTION_FAILURE),
+					 errmsg("parallel writer has disconnected")));
+	}
+#endif
+
 	goto retry;
 }
 
