@@ -49,6 +49,14 @@
 #include "access/xloginsert.h"
 #endif
 
+#if PG_VERSION_NUM >= 190000
+/* Item type was removed in PG19; PageGetItem now returns void * directly */
+typedef void *Item;
+/* Renamed in PG19 */
+#define DataChecksumsEnabled()		DataChecksumsOn()
+#define PageSetChecksumInplace(page, blkno)	PageSetChecksum(page, blkno)
+#endif
+
 #if PG_VERSION_NUM >= 100000
 #include "utils/regproc.h"
 #endif

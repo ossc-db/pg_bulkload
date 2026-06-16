@@ -11,6 +11,10 @@
 #include "access/heapam.h"
 #include "access/xact.h"
 #include "commands/dbcommands.h"
+#if PG_VERSION_NUM >= 190000
+/* get_database_name() moved out of commands/dbcommands.h in PG19 */
+extern char *get_database_name(Oid dbid);
+#endif
 #if PG_VERSION_NUM >= 160000
 #include "utils/guc_hooks.h"
 #else

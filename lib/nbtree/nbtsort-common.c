@@ -15,9 +15,9 @@
  * create and initialize a spool structure
  */
 static BTSpool *
-_bt_spoolinit(Relation heap, Relation index, bool isunique, 
+_bt_spoolinit(Relation heap, Relation index, bool isunique,
 #if PG_VERSION_NUM >= 150000
-			bool nulls_not_distinct, 
+			bool nulls_not_distinct,
 #endif
 			bool isdead)
 {
@@ -44,7 +44,11 @@ _bt_spoolinit(Relation heap, Relation index, bool isunique,
 #if PG_VERSION_NUM >= 150000
 													nulls_not_distinct,
 #endif
+#if PG_VERSION_NUM >= 190000
+													btKbytes, NULL, TUPLESORT_NONE);
+#else
 													btKbytes, NULL, false);
+#endif
 
 	return btspool;
 }

@@ -46,7 +46,12 @@
 
 #endif
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 190000
+
+#define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
+	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false, false, false)
+
+#elif PG_VERSION_NUM >= 140000
 
 #define FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults) \
 	FuncnameGetCandidates(names, nargs, NIL, expand_variadic, expand_defaults, false, false)

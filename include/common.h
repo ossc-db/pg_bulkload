@@ -14,6 +14,8 @@
 
 #define PG_BULKLOAD_VERSION "3.1.23"
 
+extern char *DataDir;
+
 
 #ifndef PG_BULKLOAD_PRINTF_ATTRIBUTE
 #ifdef WIN32

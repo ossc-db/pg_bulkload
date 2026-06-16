@@ -463,13 +463,12 @@ ParseControlFile(const char *path)
 {
 #define LINEBUF 1024
 	char	buf[LINEBUF];
-	int		lineno;
 	FILE   *file;
 	List   *items = NIL;
 
 	file = pgut_fopen(path, "rt");
 
-	for (lineno = 1; fgets(buf, LINEBUF, file); lineno++)
+	while (fgets(buf, LINEBUF, file))
 	{
 		char   *keyword;
 		char   *value;

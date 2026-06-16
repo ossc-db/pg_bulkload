@@ -596,7 +596,11 @@ IsPageCreatedByLoader(Page page)
 	if (!PageHeaderIsValid(page))
 		return true;
 
-	if (targetBlock->pd_lsn.xlogid == 0 && targetBlock->pd_lsn.xrecoff == 0)
+#if PG_VERSION_NUM >= 190000
+	if (PageXLogRecPtrGet(&targetBlock->pd_lsn) == InvalidXLogRecPtr)
+#else
+	if (PageXLogRecPtrGet(targetBlock->pd_lsn) == InvalidXLogRecPtr)
+#endif
 		return true;
 	else
 		return false;
